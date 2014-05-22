@@ -32,8 +32,20 @@ class Minimax():
 		self.ply = ply
 		self.transposition_table = {}
 		
-	def board_evaluation(self, board):
-		return sum([sum([self.valuation.get(board.get_square(rank, file), 0) for rank in range(1, 9)]) for file in range(1, 9)])
+	def board_evaluation(self, board, player_to_move):
+		white_moves = [x for x in board.legal_moves_ignoring_check('white')]
+		black_moves = [x for x in board.legal_moves_ignoring_check('black')]
+		if player_to_move == 'white' and len(white_moves) == 0:
+			if board.king_in_check(white):
+				return -999
+			else:
+				return 0
+		if player_to_move == 'black' and len(black_moves) == 0:
+			if board.king_in_check(black):
+				return 999
+			else:
+				return 0
+		return sum([sum([self.valuation.get(board.get_square(rank, file), 0) for rank in range(1, 9)]) for file in range(1, 9)]) + .01 * (len(white_moves) - len(black_moves))
 
 	def with_move(self, board, move, callback):
 		m = board.apply_move(move)
@@ -44,25 +56,25 @@ class Minimax():
 	def move(self, board):
 		self.transposition_table = {}
 		timer = time.time()
-		score, move, chain, nodes = self.find_minimax(board, self.color, self.ply)
-		elapsed = time.time() - timer
-		print "minimax: %d nodes, chain=%s, score=%d, processed %g nodes/sec" % (nodes, ', '.join([board.format_move(m) for m in chain]), score, nodes/elapsed)
-		self.transposition_table = {}
-		timer = time.time()
 		score, move, chain, nodes = self.find_alphabeta(board, self.color, self.ply)
 		elapsed = time.time() - timer
-		print "alphabeta: %d nodes, chain=%s, score=%d, processed %g nodes/sec" % (nodes, ', '.join([board.format_move(m) for m in chain]), score, nodes/elapsed)
+		print "alphabeta: %d nodes, chain=%s, score=%g, processed %g nodes/sec" % (nodes, ', '.join([board.format_move(m) for m in chain]), score, nodes/elapsed)
 		return move
 		
 	def find_alphabeta(self, board, color, depth, alpha=None, beta=None):
 		if depth == 0:
-			return [self.board_evaluation(board), None, [], 1]
+			return [self.board_evaluation(board, color), None, [], 1]
 		if alpha is None:
 			alpha = [-999999, None, [], 1]
 		if beta is None:
 			beta = [999999, None, [], 1]
 		nodes = 1
-		for move in board.legal_moves(color):
+		has_moves = False
+		move_list = board.legal_moves(color)
+		if depth > 1:
+			move_list = sorted(move_list, key=lambda m: -self.valuation.get(board.get_square(m[2], m[3]), 0), reverse=color == "white")
+		for move in move_list:
+			has_moves = True
 			m = board.apply_move(move)
 			saved, chain = self.transposition_table.get(board.compact_repr(), (None, []))
 			if saved:
@@ -81,6 +93,9 @@ class Minimax():
 				beta = min(beta, candidate)
 				if beta <= alpha:
 					break
+		if not has_moves:
+			return [self.board_evaluation(board, color), None, [], 1]
+
 		if color == 'white':
 			self.transposition_table[board.compact_repr()] = (alpha[0], candidate[2])
 			return alpha[0:3] + [nodes]
@@ -90,7 +105,7 @@ class Minimax():
 	
 	def find_minimax(self, board, color, depth):
 		if depth == 0:
-			return [self.board_evaluation(board), None, [], 1]
+			return [self.board_evaluation(board, color), None, [], 1]
 		else:
 			if color == 'white':
 				selection = max
