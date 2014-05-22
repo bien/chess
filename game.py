@@ -19,14 +19,18 @@ class Human():
 			text = raw_input("Your move> ")
 			if text == "exit":
 				raise QuitException
-			return self.algebra.interpret(text, board, self.color)
+			try:
+				return self.algebra.interpret(text, board, self.color)
+			except notation.ParseException, e:
+				print e
 			
 class Minimax():
 	def __init__(self, color, ply):
 		self.color = color
 		self.algebra = notation.Algebra()
-		self.valuation = dict(r=5,n=3,b=3,q=9,k=999, p=1, R=-1, N=-3, B=-3, Q=-9, P=-1, K=-999)
+		self.valuation = dict(r=5,n=3,b=3,q=9,k=999, p=1, R=-5, N=-3, B=-3, Q=-9, P=-1, K=-999)
 		self.ply = ply
+		self.transposition_table = {}
 		
 	def board_evaluation(self, board):
 		return sum([sum([self.valuation.get(board.get_square(rank, file), 0) for rank in range(1, 9)]) for file in range(1, 9)])
@@ -38,10 +42,12 @@ class Minimax():
 		return result
 		
 	def move(self, board):
+		self.transposition_table = {}
 		timer = time.time()
 		score, move, chain, nodes = self.find_minimax(board, self.color, self.ply)
 		elapsed = time.time() - timer
 		print "minimax: %d nodes, chain=%s, score=%d, processed %g nodes/sec" % (nodes, ', '.join([board.format_move(m) for m in chain]), score, nodes/elapsed)
+		self.transposition_table = {}
 		timer = time.time()
 		score, move, chain, nodes = self.find_alphabeta(board, self.color, self.ply)
 		elapsed = time.time() - timer
@@ -58,11 +64,15 @@ class Minimax():
 		nodes = 1
 		for move in board.legal_moves(color):
 			m = board.apply_move(move)
-			candidate = self.find_alphabeta(board, board.opposite_color(color), depth-1, alpha, beta)
+			saved, chain = self.transposition_table.get(board.compact_repr(), (None, []))
+			if saved:
+				candidate = [saved, move, chain, 0]
+			else:
+				candidate = self.find_alphabeta(board, board.opposite_color(color), depth-1, alpha, beta)
+				nodes += candidate[3]
 			candidate[1] = move
 			candidate[2] = candidate[2] + [move]
 			board.undo_move(m)
-			nodes += candidate[3]
 			if color == 'white':
 				alpha = max(alpha, candidate)
 				if alpha >= beta:
@@ -72,8 +82,10 @@ class Minimax():
 				if beta <= alpha:
 					break
 		if color == 'white':
+			self.transposition_table[board.compact_repr()] = (alpha[0], candidate[2])
 			return alpha[0:3] + [nodes]
 		else:
+			self.transposition_table[board.compact_repr()] = (beta[0], candidate[2])
 			return beta[0:3] + [nodes]
 	
 	def find_minimax(self, board, color, depth):

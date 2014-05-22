@@ -1,5 +1,6 @@
 
 ChessSymbols=dict(R=u'\u2656', N=u'\u2658', B=u'\u2657', Q=u'\u2655', K=u'\u2654', P=u'\u2659', r=u'\u265c', k=u'\u265a', q=u'\u265b', b=u'\u265d', n=u'\u265e', p=u'\u265f', x='.')
+CompactEncoding = dict(p=1, n=2, b=3, r=4, q=5, k=6, P=7, N=8, B=9, R=0xa, Q=0xb, K=0xc, x=0xf) 
 
 class Board:
 	def __init__(self):
@@ -10,11 +11,20 @@ class Board:
 		
 	def format(self):
 		return '\n'.join([''.join(c for c in self.board[i:i+8]) for i in reversed(range(0, 64, 8))])
+
+	def compact_repr(self):
+		"""A 32-byte non-readable serialization format
+		>>> Board().compact_repr()
+		'\xa8\x9b\xc9\x8awwww\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x11\x11\x11\x11B5c$'
+		"""
+		return ''.join([chr((CompactEncoding[self.board[i]] << 4) | CompactEncoding[self.board[i+1]]) for i in range(0, 64, 2)])			
 		
 	def get_square(self, rank, file):
-		"""rank is in [1, 8] and file is [1, 8]
+		"""rank is in [1, 8] and file is [1, 8]; returns None if off the board
 		>>> Board().get_square(1, 1)
 		'R'
+		>>> Board().get_square(0, 1)
+		>>> Board().get_square(1, 9)
 		>>> ''.join([Board().get_square(1, i) for i in range(1, 9)])
 		'RNBQKBNR'
 		>>> ''.join([Board().get_square(3, i) for i in range(1, 9)])
@@ -22,7 +32,8 @@ class Board:
 		>>> ''.join([Board().get_square(8, i) for i in range(1, 9)])
 		'rnbqkbnr'
 		"""
-		assert rank in range(1, 9) and file in range(1, 9)
+		if rank < 1 or rank > 8 or file < 1 or file > 8:
+			return None
 		return self.board[(rank - 1) * 8 + file - 1]
 
 	def set_square(self, rank, file, piece):
@@ -54,8 +65,11 @@ class Board:
 		'white'
 		>>> Board().get_owner('r')
 		'black'
+		>>> Board().get_owner(None)
 		"""
-		if ord(piece) < ord('a'):
+		if piece is None:
+			return None
+		elif ord(piece) < ord('a'):
 			return 'white'
 		elif piece == 'x':
 			return 'empty'
@@ -95,27 +109,32 @@ class Board:
 		else:
 			return self.make_piece(piece, 'white')
 			
-	def apply_direction(self, vector, magnitude, base_rank, base_file):
+	def apply_direction(self, vector, base_rank, base_file):
 		"""
-		>>> Board().apply_direction([1, 1], 3, 1, 1)
-		(4, 4)
+		>>> Board().apply_direction([1, 1], 1, 1)
+		(2, 2)
 		"""
-		return base_rank + vector[0] * magnitude, base_file + vector[1] * magnitude
+		return base_rank + vector[0], base_file + vector[1]
 		
-	def apply_direction_to_edge(self, vector, base_rank, base_file, owner, limit=7):
+	def apply_direction_to_edge(self, vector, base_rank, base_file, owner, limit=7, yield_empty=True):
 		"""
 		>>> b = Board()
 		>>> b.set_square(2, 1, 'x')
 		>>> [x for x in b.apply_direction_to_edge([1, 0], 1, 1, 'white')]
 		[(2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1)]
 		"""
-		for magnitude in range(1, limit+1):
-			target_rank, target_file = self.apply_direction(vector, magnitude, base_rank, base_file)
-			if target_rank not in range(1, 9) or target_file not in range(1, 9) or self.get_owner(self.get_square(target_rank, target_file)) == owner:
-				break
-			elif self.get_square(target_rank, target_file) == 'x':
+		target_rank = base_rank
+		target_file = base_file
+		for magnitude in range(limit):
+			target_rank += vector[0]
+			target_file += vector[1]
+			piece = self.get_square(target_rank, target_file)
+			pieceowner = self.get_owner(piece)
+			if yield_empty and piece == 'x':
 				yield target_rank, target_file
-			else:
+			elif pieceowner == owner or piece is None:
+				break
+			elif pieceowner == self.opposite_color(owner):
 				# opposite color piece
 				yield target_rank, target_file
 				break
@@ -239,6 +258,10 @@ class Board:
 			# en-passant capture
 			self.set_square(move[0], move[3], self.opposite_color(new_piece))
 		
+	def find_single_piece(self, piece):
+		pos = self.board.index(piece)
+		return (pos // 8) + 1, (pos % 8) + 1
+		
 	def king_in_check(self, player):
 		"""
 		>>> b = Board()
@@ -252,44 +275,27 @@ class Board:
 		False
 		"""
 		otherplayer = 'black' if player == 'white' else 'white'
-		king = None
-		for rank in range(1, 9):
-			for file in range(1, 9):
-				if self.get_square(rank, file) == self.make_piece('k', player):
-					king = (rank, file)
-					break
-			if king is not None:
-				break
+		king = self.find_single_piece(self.make_piece('k', player))
 
-		if king is None:
-			raise Exception, "Can't find king in %s" % ''.join(self.board)
-
+		pawndirection = -1 if otherplayer == 'white' else 1
 		for vector in ([1, 0], [0, 1], [-1, 0], [0, -1]):
-			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player):
+			dist = 0
+			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player, yield_empty=False):
+				dist += 1
 				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and self.get_piece(piece) in ('r', 'q'):
+				if self.get_owner(piece) == otherplayer and (self.get_piece(piece) in ('r', 'q') or (self.get_piece(piece) == 'k' and dist == 1)):
 					return True
 		for vector in ([1, 1], [-1, 1], [1, -1], [-1, -1]):
-			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player):
+			dist = 0
+			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player, yield_empty=False):
+				dist += 1
 				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and self.get_piece(piece) in ('b', 'q'):
+				if self.get_owner(piece) == otherplayer and (self.get_piece(piece) in ('b', 'q') or (self.get_piece(piece) == 'p' and r-king[0] == pawndirection) or (self.get_piece(piece) == 'k' and dist == 1)):
 					return True
 		for vector in ([1, 2], [2, 1], [1, -2], [2, -1], [-2, -1], [-1, -2], [-1, 2], [-2, 1]):
-			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player, limit=1):
-				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and self.get_piece(piece) == 'n':
-					return True
-		direction = -1 if otherplayer == 'white' else 1
-		for vector in ([direction, 1], [direction, -1]):
-			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player, limit=1):
-				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and self.get_piece(piece) == 'p':
-					return True
-		for vector in ([1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]):
-			for r, f in self.apply_direction_to_edge(vector, rank, file, player, limit=1):
-				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and self.get_piece(piece) == 'k':
-					return True
+			r, f = self.apply_direction(vector, king[0], king[1])
+			if self.get_square(r, f) == self.make_piece('n', otherplayer):
+				return True
 		return False
 		
 	def legal_moves(self, player=None):
@@ -418,3 +424,11 @@ class Board:
 if __name__ == '__main__':
 	import doctest
 	doctest.testmod()
+	
+#	b = Board()
+#	m = b.apply_move((2, 6, 3, 6))
+#	m = b.apply_move((7, 5, 5, 5))
+#	m = b.apply_move((2, 7, 4, 7))
+#	m = b.apply_move((8, 4, 4, 8))
+#	print [b.format_move(x) for x in b.legal_moves("white")]
+

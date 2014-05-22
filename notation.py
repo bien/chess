@@ -2,6 +2,9 @@ from chess import Board
 import re
 import types
 
+class ParseException(Exception):
+	pass
+
 def read(f):
 	format = Algebra()
 	board = Board()
@@ -51,10 +54,10 @@ def parse_pgn(f):
 					yield parts[0]
 					yield "done", Winner[parts[2]]
 				else:
-					raise Exception, "Can't parse pseudomove %s %s" % (pseudomove, repr(parts))
+					raise ParseException, "Can't parse pseudomove %s %s" % (pseudomove, repr(parts))
 				moves_found += 1
 			if moves_found == 0:
-				raise Exception, "Can't read %s" % line
+				raise ParseException, "Can't read %s" % line
 		elif meta:
 			yield "metadata", meta
 			meta = {}
@@ -69,7 +72,7 @@ class Basic(Notation):
 		if m:
 			return ord(m.group(1)) - ord('a') + 1, int(m.group(2)), ord(m.group(3)) - ord('a') + 1, int(m.group(4))
 		else:
-			raise Exception, "Can't parse %s" % move
+			raise ParseException, "Can't parse %s" % move
 			
 class Algebra(Notation):
 	def interpret(self, move, board, player):
@@ -98,7 +101,7 @@ class Algebra(Notation):
 					else:
 						return candidate
 			print board.format()
-			raise Exception, "Couldn't find match for %s %s=(%s %s%d-%s%d) among %s" % (player, move, piece, src_file or 'x', src_rank or 0, dest_file, dest_rank, repr(sorted([board.format_move(m) for m in board.legal_moves(player)])))
+			raise ParseException, "Couldn't find match for %s %s=(%s %s%d-%s%d) among %s" % (player, move, piece, src_file or 'x', src_rank or 0, dest_file, dest_rank, repr(sorted([board.format_move(m) for m in board.legal_moves(player)])))
 		elif move == 'O-O':
 			if player == 'white':
 				return (1, 5, 1, 7)
@@ -110,7 +113,7 @@ class Algebra(Notation):
 			else:
 				return (8, 5, 8, 3)
 		else:
-			raise Exception, "Couldn't parse %s" % move
+			raise ParseException, "Couldn't parse %s" % move
 
 class Printer:
 	def show(self, board):
