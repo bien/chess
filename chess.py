@@ -1,3 +1,4 @@
+import re
 
 ChessSymbols=dict(R=u'\u2656', N=u'\u2658', B=u'\u2657', Q=u'\u2655', K=u'\u2654', P=u'\u2659', r=u'\u265c', k=u'\u265a', q=u'\u265b', b=u'\u265d', n=u'\u265e', p=u'\u265f', x='.')
 CompactEncoding = dict(p=1, n=2, b=3, r=4, q=5, k=6, P=7, N=8, B=9, R=0xa, Q=0xb, K=0xc, x=0xf) 
@@ -12,13 +13,48 @@ class Board:
 	def format(self):
 		return '\n'.join([''.join(c for c in self.board[i:i+8]) for i in reversed(range(0, 64, 8))])
 
-	def compact_repr(self):
+	def flush_spaces(self, spaces, out):
+		if spaces < 1:
+			pass
+		elif spaces == 1:
+			out.append(CompactEncoding['x'])
+		elif spaces < 16 + 2:
+			out.append(0)
+			out.append(spaces - 2)
+		elif spaces < 32 + 2:
+			out.append(0xd)
+			out.append((spaces - 2) & 0xf)
+		else:
+			out.append(0xe)
+			out.append(((spaces - 2) & 0xf0) >> 4)
+			out.append((spaces - 2) & 0x0f)
+	
+	def compact_repr(self, compress=True):
 		"""A 32-byte non-readable serialization format
-		>>> Board().compact_repr()
+		>>> Board().compact_repr(False)
+		'\xa8\x9b\xc9\x8awwww\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x11\x11\x11\x11B5c$'
+		>>> repr(Board().compact_repr())
 		'\xa8\x9b\xc9\x8awwww\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x11\x11\x11\x11B5c$'
 		"""
-		return ''.join([chr((CompactEncoding[self.board[i]] << 4) | CompactEncoding[self.board[i+1]]) for i in range(0, 64, 2)])			
 		
+		if compress:
+			out = []
+			spaces = 0
+			for c in [CompactEncoding[sq] for sq in self.board]:
+				if c == CompactEncoding['x']:
+					spaces += 1
+				else:
+					self.flush_spaces(spaces, out)
+					out.append(c)
+					spaces = 0
+			if spaces > 0:
+				self.flush_spaces(spaces, out)
+			if len(out) % 2 == 1:
+				out.append(0)
+			return ''.join([chr((out[i] << 4) | out[i+1]) for i in range(0, len(out), 2)])
+		else:
+			return ''.join([chr((CompactEncoding[self.board[i]] << 4) | CompactEncoding[self.board[i+1]]) for i in range(0, 64, 2)])	
+
 	def get_square(self, rank, file):
 		"""rank is in [1, 8] and file is [1, 8]; returns None if off the board
 		>>> Board().get_square(1, 1)
