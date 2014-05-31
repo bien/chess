@@ -50,10 +50,10 @@ class Minimax():
 		0.0
 		>>> b.set_square(1, 4, 'x')
 		>>> m.board_evaluation(b, 'white')
-		9.01
+		-8.99
 		>>> b.set_square(8, 1, 'x')
 		>>> m.board_evaluation(b, 'black')
-		4.01
+		-3.99
 		>>> b = Board()
 		>>> x = b.apply_move(alg.interpret('a4', b, 'white'))
 		>>> x = b.apply_move(alg.interpret('e5', b, 'black'))
@@ -63,20 +63,23 @@ class Minimax():
 		>>> x = b.apply_move(alg.interpret('e3', b, 'black'))
 		>>> x = b.apply_move(alg.interpret('dxe3', b, 'white'))
 		>>> m.board_evaluation(b, 'black')
-		1
+		0.98
+		>>> b.board = 'RNxxKxxr PPPxPPxx xxxPxxxx xQxpxxxx xxxxxxqx xxxxxxxx pxxxpppx rnbxkbnx'.replace(' ', '')
+		>>> m.board_evaluation(b, 'white')
+		-999
 		"""
-		white_moves = [x for x in board.legal_moves_ignoring_check('white')]
-		black_moves = [x for x in board.legal_moves_ignoring_check('black')]
-		if player_to_move == 'white' and len(white_moves) == 0:
-			if board.king_in_check(white):
+		if board.king_in_check('white'):
+			white_moves = [x for x in board.legal_moves('white')]
+			if len(white_moves) == 0:
 				return -999
-			else:
-				return 0
-		if player_to_move == 'black' and len(black_moves) == 0:
-			if board.king_in_check(black):
+		else:
+			white_moves = [x for x in board.legal_moves_ignoring_check('white')]
+		if board.king_in_check('black'):
+			black_moves = [x for x in board.legal_moves('black')]
+			if len(black_moves) == 0:
 				return 999
-			else:
-				return 0
+		else:
+			black_moves = [x for x in board.legal_moves_ignoring_check('black')]
 		piece_values = [self.valuation.get(x, 0) for x in board.board]
 		# draw due to lack of material
 		if len([p for p in piece_values if p != 0]) == 0:
@@ -94,11 +97,12 @@ class Minimax():
 		self.debug_graph = {}
 		self.debug_score = {}
 		self.debug_pruned = {}
+		self.debug_principal = {}
 		timer = time.time()
 		score, move, chain, nodes = self.find_alphabeta(board, self.color, self.ply)
 		elapsed = time.time() - timer
 		print "alphabeta: move %d: %d nodes, chain=%s, score=%g, depth=%d, processed %g nodes/sec" % (self.moveno, nodes, ', '.join([board.format_move(m) for m in chain]), score, self.ply, nodes/(.0001+elapsed))
-		self.debug_file = file('%d-%d.dot' % (self.moveno, self.ply), 'w')
+		self.debug_file = file('%s-%d-%d.dot' % (self.color, self.moveno, self.ply), 'w')
 		try:
 			self.debug_file.write("""
 	digraph move_graph {
@@ -106,41 +110,45 @@ class Minimax():
 	""")
 			nodenames = {}
 			for nodename, score in self.debug_score.iteritems():
-				nodenames[nodename] = '%d (%g)' % (len(nodenames), score)
+				if board.compact_repr() == nodename:
+					nodenames[nodename] = 'start (%g)' % score
+				else:
+					nodenames[nodename] = '%d (%g)' % (len(nodenames), score)
 	#		nodenames = dict([(k, '%s (%g)' % (k, v)) for k, v in self.debug_score.iteritems()])
 			for bm, result in self.debug_graph.iteritems():
 				source, mm = bm
-				self.debug_file.write('    "%s" -> "%s" [ label = "%s" ];\n' % (nodenames[source], nodenames[result], mm))
+				self.debug_file.write('    "%s" -> "%s" [ label = "%s%s" ];\n' % (nodenames[source], nodenames[result], board.format_move(mm), '*' if self.debug_principal.get(source) == mm else ''))
 			for source, prunecount in self.debug_pruned.iteritems():
 				self.debug_file.write('    "%s" -> "%s_pruned" [ label = "%d pruned" ];\n' % (nodenames[source], nodenames[source], prunecount))
 			self.debug_file.write('}\n')
 		finally:
 			self.debug_file.close()
 			self.debug_file = None
+		self.moveno += 1
 		return move
 		
-	def fast_eval(self, prev_board, move):
-		return -self.valuation.get(board.get_square(m[2], m[3]), 0)
+	def fast_eval(self, board, move):
+		return -self.valuation.get(board.get_square(move[2], move[3]), 0)
 	
 	def find_alphabeta(self, board, color, depth, alpha=-999999, beta=999999):
-		if depth == 0:
-			score = self.board_evaluation(board, color)
-			self.debug_score[''.join(board.board)] = score
-			return [score, None, [], 1]
+		board_repr = board.compact_repr()
 		nodes = 1
 		has_moves = False
 		children = 0
 		move_list = [x for x in board.legal_moves(color)]
 		highest = [alpha, None, []]
 		lowest = [beta, None, []]
-		board_repr = ''.join(board.board)
 		if depth > 1:
 			move_list = sorted(move_list, key=lambda m: self.fast_eval(board, m), reverse=color == "white")
+		if depth == 0 or len(move_list) == 0:
+			score = self.board_evaluation(board, color)
+			self.debug_score[board_repr] = score
+			return [score, None, [], nodes]
 		for move in move_list:
 			has_moves = True
 			children += 1
 			m = board.apply_move(move)
-			self.debug_graph[(board_repr, board.format_move(move))] = ''.join(board.board)
+			self.debug_graph[(board_repr, move)] = board.compact_repr()
 			saved, chain, tdepth = self.transposition_table.get(board.compact_repr(), (None, [], 0))
 			if saved and tdepth >= depth:
 				candidate = [saved, move, [move] + chain]
@@ -153,6 +161,8 @@ class Minimax():
 				highest = max(highest, candidate)
 				if highest[0] >= lowest[0]:
 					self.debug_pruned[board_repr] = len(move_list) - children
+					# make the score worse so we ensure the algorithm doesn't pick the pruned value
+					highest[2] = []
 					break # beta-cutoff
 			else:
 				if lowest[0] == candidate[0]:
@@ -161,19 +171,21 @@ class Minimax():
 					lowest = min(lowest, candidate)
 				if lowest[0] <= highest[0]:
 					self.debug_pruned[board_repr] = len(move_list) - children
+					# make the score worse so we ensure the algorithm doesn't pick the pruned value
+					lowest[2] = []
 					break
-		if not has_moves:
-			score = self.board_evaluation(board, color)
-			self.debug_score[''.join(board.board)] = score
-			return [score, None, [], nodes]
 
 		if color == 'white':
-			self.transposition_table[board.compact_repr()] = (highest[0], highest[2], depth)
 			self.debug_score[board_repr] = highest[0]
+			if len(highest[2]) > 0:
+				self.transposition_table[board.compact_repr()] = (highest[0], highest[2], depth)
+				self.debug_principal[board.compact_repr()] = highest[1]
 			return highest[0:3] + [nodes]
 		else:
-			self.transposition_table[board.compact_repr()] = (lowest[0], lowest[2], depth)
 			self.debug_score[board_repr] = lowest[0]
+			if len(lowest[2]) > 0:
+				self.transposition_table[board.compact_repr()] = (lowest[0], lowest[2], depth)
+				self.debug_principal[board.compact_repr()] = lowest[1]
 			return lowest[0:3] + [nodes]
 	
 	def find_minimax(self, board, color, depth):
@@ -199,6 +211,7 @@ class IterativeDeepening(Minimax):
 	def __init__(self, color, timelimit):
 		Minimax.__init__(self, color, 3)
 		self.timelimit = timelimit
+		self.iter_moveno = 1
 	
 	def move(self, board):
 		start = time.time()
@@ -206,9 +219,10 @@ class IterativeDeepening(Minimax):
 		self.deepening_table = {}
 		while time.time() - start < self.timelimit / 2:
 			self.ply += 1
+			self.moveno = self.iter_moveno
 			best = Minimax.move(self, board)
 			self.deepening_table = self.transposition_table
-		self.moveno += 1
+		self.iter_moveno += 1
 		return best
 		
 	def fast_eval(self, board, move):
