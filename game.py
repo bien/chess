@@ -155,15 +155,20 @@ class Minimax():
 			else:
 				candidate = self.find_alphabeta(board, board.opposite_color(color), depth-1, highest[0], lowest[0])
 				nodes += candidate[3]
-				candidate = [candidate[0], move, [move] + candidate[2]]
+				if candidate[0] != "pruned":
+					# special case: if we foresee mate, discount based on number of moves req'd to discourage procrastination
+					if abs(candidate[0]) > 900:
+						candidate[0] *= .999
+					candidate = [candidate[0], move, [move] + candidate[2]]
 			board.undo_move(m)
+			if candidate[0] == "pruned":
+				continue
 			if color == 'white':
 				highest = max(highest, candidate)
 				if highest[0] >= lowest[0]:
 					self.debug_pruned[board_repr] = len(move_list) - children
-					# make the score worse so we ensure the algorithm doesn't pick the pruned value
-					highest[2] = []
-					break # beta-cutoff
+					self.debug_score[board_repr] = highest[0]
+					return ["pruned", None, [], nodes]
 			else:
 				if lowest[0] == candidate[0]:
 					lowest = min(lowest, candidate, key=lambda a: -len(a[2]))
@@ -171,9 +176,8 @@ class Minimax():
 					lowest = min(lowest, candidate)
 				if lowest[0] <= highest[0]:
 					self.debug_pruned[board_repr] = len(move_list) - children
-					# make the score worse so we ensure the algorithm doesn't pick the pruned value
-					lowest[2] = []
-					break
+					self.debug_score[board_repr] = lowest[0]
+					return ["pruned", None, [], nodes]
 
 		if color == 'white':
 			self.debug_score[board_repr] = highest[0]
