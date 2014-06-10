@@ -5,7 +5,7 @@ CompactEncoding = dict(p=1, n=2, b=3, r=4, q=5, k=6, P=7, N=8, B=9, R=0xa, Q=0xb
 
 class Board:
 	def __init__(self):
-		self.board = [c for c in 'RNBQKBNR' + ('P' * 8) + ('x' * 8 * 4) + ('p' * 8) + 'rnbqkbnr']
+		self.board = 'RNBQKBNR' + ('P' * 8) + ('x' * 8 * 4) + ('p' * 8) + 'rnbqkbnr'
 		self.can_castle = dict(white=[True, True], black=[True, True]) # kingside, queenside
 		self.last_move = None
 		self.turn = 'white'
@@ -29,12 +29,8 @@ class Board:
 			out.append(((spaces - 2) & 0xf0) >> 4)
 			out.append((spaces - 2) & 0x0f)
 	
-	def compact_repr(self, compress=True):
+	def compact_repr(self, compress=False):
 		"""A 32-byte non-readable serialization format
-		>>> Board().compact_repr(False)
-		'\xa8\x9b\xc9\x8awwww\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x11\x11\x11\x11B5c$'
-		>>> repr(Board().compact_repr())
-		'\xa8\x9b\xc9\x8awwww\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x11\x11\x11\x11B5c$'
 		"""
 		
 		if compress:
@@ -81,7 +77,9 @@ class Board:
 		'x'
 		"""
 		assert rank in range(1, 9) and file in range(1, 9)
-		self.board[(rank - 1) * 8 + file - 1] = piece
+		temp = [c for c in self.board]
+		temp[(rank - 1) * 8 + file - 1] = piece
+		self.board = ''.join(temp)
 		
 	def get_piece(self, piece):
 		"""
@@ -119,10 +117,9 @@ class Board:
 		>>> Board().make_piece('p', 'black')
 		'p'
 		"""
-		assert color in ('white', 'black')
 		if color == 'white':
 			return chr(ord(self.get_piece(piece)) + ord('A') - ord('a'))
-		else:
+		elif color == "black":
 			return self.get_piece(piece)
 			
 	def format_move(self, move):
@@ -166,8 +163,9 @@ class Board:
 			target_file += vector[1]
 			piece = self.get_square(target_rank, target_file)
 			pieceowner = self.get_owner(piece)
-			if yield_empty and piece == 'x':
-				yield target_rank, target_file
+			if piece == 'x':
+				if yield_empty:
+					yield target_rank, target_file
 			elif pieceowner == owner or piece is None:
 				break
 			elif pieceowner == self.opposite_color(owner):
@@ -297,6 +295,21 @@ class Board:
 	def find_single_piece(self, piece):
 		pos = self.board.index(piece)
 		return (pos // 8) + 1, (pos % 8) + 1
+
+	def find_pieces(self, piece, ranks=None):
+		if ranks == None:
+			pos = 0
+			end = 64
+		else:
+			pos = ranks[0] * 8
+			end = (1 + ranks[1]) * 8
+		while True:
+			pos = self.board.find(piece, pos, end)
+			if pos == -1:
+				break
+			else:
+				yield (pos // 8) + 1, (pos % 8) + 1
+				pos += 1
 		
 	def king_in_check(self, player):
 		"""
@@ -309,29 +322,71 @@ class Board:
 		>>> b.board = "xxxxkxxxxxxxxxxxxxxKxxxxxxxxxxxxxxxxxPbPxxxxxxxpxxxxxxxxxxxxxxxx"
 		>>> b.king_in_check("black")
 		False
+		>>> b.board = 'xxxxxxxx xxxxxxxx xxxxxxxx xxxxxKxx xxxxxxxx xxxxxxxx xxxxxxxx xxxxxkxx'.replace(" ", "")
+		>>> b.king_in_check("white")
+		False
+		>>> b.board = 'xxxxxxxx xxxxxxxx xxrxxxxx xxxxxKxx xxxxxxxx xxxxxxpx xpxxxxxp xxxxrkxx'.replace(" ", "")
+		>>> b.king_in_check("white")
+		False
+		>>> b.board = 'RNBQKBNRPPPPPxxPxxxxxPxxxxxxxxPqxxxxpxxxxxxxxxxxppppxppprnbxkbnr'
+		>>> b.king_in_check("white")
+		True
 		"""
 		otherplayer = 'black' if player == 'white' else 'white'
-		king = self.find_single_piece(self.make_piece('k', player))
+		try:
+			king = self.find_single_piece(self.make_piece('k', player))
+		except ValueError:
+			print self.board
+			raise
 
-		pawndirection = -1 if otherplayer == 'white' else 1
-		for vector in ([1, 0], [0, 1], [-1, 0], [0, -1]):
-			dist = 0
-			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player, yield_empty=False):
-				dist += 1
-				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and (self.get_piece(piece) in ('r', 'q') or (self.get_piece(piece) == 'k' and dist == 1)):
-					return True
-		for vector in ([1, 1], [-1, 1], [1, -1], [-1, -1]):
-			dist = 0
-			for r, f in self.apply_direction_to_edge(vector, king[0], king[1], player, yield_empty=False):
-				dist += 1
-				piece = self.get_square(r, f)
-				if self.get_owner(piece) == otherplayer and (self.get_piece(piece) in ('b', 'q') or (self.get_piece(piece) == 'p' and r-king[0] == pawndirection) or (self.get_piece(piece) == 'k' and dist == 1)):
-					return True
-		for vector in ([1, 2], [2, 1], [1, -2], [2, -1], [-2, -1], [-1, -2], [-1, 2], [-2, 1]):
-			r, f = self.apply_direction(vector, king[0], king[1])
-			if self.get_square(r, f) == self.make_piece('n', otherplayer):
+		# king
+		for otherking in self.find_pieces(self.make_piece('k', otherplayer), ranks=(king[0]-1, king[0]+1)):
+			if abs(otherking[1] - king[1]) <= 1 and abs(otherking[0] - king[0]) <= 1:
 				return True
+			
+		# check for pawn
+		pawndirection = -1 if otherplayer == 'white' else 1
+		if self.make_piece('p', otherplayer) in [self.get_square(pawndirection, next_to) for next_to in (-1, 1)]:
+			return True
+			
+		# knight
+		for knight in self.find_pieces(self.make_piece('n', otherplayer), ranks=(king[0]-2, king[0]+2)):
+			dr = abs(knight[1] - king[1])
+			df = abs(knight[0] - king[0])
+			if (dr == 1 and df == 2) or (dr == 2 and df == 1):
+				return True
+		
+		# rook
+		for rook in self.find_pieces(self.make_piece('r', otherplayer)):
+			if rook[0] == king[0]:
+				for r, f in self.apply_direction_to_edge([0, 1 if rook[1] < king[1] else -1], rook[0], rook[1], otherplayer, yield_empty=False):
+					if (r, f) == king:
+						return True
+			elif rook[1] == king[1]:
+				for r, f in self.apply_direction_to_edge([1 if rook[1] < king[1] else -1, 0], rook[0], rook[1], otherplayer, yield_empty=False):
+					if (r, f) == king:
+						return True
+
+		for bishop in self.find_pieces(self.make_piece('b', otherplayer)):
+			if abs(bishop[0] - king[0]) == abs(bishop[1] - king[1]):
+				for r, f in self.apply_direction_to_edge([1 if bishop[0] < king[0] else -1, 1 if bishop[1] < king[1] else -1], bishop[0], bishop[1], otherplayer, yield_empty=False):
+					if (r, f) == king:
+						return True
+
+		for queen in self.find_pieces(self.make_piece('q', otherplayer)):
+			if queen[0] == king[0]:
+				for r, f in self.apply_direction_to_edge([0, 1 if queen[1] < king[1] else -1], queen[0], queen[1], otherplayer, yield_empty=False):
+					if (r, f) == king:
+						return True
+			elif queen[1] == king[1]:
+				for r, f in self.apply_direction_to_edge([1 if queen[1] < king[1] else -1, 0], queen[0], queen[1], otherplayer, yield_empty=False):
+					if (r, f) == king:
+						return True
+			elif abs(queen[0] - king[0]) == abs(queen[1] - king[1]):
+				for r, f in self.apply_direction_to_edge([1 if queen[0] < king[0] else -1, 1 if queen[1] < king[1] else -1], queen[0], queen[1], otherplayer, yield_empty=False):
+					if (r, f) == king:
+						return True
+		
 		return False
 		
 	def legal_moves(self, player=None):
@@ -371,6 +426,8 @@ class Board:
 		>>> b.undo_move(m)
 		>>> sorted([b.format_move(x) for x in b.legal_moves("white")])
 		['a1-a2', 'a1-a3', 'a1-a4', 'a1-a5', 'a1-a6', 'a1-a7', 'a1-b1', 'a1-c1', 'a1-d1', 'e1-c1', 'e1-d1', 'e1-d2', 'e1-e2', 'e1-f1', 'e1-f2', 'e1-g1', 'h1-f1', 'h1-g1', 'h1-h2', 'h1-h3', 'h1-h4', 'h1-h5', 'h1-h6', 'h1-h7']
+		>>> b.board = [x for x in 'xxxxxxxx xRxxxxxP xxrxxPxx xxxxKxPx PxxRPxxx xxxxxxpx xpxxxxxp xxxxrkxx'.replace(" ", "")]
+		>>> #sorted([b.format_move(x) for x in b.legal_moves("white")])
 		"""
 		if player is None:
 			player = self.turn

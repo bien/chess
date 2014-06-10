@@ -3,6 +3,7 @@ import notation
 import time
 import random
 import base64
+import sys
 
 class MoveException(Exception):
 	pass
@@ -24,6 +25,10 @@ class Human():
 				return self.algebra.interpret(text, board, self.color)
 			except notation.ParseException, e:
 				print e
+				
+class Quitter(Human):
+	def move(self, board):
+		sys.exit(0)
 				
 class Random():
 	def __init__(self, color):
@@ -245,6 +250,8 @@ def makeplayer(spec, color):
 		return IterativeDeepening(color, int(spec.replace("ai:", "")))
 	elif spec == 'random':
 		return Random(color)
+	elif spec == 'quit':
+		return Quitter(color)
 	else:
 		return None
 
