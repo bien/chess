@@ -5,6 +5,10 @@ import types
 class ParseException(Exception):
 	pass
 
+def format_move(move):
+	sr, sf, tr, tf = move[0:4]
+	return '%s%d-%s%d%s' % (chr(sf + ord('a') - 1), sr, chr(tf + ord('a') - 1), tr, '=%s' % move[4] if len(move) == 5 else '') 
+
 def read(f):
 	format = Algebra()
 	board = Board()
@@ -36,7 +40,7 @@ def parse_pgn(f):
 	for line in f:
 		m = re.match('\[(\w+) "(.*)"\]', line)
 		if m:
-			meta[m.groups(1)] = m.groups(2)
+			meta[m.group(1)] = m.group(2)
 		elif line.strip():
 			moves_found = 0
 			for pseudomove in re.split('\d+\.', line):
@@ -80,16 +84,28 @@ class Algebra(Notation):
 		>>> b = Board()
 		>>> Algebra().interpret('b8=Q', b, 'white')
 		"""
-		m = re.match('^(?P<piece>[KNBRQ]?)(?P<originrank>[1-8]?)(?P<originfile>[a-h]?)x?(?P<file>[a-h])(?P<rank>[1-8])(=(?P<promote>[BNRQ]))?(?P<check>\+?\+?)$', move)
+		m =  re.match('(?P<move>O-O(-O)?)(?P<check>\+?\+?)', move)
 		if m:
+			if m.group('move') == 'O-O':
+				if player == 'white':
+					return (1, 5, 1, 7)
+				else:
+					return (8, 5, 8, 7)
+			elif m.group('move') == 'O-O-O':
+				if player == 'white':
+					return (1, 5, 1, 3)
+				else:
+					return (8, 5, 8, 3)
+
+		m = re.match('^(?P<piece>[KNBRQ]?)(?P<originrank>[1-8]?)(?P<originfile>[a-h]?)x?(?P<file>[a-h])(?P<rank>[1-8])(=(?P<promote>[BNRQ]))?(?P<check>\+?\+?)$', move) 
+		if m:
+			check = m.group('check')
 			piece = board.get_piece(m.group('piece') or 'p')
 			src_file = ord(m.group('originfile')) - ord('a') + 1 if m.group('originfile') else None
 			src_rank = int(m.group('originrank'))if m.group('originrank') else None
 			dest_file = ord(m.group('file')) - ord('a') + 1
 			dest_rank = int(m.group('rank'))
 			promotion = m.group('promote')
-			check = m.group('check')
-#			print "Checking match for %s %s=(%s %s%d-%s%d)" % (player, move, piece, src_file or 'x', src_rank or 0, dest_file, dest_rank)
 			for candidate in board.legal_moves(player):
 				if dest_rank == candidate[2] and dest_file == candidate[3] and piece == board.get_piece(board.get_square(candidate[0], candidate[1])) and (src_rank is None or src_rank == candidate[0]) and (src_file is None or src_file == candidate[1]) and (len(candidate) == 4 or promotion == candidate[4]):
 					if check == '+':
@@ -101,17 +117,7 @@ class Algebra(Notation):
 					else:
 						return candidate
 			print board.format()
-			raise ParseException, "Couldn't find match for %s %s=(%s %s%d-%s%d) among %s" % (player, move, piece, src_file or 'x', src_rank or 0, dest_file, dest_rank, repr(sorted([board.format_move(m) for m in board.legal_moves(player)])))
-		elif move == 'O-O':
-			if player == 'white':
-				return (1, 5, 1, 7)
-			else:
-				return (8, 5, 8, 7)
-		elif move == 'O-O-O':
-			if player == 'white':
-				return (1, 5, 1, 3)
-			else:
-				return (8, 5, 8, 3)
+			raise ParseException, "Couldn't find match for %s %s=(%s %s%d-%s%d)%s among %s" % (player, move, piece, src_file or 'x', src_rank or 0, dest_file, dest_rank, check, repr(sorted([board.format_move(m) for m in board.legal_moves(player)])))
 		else:
 			raise ParseException, "Couldn't parse %s" % move
 

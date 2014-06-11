@@ -301,8 +301,8 @@ class Board:
 			pos = 0
 			end = 64
 		else:
-			pos = ranks[0] * 8
-			end = (1 + ranks[1]) * 8
+			pos = max(0, (ranks[0]-1) * 8)
+			end = min(64, ranks[1] * 8)
 		while True:
 			pos = self.board.find(piece, pos, end)
 			if pos == -1:
@@ -346,7 +346,7 @@ class Board:
 			
 		# check for pawn
 		pawndirection = -1 if otherplayer == 'white' else 1
-		if self.make_piece('p', otherplayer) in [self.get_square(pawndirection, next_to) for next_to in (-1, 1)]:
+		if self.make_piece('p', otherplayer) in [self.get_square(pawndirection+king[0], next_to+king[1]) for next_to in (-1, 1)]:
 			return True
 			
 		# knight
@@ -363,7 +363,7 @@ class Board:
 					if (r, f) == king:
 						return True
 			elif rook[1] == king[1]:
-				for r, f in self.apply_direction_to_edge([1 if rook[1] < king[1] else -1, 0], rook[0], rook[1], otherplayer, yield_empty=False):
+				for r, f in self.apply_direction_to_edge([1 if rook[0] < king[0] else -1, 0], rook[0], rook[1], otherplayer, yield_empty=False):
 					if (r, f) == king:
 						return True
 
@@ -379,7 +379,7 @@ class Board:
 					if (r, f) == king:
 						return True
 			elif queen[1] == king[1]:
-				for r, f in self.apply_direction_to_edge([1 if queen[1] < king[1] else -1, 0], queen[0], queen[1], otherplayer, yield_empty=False):
+				for r, f in self.apply_direction_to_edge([1 if queen[0] < king[0] else -1, 0], queen[0], queen[1], otherplayer, yield_empty=False):
 					if (r, f) == king:
 						return True
 			elif abs(queen[0] - king[0]) == abs(queen[1] - king[1]):
@@ -427,7 +427,8 @@ class Board:
 		>>> sorted([b.format_move(x) for x in b.legal_moves("white")])
 		['a1-a2', 'a1-a3', 'a1-a4', 'a1-a5', 'a1-a6', 'a1-a7', 'a1-b1', 'a1-c1', 'a1-d1', 'e1-c1', 'e1-d1', 'e1-d2', 'e1-e2', 'e1-f1', 'e1-f2', 'e1-g1', 'h1-f1', 'h1-g1', 'h1-h2', 'h1-h3', 'h1-h4', 'h1-h5', 'h1-h6', 'h1-h7']
 		>>> b.board = [x for x in 'xxxxxxxx xRxxxxxP xxrxxPxx xxxxKxPx PxxRPxxx xxxxxxpx xpxxxxxp xxxxrkxx'.replace(" ", "")]
-		>>> #sorted([b.format_move(x) for x in b.legal_moves("white")])
+		>>> sorted([b.format_move(x) for x in b.legal_moves("white")])
+		['a5-a6', 'b2-a2', 'b2-b1', 'b2-b3', 'b2-b4', 'b2-b5', 'b2-b6', 'b2-b7', 'b2-c2', 'b2-d2', 'b2-e2', 'b2-f2', 'b2-g2', 'd5-b5', 'd5-c5', 'd5-d1', 'd5-d2', 'd5-d3', 'd5-d4', 'd5-d6', 'd5-d7', 'd5-d8', 'e4-d4', 'e4-f4', 'e4-f5', 'e5-e6', 'f3-f4', 'g4-g5', 'h2-h3', 'h2-h4']
 		"""
 		if player is None:
 			player = self.turn
