@@ -12,6 +12,6 @@ int main(int argc, char **argv)
 		b.print_move(moves[i], std::cout);
 		std::cout << std::endl;
 	}
-	
+		
 	return 0;
 }

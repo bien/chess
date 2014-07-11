@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <iostream>
 #include "chess.hh"
@@ -153,7 +154,7 @@ inline BoardPos add_vector(BoardPos bp, int delta_rank, int delta_file)
 
 piece_t make_piece(piece_t type, Color color)
 {
-	if (color == Black) {
+	if (color == Black && type != EMPTY) {
 		return type | BlackMask;
 	} else {
 		return type;
@@ -167,6 +168,124 @@ piece_t Board::get_piece(BoardPos bp) const
 	} else {
 		return twosquare >> 4;
 	}
+}
+
+move_t invalid_move(const std::string &s)
+{
+	std::cerr << "Can't read move " << s << std::endl;
+	abort();
+}
+
+unsigned char read_piece(unsigned char c)
+{
+	switch (c) {
+		case 'N': return KNIGHT;
+		case 'R': return ROOK; 
+		case 'B': return BISHOP; 
+		case 'Q': return QUEEN; 
+		case 'K': return KING; 
+		case 'P': return PAWN; 
+	}
+	return 0;
+}
+
+move_t Board::read_move(const std::string &s, Color color) const
+{
+	int pos = 0;
+	bool castle = false;
+	bool queenside_castle = false;
+	bool check = false;
+	
+	piece_t piece;
+	int srcrank = INVALID;
+	int srcfile = INVALID;
+	int destfile = INVALID;
+	int destrank = INVALID;
+	int promotion = 0;
+
+	std::vector<move_t> candidates;
+
+	if (s[pos] == 'O') {
+		castle = true;
+	}
+	else if (s[pos] >= 'A' && s[pos] <= 'Z') {
+		piece = read_piece(s[pos++]);
+	} else {
+		piece = PAWN;
+	}
+	if (castle) {
+		if (s[pos++] != '-') {
+			invalid_move(s);
+		}
+		if (s[pos++] != 'O') {
+			invalid_move(s);
+		}
+		if (s[pos + 1] == '-' && s[pos + 2] == 'O') {
+			queenside_castle = true;
+			pos += 2;
+		}
+		if (s[pos] == '+') {
+			check = true;
+		}
+	} else {
+		while (s[pos] != 0) {
+			if (s[pos] >= '1' && s[pos] <= '8') {
+				if (destrank != 0) {
+					srcrank = destrank;
+				}
+				destrank = s[pos] - '1';
+			}
+			else if (s[pos] >= 'a' && s[pos] <= 'f') {
+				if (destfile != 0) {
+					srcfile = destfile;
+				}
+				destfile = s[pos] - 'a';
+			}
+			else if (s[pos] == '+') {
+				check = true;
+			}
+			else if (s[pos] == '=') {
+				promotion = s[pos + 1];
+				pos += 1;
+			} else if (s[pos] != 'x') {
+				invalid_move(s);
+			}
+			pos++;
+		}
+	}
+	if (castle) {
+		piece_t piece = make_piece(KING, color);
+		if (queenside_castle) {
+			if (color == White) {
+				return make_move(make_board_pos(0, 4), piece, make_board_pos(0, 2), EMPTY, 0);
+			} else {
+				return make_move(make_board_pos(7, 4), piece, make_board_pos(7, 2), EMPTY, 0);
+			}
+		} else {
+			if (color == White) {
+				return make_move(make_board_pos(0, 4), piece, make_board_pos(0, 2), EMPTY, 0);
+			} else {
+				return make_move(make_board_pos(7, 4), piece, make_board_pos(7, 2), EMPTY, 0);
+			}
+		}
+	} else {
+		std::cout << "legal moves" << std::endl;
+		legal_moves(color, candidates, piece);
+		for (unsigned int i = 0; i < candidates.size(); i++) {
+			move_t move = candidates[i];
+			std::cout << "test ";
+			print_move(move, std::cout);
+			std::cout << std::endl;
+			BoardPos cdestpos = get_dest_pos(move);
+			BoardPos csourcepos = get_source_pos(move);
+			piece_t csourcepiece = get_piece(csourcepos);
+			piece_t cpromote = get_promotion(move, color);
+			if (piece == (PIECE_MASK & csourcepiece) && (srcrank == INVALID || srcrank == get_board_rank(csourcepos)) && (srcfile == INVALID || srcfile == get_board_file(csourcepos)) && (destrank == INVALID || destrank == get_board_rank(cdestpos)) && (destfile == INVALID || destfile == get_board_file(cdestpos)) && (promotion == (cpromote & PIECE_MASK))) {
+				return move;
+			}
+		}
+	}
+	return invalid_move(s);
 }
 
 void Board::set_piece(BoardPos bp, piece_t piece)
@@ -342,7 +461,6 @@ void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector
 {
 	if (((color == White && (piece & 0x08) == 0) || (color == Black && (piece & 0x08))))
 	{
-		std::cout << "calculate_moves " << color << " " << static_cast<char>(get_board_file(bp) + 'a') << static_cast<char>(get_board_rank(bp) + '1') << " " << (int) piece << std::endl;
 		switch (piece & 0x07)
 		{
 			case ROOK:
@@ -414,7 +532,6 @@ void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector
 
 void Board::get_moves(Color color, std::vector<move_t> &moves, bool exclude_pawn_advance) const
 {
-	std::cout << "get_moves " << color << std::endl;
 	for (BoardPos i = (make_board_pos(0, 0) & 0xfe); i <= (make_board_pos(7, 7) | 0x1); i += 2)
 	{
 		unsigned char twosquare = data[i >> 1];
@@ -427,7 +544,7 @@ void Board::get_moves(Color color, std::vector<move_t> &moves, bool exclude_pawn
 	}
 }
 
-void Board::legal_moves(Color color, std::vector<move_t> &moves) const
+void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_to_limit) const
 {
 	get_moves(color, moves, false);
 	uint64_t covered_squares = 0;

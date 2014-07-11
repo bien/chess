@@ -1,7 +1,8 @@
 #include <stdlib.h>
 #include <iostream>
+#include <sstream>
+#include <set>
 #include "chess.hh"
-
 
 char get_board_rank(BoardPos bp);
 char get_board_file(BoardPos bp);
@@ -18,6 +19,26 @@ void assert_equals(T expected, T actual)
 	if (expected != actual) {
 		std::cout << "Test failed: expected " << expected << " but got " << actual << std::endl;
 		abort();
+	}
+}
+
+template <class T>
+void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
+{
+	std::set<T> aset(a.begin(), a.end());
+	std::set<T> bset(b.begin(), b.end());
+	
+	for (typename std::set<T>::const_iterator aiter = aset.begin(); aiter != aset.end(); aiter++) {
+		if (bset.find(*aiter) == bset.end()) {
+			std::cout << "Couldn't find expected value " << *aiter << std::endl;
+			abort();
+		}
+	}
+	for (typename std::set<T>::const_iterator biter = bset.begin(); biter != bset.end(); biter++) {
+		if (aset.find(*biter) == aset.end()) {
+			std::cout << "Found unexpected value " << *biter << std::endl;
+			abort();
+		}
 	}
 }
 
@@ -39,9 +60,52 @@ int main()
 		assert_equals(make_piece(PAWN, Black), b.get_piece(make_board_pos(6, i)));
 		assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(1, i)));
 		for (int r = 2; r < 6; r++) {
-			assert_equals(static_cast<char>(EMPTY), b.get_piece(make_board_pos(r, i)));
+			assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(r, i)));
 		}
 	}
+
+	std::vector<move_t> legal_white, legal_black;
+	b.legal_moves(White, legal_white);
+	b.legal_moves(Black, legal_black);
+	std::vector<move_t> expected_white, expected_black;
+
+	for (int i = 0; i < 8; i++) {
+		for (int j = 3; j <= 6; j++) {
+			std::ostringstream os;
+			os << char('a' + i) << j;
+			std::cout << "reading move " << os.str() << std::endl;
+			if (j >= 5) {
+				expected_black.push_back(b.read_move(os.str(), Black));
+			} else {
+				expected_white.push_back(b.read_move(os.str(), White));
+			}
+		}
+		if (i == 0 || i == 2 || i == 5 || i == 7) {
+			std::ostringstream os;
+			os << 'N' << char('a' + i) << 3;
+			expected_white.push_back(b.read_move(os.str(), White));
+			os.str("");
+			os << 'N' << char('a' + i) << 6;
+			expected_black.push_back(b.read_move(os.str(), Black));
+		}
+	}
+	assert_equals_unordered(expected_white, legal_white);
+	assert_equals_unordered(expected_black, legal_black);
 	
+	move_t e4 = b.read_move("e4", White);
+	b.apply_move(e4);
+	assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(3, 4)));
+	assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(1, 4)));
+	b.undo_move(e4);
+	for (int i = 0; i < 8; i++) {
+		assert_equals(make_piece(pieces[i], White), b.get_piece(make_board_pos(0, i)));
+		assert_equals(make_piece(pieces[i], Black), b.get_piece(make_board_pos(7, i)));
+		assert_equals(make_piece(PAWN, Black), b.get_piece(make_board_pos(6, i)));
+		assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(1, i)));
+		for (int r = 2; r < 6; r++) {
+			assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(r, i)));
+		}
+	}
+
 	return 0;
 }
