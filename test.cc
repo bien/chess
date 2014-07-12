@@ -73,7 +73,6 @@ int main()
 		for (int j = 3; j <= 6; j++) {
 			std::ostringstream os;
 			os << char('a' + i) << j;
-			std::cout << "reading move " << os.str() << std::endl;
 			if (j >= 5) {
 				expected_black.push_back(b.read_move(os.str(), Black));
 			} else {

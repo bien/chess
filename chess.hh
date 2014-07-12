@@ -36,7 +36,7 @@ class Board
 public:
 	Board();
 	Board(const Board &);
-	void legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece=INVALID) const;
+	void legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece=0) const;
 	piece_t get_piece(BoardPos) const;
 
 	void apply_move(move_t);
@@ -49,7 +49,7 @@ private:
 	void standard_initial();
 	
 	void set_piece(BoardPos, piece_t);
-	void get_moves(Color, std::vector<move_t> &moves, bool exclude_pawn_advance=false, piece_t limit_to_this_piece=INVALID) const;
+	void get_moves(Color, std::vector<move_t> &moves, bool exclude_pawn_advance=false, piece_t limit_to_this_piece=0) const;
 	bool discovers_check(move_t, Color) const;
 	BoardPos find_piece(piece_t) const;
 	void calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance) const;
