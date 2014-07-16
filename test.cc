@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <set>
 #include "chess.hh"
+#include "pgn.hh"
 
 char get_board_rank(BoardPos bp);
 char get_board_file(BoardPos bp);
@@ -90,12 +92,26 @@ int main()
 	}
 	assert_equals_unordered(expected_white, legal_white);
 	assert_equals_unordered(expected_black, legal_black);
+
+	std::ostringstream boardtext;
+	boardtext << b;
+	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"), boardtext.str());
 	
 	move_t e4 = b.read_move("e4", White);
 	b.apply_move(e4);
+
+	boardtext.str("");
+	boardtext << b;
+	assert_equals(std::string("rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR b KQkq e3 0 0"), boardtext.str());
+	
 	assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(3, 4)));
 	assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(1, 4)));
 	b.undo_move(e4);
+	
+	boardtext.str("");
+	boardtext << b;
+	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"), boardtext.str());
+	
 	for (int i = 0; i < 8; i++) {
 		assert_equals(make_piece(pieces[i], White), b.get_piece(make_board_pos(0, i)));
 		assert_equals(make_piece(pieces[i], Black), b.get_piece(make_board_pos(7, i)));
@@ -105,6 +121,21 @@ int main()
 			assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(r, i)));
 		}
 	}
+	
+	std::map<std::string, std::string> game_metadata;
+	std::vector<std::pair<std::string, std::string> > movelist;
+	std::ifstream fischer("games/Fischer.pgn");
+	read_pgn(fischer, game_metadata, movelist);
+	for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
+		move_t move = b.read_move(iter->first, White);
+		b.apply_move(move);
+		move = b.read_move(iter->second, Black);
+		b.apply_move(move);
+	}
+	
+	boardtext.str("");
+	boardtext << b;
+	assert_equals(std::string("r4r1k/ppb3pp/8/2N1nN2/3p4/3P2PP/PPP3BK/R2Q4 w - - 0 0"), boardtext.str());
 
 	return 0;
 }

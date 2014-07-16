@@ -3,7 +3,7 @@ CXXFLAGS = -Wall -g
 chess: moves.o chess.o
 	$(CXX) $^ -o $@
 	
-testexe: chess.o test.o
+testexe: chess.o test.o pgn.o
 	$(CXX) $^ -o $@
 	
 test: testexe

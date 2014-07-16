@@ -137,6 +137,8 @@ move_t Board::make_move(BoardPos source, piece_t source_piece, BoardPos dest, pi
 	}
 	if (enpassant_target != -1) {
 		move |= (0xf & enpassant_target) << 20;
+	} else {
+		move |= ENPASSANT_STATE_MASK;
 	}
 	bool invalidates_castle = false;
 	if ((source_piece & PIECE_MASK) == KING && (can_castle(get_color(source_piece), true) || can_castle(get_color(source_piece), false))) {
@@ -152,9 +154,6 @@ move_t Board::make_move(BoardPos source, piece_t source_piece, BoardPos dest, pi
 		move |= INVALIDATES_CASTLE;
 	}
 
-	if (move == 0x17261) {
-		std::cout << "break here" << std::endl;
-	}
 	return move;
 }
 
@@ -237,17 +236,17 @@ move_t Board::read_move(const std::string &s, Color color) const
 		piece = PAWN;
 	}
 	if (castle) {
-		if (s[pos++] != '-') {
+		if (s[++pos] != '-') {
 			invalid_move(s);
 		}
-		if (s[pos++] != 'O') {
+		if (s[++pos] != 'O') {
 			invalid_move(s);
 		}
 		if (s[pos + 1] == '-' && s[pos + 2] == 'O') {
 			queenside_castle = true;
 			pos += 2;
 		}
-		if (s[pos] == '+') {
+		if (s[pos+1] == '+') {
 			check = true;
 		}
 	} else {
@@ -286,9 +285,9 @@ move_t Board::read_move(const std::string &s, Color color) const
 			}
 		} else {
 			if (color == White) {
-				return make_move(make_board_pos(0, 4), piece, make_board_pos(0, 2), EMPTY, 0);
+				return make_move(make_board_pos(0, 4), piece, make_board_pos(0, 6), EMPTY, 0);
 			} else {
-				return make_move(make_board_pos(7, 4), piece, make_board_pos(7, 2), EMPTY, 0);
+				return make_move(make_board_pos(7, 4), piece, make_board_pos(7, 6), EMPTY, 0);
 			}
 		}
 	} else {
@@ -759,6 +758,10 @@ void Board::undo_move(move_t move)
 	if (move & ENPASSANT_FLAG) {
 		set_piece(make_board_pos(get_board_rank(sourcepos), get_board_file(destpos)), make_piece(PAWN, get_opposite_color(color)));
 	}
+	enpassant_target = (move >> 20) & 0xf;
+	if (enpassant_target > 8) {
+		enpassant_target = -1;
+	}
 }
 
 bool Board::removes_check(move_t move, Color color) const
@@ -822,3 +825,107 @@ void Board::print_move(move_t move, std::ostream &os) const
 	BoardPos sourcepos = get_source_pos(move);
 	os << static_cast<char>(get_board_file(sourcepos) + 'a') << static_cast<char>(get_board_rank(sourcepos) + '1') << '-' << static_cast<char>(get_board_file(destpos) + 'a') << static_cast<char>(get_board_rank(destpos) + '1');
 }
+
+char Board::fen_repr(piece_t p) const
+{
+	switch (p) {
+	case EMPTY: return 'x';
+	case PAWN: return 'p';
+	case KNIGHT: return 'n';
+	case BISHOP: return 'b';
+	case ROOK: return 'r';
+	case QUEEN: return 'q';
+	case KING: return 'k';
+	case PAWN | BlackMask: return 'P';
+	case KNIGHT | BlackMask: return 'N';
+	case BISHOP | BlackMask: return 'B';
+	case ROOK | BlackMask: return 'R';
+	case QUEEN | BlackMask: return 'Q';
+	case KING | BlackMask: return 'K';
+	default: return 'X';
+	}
+}
+
+void Board::fen_flush(std::ostream &os, int &empty) const
+{
+	if (empty > 0) {
+		os << empty;
+		empty = 0;
+	}
+}
+
+void Board::fen_handle_space(piece_t piece, std::ostream &os, int &empty) const
+{
+	char c = fen_repr(piece);
+	if (c == 'x') {
+		empty++;
+	}
+	else if (c == 'X') {
+		std::cout << "Error printing fen representation" << std::endl;
+		abort();
+	}
+	else if (empty > 0) {
+		fen_flush(os, empty);
+		os << c;
+	}
+	else {
+		os << c;
+	}
+}
+
+void Board::get_fen(std::ostream &os) const
+{
+	int empty = 0;
+	for (BoardPos i = (make_board_pos(0, 0) & 0xfe); i <= (make_board_pos(7, 7) | 0x1); i += 2)
+	{
+		unsigned char twosquare = data[i >> 1];
+		if (is_legal_pos(i)) {
+			fen_handle_space(twosquare >> 4, os, empty);
+		}
+		if (is_legal_pos(i + 1)) {
+			fen_handle_space(twosquare & 0xf, os, empty);
+		}
+		if (get_board_file(i) == 7 && get_board_rank(i) < 7) {
+			fen_flush(os, empty);
+			os << "/";
+		}
+	}
+	fen_flush(os, empty);
+	switch (side_to_play) {
+		case White: os << " w"; break;
+		case Black: os << " b"; break;
+		default: abort();
+	}
+	os << " ";
+	if (can_castle(White, true)) {
+		os << "K";
+	}
+	if (can_castle(White, false)) {
+		os << "Q";
+	}
+	if (can_castle(Black, true)) {
+		os << "k";
+	} 
+	if (can_castle(Black, false)) {
+		os << "q";
+	}
+	if (!castle) {
+		os << "-";
+	}
+	os << " ";
+	if (enpassant_target < 0 || enpassant_target >= 8) {
+		os << "-";
+	} else if (side_to_play == White) {
+		os << static_cast<char>(enpassant_target + 'a') << "6";
+	} else {
+		os << static_cast<char>(enpassant_target + 'a') << "3";
+	}
+	os << " 0 0";
+}
+
+std::ostream &operator<<(std::ostream &os, const Board &b)
+{
+	b.get_fen(os);
+	return os;
+}
+
