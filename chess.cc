@@ -34,15 +34,15 @@ T abs(T a)
 
 bool bitboard_getbit(uint64_t data, int pos)
 {
-	return data & (1 << pos);
+	return data & (static_cast<unsigned long long>(1) << pos);
 }
 
 void bitboard_setbit(uint64_t &bitboard, int pos, bool value)
 {
 	if (value) {
-		bitboard |= (1 << pos);
+		bitboard |= (static_cast<unsigned long long>(1) << pos);
 	} else {
-		bitboard &= ~(1 << pos);
+		bitboard &= ~(static_cast<unsigned long long>(1) << pos);
 	}
 }
 
@@ -192,9 +192,10 @@ void Board::set_piece(BoardPos bp, piece_t piece)
 	data[bp >> 1] = twosquare;
 }
 
-move_t invalid_move(const std::string &s)
+move_t Board::invalid_move(const std::string &s) const
 {
 	std::cerr << "Can't read move " << s << std::endl;
+	std::cerr << *this << std::endl;
 	abort();
 }
 
@@ -307,6 +308,11 @@ move_t Board::read_move(const std::string &s, Color color) const
 }
 
 Board::Board()
+{
+	reset();
+}
+
+void Board::reset()
 {
 	standard_initial();
 	side_to_play = White;

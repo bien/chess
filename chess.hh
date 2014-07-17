@@ -36,6 +36,8 @@ class Board
 public:
 	Board();
 	Board(const Board &);
+	void reset();
+
 	void legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece=0) const;
 	piece_t get_piece(BoardPos) const;
 	void get_fen(std::ostream &os) const;
@@ -52,6 +54,8 @@ private:
 	char fen_repr(piece_t p) const;
 	void fen_flush(std::ostream &os, int &empty) const;
 	void fen_handle_space(piece_t piece, std::ostream &os, int &empty) const;
+	
+	move_t invalid_move(const std::string &s) const;
 
 	void set_piece(BoardPos, piece_t);
 	void get_moves(Color, std::vector<move_t> &moves, bool exclude_pawn_advance=false, piece_t limit_to_this_piece=0) const;
