@@ -403,7 +403,7 @@ BoardPos Board::get_capture(BoardPos base, char drank, char dfile, Color capture
 		piece_t owner = get_piece(pos);
 		if (owner == EMPTY) {
 			continue;
-		} else if (((owner & 0x80) != 0) == (capture == Black)) {
+		} else if (((owner & 0x8) != 0) == (capture == Black)) {
 			// found what we want to capture
 			return pos;
 		} else {
