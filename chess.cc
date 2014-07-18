@@ -653,7 +653,8 @@ bool Board::discovers_check(move_t move, Color color) const
 	BoardPos piece_to_king = get_capture(king, unit_drank, unit_dfile, get_opposite_color(source_piece));
 	if (piece_to_king == source) {
 		// follow line of sight to candidate capturing piece
-		BoardPos piece_to_check = get_capture(piece_to_king, unit_drank, unit_dfile, get_color(king));
+		BoardPos place_to_check = get_capture(piece_to_king, unit_drank, unit_dfile, get_color(king));
+		piece_t piece_to_check = get_piece(place_to_check);
 		switch (piece_to_check & PIECE_MASK) {
 			case BISHOP:
 				return unit_drank != 0 && unit_dfile != 0;
