@@ -268,7 +268,13 @@ move_t Board::read_move(const std::string &s, Color color) const
 				check = true;
 			}
 			else if (s[pos] == '=') {
-				promotion = s[pos + 1];
+				switch (s[pos + 1]) {
+					case 'q': case 'Q': promotion = QUEEN; break;
+					case 'r': case 'R': promotion = ROOK; break;
+					case 'n': case 'N': promotion = KNIGHT; break;
+					case 'b': case 'B': promotion = BISHOP; break;
+					default: invalid_move(s); break;
+				}
 				pos += 1;
 			} else if (s[pos] != 'x') {
 				invalid_move(s);
@@ -302,6 +308,11 @@ move_t Board::read_move(const std::string &s, Color color) const
 			if (piece == (PIECE_MASK & csourcepiece) && (srcrank == INVALID || srcrank == get_board_rank(csourcepos)) && (srcfile == INVALID || srcfile == get_board_file(csourcepos)) && (destrank == INVALID || destrank == get_board_rank(cdestpos)) && (destfile == INVALID || destfile == get_board_file(cdestpos)) && (promotion == (cpromote & PIECE_MASK))) {
 				return move;
 			}
+		}
+		std::cout << "couldn't find legal moves among: " << std::endl;
+		for (unsigned int i = 0; i < candidates.size(); i++) {
+			print_move(candidates[i], std::cout);
+			std::cout << std::endl;
 		}
 	}
 	return invalid_move(s);
@@ -448,7 +459,7 @@ void Board::pawn_capture(BoardPos bp, char dfile, Color piece_color, std::vector
 		pawn_move(bp, dest, moves);
 	}
 	// en passant captures
-	else if (enpassant_target == get_board_file(square) && get_board_rank(bp) == (piece_color == White ? 4 : 3))
+	else if (enpassant_target == get_board_file(dest) && get_board_rank(bp) == (piece_color == White ? 4 : 3))
 	{
 		pawn_move(bp, dest, moves);
 	}
@@ -625,48 +636,67 @@ BoardPos Board::find_piece(piece_t piece) const
 	return InvalidPos;
 }
 
-// color indicates which king would be checked
-bool Board::discovers_check(move_t move, Color color) const
+bool get_unit_vector(char drank, char dfile, char &unit_drank, char &unit_dfile)
 {
-	BoardPos source = get_source_pos(move);
-	piece_t source_piece = get_piece(source);
-	if ((source_piece & 0x7) == 0) {
-		// moving away from empty square cannot discover a check
-		return false;
-	}
-	BoardPos king = find_piece(make_piece(KING, color));
-	char drank, dfile;
-	get_vector(king, source, drank, dfile);
-	char unit_drank = 0, unit_dfile = 0;
 	if (drank == 0) {
 		unit_dfile = sign(dfile);
+		unit_drank = 0;
 	} else if (dfile == 0) {
 		unit_drank = sign(drank);
+		unit_dfile = 0;
 	} else if (abs(drank) == abs(dfile)) {
 		unit_drank = sign(drank);
 		unit_dfile = sign(dfile);
 	} else {
 		return false;
 	}
-	
-	// check whether there is clear line of sight from king to source
-	BoardPos piece_to_king = get_capture(king, unit_drank, unit_dfile, get_opposite_color(source_piece));
-	if (piece_to_king == source) {
-		// follow line of sight to candidate capturing piece
-		BoardPos place_to_check = get_capture(piece_to_king, unit_drank, unit_dfile, get_color(king));
-		piece_t piece_to_check = get_piece(place_to_check);
-		switch (piece_to_check & PIECE_MASK) {
-			case BISHOP:
-				return unit_drank != 0 && unit_dfile != 0;
-			case ROOK:
-				return unit_drank == 0 || unit_dfile == 0;
-			case QUEEN:
-				return true;
-		}
-		return false;
-	} else {
+	return true;
+}
+
+// color indicates which king would be checked
+bool Board::discovers_check(move_t move, Color color) const
+{
+	BoardPos source = get_source_pos(move);
+	BoardPos king = find_piece(make_piece(KING, color));
+	char drank, dfile;
+	get_vector(king, source, drank, dfile);
+	char unit_drank = 0, unit_dfile = 0;
+	bool simple_vector = get_unit_vector(drank, dfile, unit_drank, unit_dfile);
+	if (!simple_vector) {
 		return false;
 	}
+	
+	// check whether there is clear line of sight from source to king
+	BoardPos piece_to_king = get_capture(source, -unit_drank, -unit_dfile, get_color(get_piece(king)));
+	piece_t piece_to_check;
+	if (piece_to_king != king) {
+		return false;
+	}
+	// follow line of sight to candidate capturing piece
+	BoardPos place_to_check = get_capture(source, unit_drank, unit_dfile, get_opposite_color(get_piece(king)));
+
+	// is the destination of the moving piece between king and place_to_check?
+	char capture_drank, capture_dfile;
+	char destdrank, destdfile, unit_destdrank, unit_destdfile;
+	get_vector(king, place_to_check, capture_drank, capture_dfile);
+	get_vector(king, get_dest_pos(move), destdrank, destdfile);
+	if (get_unit_vector(destdrank, destdfile, unit_destdrank, unit_destdfile)) {
+		if (abs(destdrank) <= abs(capture_drank) && abs(destdfile) <= abs(capture_dfile) && unit_destdrank == unit_drank && unit_destdfile == unit_dfile) {
+			return false;
+		}
+	}
+
+	// can the piece now attack the king?
+	piece_to_check = get_piece(place_to_check);
+	switch (piece_to_check & PIECE_MASK) {
+		case BISHOP:
+			return unit_drank != 0 && unit_dfile != 0;
+		case ROOK:
+			return unit_drank == 0 || unit_dfile == 0;
+		case QUEEN:
+			return true;
+	}
+	return false;
 }
 
 void Board::apply_move(move_t move)
@@ -806,7 +836,7 @@ bool Board::removes_check(move_t move, Color color) const
 	
 	Board copy(*this);
 	copy.apply_move(move);
-	return copy.king_in_check(color);
+	return !copy.king_in_check(color);
 }
 
 bool Board::king_in_check(Color color) const
@@ -831,24 +861,34 @@ void Board::print_move(move_t move, std::ostream &os) const
 	BoardPos destpos = get_dest_pos(move);
 	BoardPos sourcepos = get_source_pos(move);
 	os << static_cast<char>(get_board_file(sourcepos) + 'a') << static_cast<char>(get_board_rank(sourcepos) + '1') << '-' << static_cast<char>(get_board_file(destpos) + 'a') << static_cast<char>(get_board_rank(destpos) + '1');
+	piece_t promotion = get_promotion(move, White);
+	if (promotion > 0) {
+		os << "=";
+		switch (promotion) {
+			case BISHOP: os << "B"; break;
+			case KNIGHT: os << "N"; break;
+			case ROOK: os << "R"; break;
+			case QUEEN: os << "Q"; break;
+		}
+	}
 }
 
 char Board::fen_repr(piece_t p) const
 {
 	switch (p) {
 	case EMPTY: return 'x';
-	case PAWN: return 'p';
-	case KNIGHT: return 'n';
-	case BISHOP: return 'b';
-	case ROOK: return 'r';
-	case QUEEN: return 'q';
-	case KING: return 'k';
-	case PAWN | BlackMask: return 'P';
-	case KNIGHT | BlackMask: return 'N';
-	case BISHOP | BlackMask: return 'B';
-	case ROOK | BlackMask: return 'R';
-	case QUEEN | BlackMask: return 'Q';
-	case KING | BlackMask: return 'K';
+	case PAWN: return 'P';
+	case KNIGHT: return 'N';
+	case BISHOP: return 'B';
+	case ROOK: return 'R';
+	case QUEEN: return 'Q';
+	case KING: return 'K';
+	case PAWN | BlackMask: return 'p';
+	case KNIGHT | BlackMask: return 'n';
+	case BISHOP | BlackMask: return 'b';
+	case ROOK | BlackMask: return 'r';
+	case QUEEN | BlackMask: return 'q';
+	case KING | BlackMask: return 'k';
 	default: return 'X';
 	}
 }
@@ -883,21 +923,15 @@ void Board::fen_handle_space(piece_t piece, std::ostream &os, int &empty) const
 void Board::get_fen(std::ostream &os) const
 {
 	int empty = 0;
-	for (BoardPos i = (make_board_pos(0, 0) & 0xfe); i <= (make_board_pos(7, 7) | 0x1); i += 2)
-	{
-		unsigned char twosquare = data[i >> 1];
-		if (is_legal_pos(i)) {
-			fen_handle_space(twosquare >> 4, os, empty);
+	for (int rank = 8; rank >= 1; rank--) {
+		for (int file = 1; file <= 8; file++) {
+			fen_handle_space(get_piece(make_board_pos(rank-1, file-1)), os, empty);
 		}
-		if (is_legal_pos(i + 1)) {
-			fen_handle_space(twosquare & 0xf, os, empty);
-		}
-		if (get_board_file(i) == 7 && get_board_rank(i) < 7) {
-			fen_flush(os, empty);
-			os << "/";
+		fen_flush(os, empty);
+		if (rank > 1) {
+				os << "/";
 		}
 	}
-	fen_flush(os, empty);
 	switch (side_to_play) {
 		case White: os << " w"; break;
 		case Black: os << " b"; break;

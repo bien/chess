@@ -102,7 +102,7 @@ int main()
 
 	boardtext.str("");
 	boardtext << b;
-	assert_equals(std::string("rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR b KQkq e3 0 0"), boardtext.str());
+	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 0"), boardtext.str());
 	
 	assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(3, 4)));
 	assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(1, 4)));
@@ -135,7 +135,7 @@ int main()
 	
 	boardtext.str("");
 	boardtext << b;
-	assert_equals(std::string("r4r1k/ppb3pp/8/2N1nN2/3p4/3P2PP/PPP3BK/R2Q4 w - - 0 0"), boardtext.str());
+	assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 0"), boardtext.str());
 	
 	b.reset();
 	boardtext.str("");
@@ -150,14 +150,13 @@ int main()
 		b.reset();
 		i = 0;
 		for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
-			if (iter->first == "Kb1") {
-				std::cout << "break here" << std::endl;
-			}
-			std::cout << ++i << ". " << iter->first << " " << iter->second << std::endl;
+			std::cout << b << std::endl << ++i << ". " << iter->first << " " << iter->second << std::endl;
 			move_t move = b.read_move(iter->first, White);
 			b.apply_move(move);
-			move = b.read_move(iter->second, Black);
-			b.apply_move(move);
+			if (iter->second.length() > 1) {
+				move = b.read_move(iter->second, Black);
+				b.apply_move(move);
+			}
 		}
 	}
 
