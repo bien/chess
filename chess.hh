@@ -41,6 +41,7 @@ public:
 	void legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece=0) const;
 	piece_t get_piece(BoardPos) const;
 	void get_fen(std::ostream &os) const;
+	void set_fen(const std::string &fen);
 
 	void apply_move(move_t);
 	void undo_move(move_t);

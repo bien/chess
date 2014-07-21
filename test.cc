@@ -141,16 +141,22 @@ int main()
 	boardtext.str("");
 	boardtext << b;
 	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"), boardtext.str());
+	
+	b.set_fen("r5k1/1p1brpbp/1npp2p1/q1n5/p1PNPP2/2N3PP/PPQ2B1K/3RRB2");
+	move_t move = b.read_move("g4", White);
+	b.apply_move(move);
+	move = b.read_move("Rae8", Black);
+	b.apply_move(move);
+	boardtext.str("");
+	boardtext << b;
+	assert_equals(std::string("4r1k1/1p1brpbp/1npp2p1/q1n5/p1PNPPP1/2N4P/PPQ2B1K/3RRB2 w KQk - 0 0"), boardtext.str());
 
-	int i;
 	while (!fischer.eof()) {
 		movelist.clear();
 		game_metadata.clear();
 		read_pgn(fischer, game_metadata, movelist);
 		b.reset();
-		i = 0;
 		for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
-			std::cout << b << std::endl << ++i << ". " << iter->first << " " << iter->second << std::endl;
 			move_t move = b.read_move(iter->first, White);
 			b.apply_move(move);
 			if (iter->second.length() > 1) {

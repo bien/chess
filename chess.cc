@@ -157,7 +157,7 @@ move_t Board::make_move(BoardPos source, piece_t source_piece, BoardPos dest, pi
 	return move;
 }
 
-inline BoardPos add_vector(BoardPos bp, int delta_rank, int delta_file)
+BoardPos add_vector(BoardPos bp, int delta_rank, int delta_file)
 {
 	return bp + delta_file + delta_rank * MEMORY_FILES;
 }
@@ -197,6 +197,45 @@ move_t Board::invalid_move(const std::string &s) const
 	std::cerr << "Can't read move " << s << std::endl;
 	std::cerr << *this << std::endl;
 	abort();
+}
+
+void Board::set_fen(const std::string &fen)
+{
+	unsigned char rank = 8, file = 1;
+	unsigned int pos = 0;
+	while (pos < fen.length()) {
+		char c = fen[pos++];
+		if (c == '/') {
+			rank--; 
+			file = 1; 
+			continue;
+		}
+			
+		BoardPos bp = make_board_pos(rank-1, file-1);
+		switch (c) {
+			case 'p': set_piece(bp, PAWN | BlackMask); break;
+			case 'r': set_piece(bp, ROOK | BlackMask); break;
+			case 'n': set_piece(bp, KNIGHT | BlackMask); break;
+			case 'b': set_piece(bp, BISHOP | BlackMask); break;
+			case 'q': set_piece(bp, QUEEN | BlackMask); break;
+			case 'k': set_piece(bp, KING | BlackMask); break;
+			case 'P': set_piece(bp, PAWN); break;
+			case 'R': set_piece(bp, ROOK); break;
+			case 'N': set_piece(bp, KNIGHT); break;
+			case 'B': set_piece(bp, BISHOP); break;
+			case 'Q': set_piece(bp, QUEEN); break;
+			case 'K': set_piece(bp, KING); break;
+		}
+		if (c > '0' && c < '9') {
+			for (int i = 0; i < c - '0'; i++) {
+				set_piece(make_board_pos(rank-1, file-1), EMPTY);
+				file++;
+			}
+		} else {
+			file++;
+		}
+	}
+	
 }
 
 unsigned char read_piece(unsigned char c)
@@ -253,13 +292,13 @@ move_t Board::read_move(const std::string &s, Color color) const
 	} else {
 		while (s[pos] != 0) {
 			if (s[pos] >= '1' && s[pos] <= '8') {
-				if (destrank != 0) {
+				if (destrank != INVALID) {
 					srcrank = destrank;
 				}
 				destrank = s[pos] - '1';
 			}
 			else if (s[pos] >= 'a' && s[pos] <= 'h') {
-				if (destfile != 0) {
+				if (destfile != INVALID) {
 					srcfile = destfile;
 				}
 				destfile = s[pos] - 'a';
@@ -429,7 +468,7 @@ void Board::single_move(BoardPos base, piece_t piece, char drank, char dfile, Co
 	BoardPos pos = base;
 	pos = add_vector(pos, drank, dfile);
 	piece_t owner = get_piece(pos);
-	if (is_legal_pos(pos) && (owner == EMPTY || ((owner & 0x8) != 0) == (capture == Black))) {
+	if (is_legal_pos(pos) && (owner == EMPTY || (((owner & 0x8) != 0) == (capture == Black)))) {
 		// found what we want to capture
 		moves.push_back(make_move(base, piece, pos, owner, 0));
 	} 
@@ -459,7 +498,7 @@ void Board::pawn_capture(BoardPos bp, char dfile, Color piece_color, std::vector
 		pawn_move(bp, dest, moves);
 	}
 	// en passant captures
-	else if (enpassant_target == get_board_file(dest) && get_board_rank(bp) == (piece_color == White ? 4 : 3))
+	else if (square == EMPTY && enpassant_target == get_board_file(dest) && get_board_rank(bp) == (piece_color == White ? 4 : 3) && piece_color == side_to_play)
 	{
 		pawn_move(bp, dest, moves);
 	}
