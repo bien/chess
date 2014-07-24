@@ -1,5 +1,8 @@
 CXXFLAGS = -Wall -g -O2
 
+feature: extractfeatures.o chess.o pgn.o
+	$(CXX) $^ -o $@
+
 chess: moves.o chess.o
 	$(CXX) $^ -o $@
 	

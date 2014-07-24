@@ -12,7 +12,8 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
 		}
 		if (line[0] == '[') {
 			int spacepos = line.find(' ');
-			metadata[line.substr(0, spacepos)] = line.substr(spacepos+2, line.length() - 1);
+			int lastquote = line.rfind('"');
+			metadata[line.substr(1, spacepos-1)] = line.substr(spacepos+2, lastquote-spacepos-2);
 		}
 		else if (line == "" && !movelist.empty()) {
 			break;
