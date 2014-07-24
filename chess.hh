@@ -31,6 +31,8 @@ const int BlackMask = 8;
 
 typedef unsigned char BoardPos;
 
+BoardPos make_board_pos(int rank, int file);
+
 class Board
 {
 public:
@@ -81,6 +83,7 @@ private:
 	bool in_check;
 	char castle;
 	char enpassant_target;
+	short move_count;
 };
 
 piece_t make_piece(piece_t type, Color color);

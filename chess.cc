@@ -17,7 +17,6 @@ unsigned char get_board_file(BoardPos bp);
 bool is_legal_pos(BoardPos bp);
 void get_vector(BoardPos origin, BoardPos bp, char &drank, char &dfile);
 inline BoardPos add_vector(BoardPos bp, int delta_rank, int delta_file);
-BoardPos make_board_pos(int rank, int file);
 
 BoardPos get_source_pos(move_t move);
 BoardPos get_dest_pos(move_t move);
@@ -369,10 +368,11 @@ void Board::reset()
 	castle = 0x0f;
 	in_check = false;
 	enpassant_target = -1;
+	move_count = 0;
 }
 
 Board::Board(const Board &copy)
-	: side_to_play(copy.side_to_play), in_check(copy.in_check), castle(copy.castle), enpassant_target(copy.enpassant_target)
+	: side_to_play(copy.side_to_play), in_check(copy.in_check), castle(copy.castle), enpassant_target(copy.enpassant_target), move_count(copy.move_count)
 {
 	memcpy(this->data, copy.data, sizeof(data)); 
 }
@@ -792,6 +792,9 @@ void Board::apply_move(move_t move)
 	}
 	side_to_play = get_opposite_color(color);
 	in_check = king_in_check(side_to_play);
+	if (color == White) {
+		move_count++;
+	}
 }
 
 void Board::undo_move(move_t move)
@@ -837,6 +840,9 @@ void Board::undo_move(move_t move)
 	enpassant_target = (move >> 20) & 0xf;
 	if (enpassant_target > 8) {
 		enpassant_target = -1;
+	}
+	if (color == White) {
+		move_count--;
 	}
 }
 
