@@ -163,10 +163,7 @@ int main(int argc, char **argv)
 		} else if (game_metadata["Result"] == "1/2-1/2") {
 			result = 0;
 		} else {
-			std::cerr << "Can't read result " << game_metadata["Result"] << " " << game_metadata.size() << " length " << movelist.size() << " last move " << movelist.back().first << " " << movelist.back().second << std::endl;
-			for (std::map<std::string, std::string>::iterator iter = game_metadata.begin(); iter != game_metadata.end(); iter++) {
-				std::cerr << iter->first << ": " << iter->second << std::endl;
-			}
+			std::cerr << "Can't read result " << game_metadata["Result"] << std::endl;
 			abort();
 		}
 		std::cout << result << " ";

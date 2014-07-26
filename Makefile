@@ -1,4 +1,4 @@
-CXXFLAGS = -Wall -g
+CXXFLAGS = -Wall -g -O2
 
 feature: extractfeatures.o chess.o pgn.o
 	$(CXX) $^ -o $@
