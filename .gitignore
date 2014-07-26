@@ -1,0 +1,8 @@
+*.o
+games/*.zip
+*.stackdump
+*.pyc
+*.log
+*.dot
+*.features
+*.exe
