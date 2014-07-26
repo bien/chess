@@ -124,20 +124,40 @@ int main()
 	
 	std::map<std::string, std::string> game_metadata;
 	std::vector<std::pair<std::string, std::string> > movelist;
+	std::vector<move_t> moverecord;
+	std::vector<std::string> boardrecord;
 	std::ifstream fischer("games/Fischer.pgn");
 	read_pgn(fischer, game_metadata, movelist);
 	for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
 		move_t move = b.read_move(iter->first, White);
 		b.apply_move(move);
+		moverecord.push_back(move);
+		boardtext.str("");
+		boardtext << b;
+		boardrecord.push_back(boardtext.str());
+
 		move = b.read_move(iter->second, Black);
 		b.apply_move(move);
+		moverecord.push_back(move);
+		boardtext.str("");
+		boardtext << b;
+		boardrecord.push_back(boardtext.str());
 	}
 	
 	boardtext.str("");
 	boardtext << b;
 	assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 0"), boardtext.str());
 	
-	b.reset();
+	// play in reverse
+	assert_equals(moverecord.size(), boardrecord.size());
+	for (int i = moverecord.size() - 1; i >= 0; i--) 
+	{
+		boardtext.str("");
+		b.get_fen(boardtext);
+		assert_equals(boardrecord[i], boardtext.str());
+		b.undo_move(moverecord[i]);
+	}
+	
 	boardtext.str("");
 	boardtext << b;
 	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"), boardtext.str());
@@ -150,6 +170,14 @@ int main()
 	boardtext.str("");
 	boardtext << b;
 	assert_equals(std::string("4r1k1/1p1brpbp/1npp2p1/q1n5/p1PNPPP1/2N4P/PPQ2B1K/3RRB2 w KQk - 0 0"), boardtext.str());
+	
+	b.set_fen("8/4k3/5p2/3BP1pP/5KP1/8/2b5/8 w - g6 0 0");
+	move = b.read_move("hxg6", White);
+	b.apply_move(move);
+	boardtext.str("");
+	boardtext << b;
+	assert_equals(std::string("8/4k3/5pP1/3BP3/5KP1/8/2b5/8 b - - 0 0"), boardtext.str());
+	
 
 	while (!fischer.eof()) {
 		movelist.clear();

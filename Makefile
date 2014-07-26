@@ -1,4 +1,4 @@
-CXXFLAGS = -Wall -g -O2
+CXXFLAGS = -Wall -g
 
 feature: extractfeatures.o chess.o pgn.o
 	$(CXX) $^ -o $@
@@ -14,3 +14,9 @@ test: testexe
 
 clean:
 	rm -f *.o chess test
+
+%.features: games/%.zip feature
+	gunzip < $< | ./feature > $@
+	
+
+	

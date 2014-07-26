@@ -1,5 +1,6 @@
 #include "chess.hh"
 #include <iostream>
+#include <fstream>
 #include <string.h>
 #include "pgn.hh"
 #include <stdlib.h>
@@ -62,7 +63,7 @@ void print_features(const Board &b, std::ostream &os)
 					bscore += accum * diagonal_moves(rank, file);
 					break;
 				case ROOK: 
-					bct += accum; 
+					rct += accum; 
 					if (colorindex == 1 && pawns[file+8] == 0) {
 						rhopenfile--;
 						if (pawns[file] == 0) {
@@ -128,16 +129,23 @@ void print_features(const Board &b, std::ostream &os)
 		<< nscore << " " << bscore << " " << kscore << " " << rhopenfile << " " << rfopenfile << " " << qscore;
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	std::map<std::string, std::string> game_metadata;
 	std::vector<std::pair<std::string, std::string> > movelist;
 	Board b;
+	std::istream *input_stream = &std::cin;
+	if (argc > 1) {
+		input_stream = new std::ifstream(argv[1]);
+	}
 
-	while (!std::cin.eof()) {
+	while (!input_stream->eof()) {
 		movelist.clear();
 		game_metadata.clear();
-		read_pgn(std::cin, game_metadata, movelist);
+		read_pgn(*input_stream, game_metadata, movelist);
+		if (movelist.empty()) {
+			break;
+		}
 		b.reset();
 		for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
 			move_t move = b.read_move(iter->first, White);
@@ -155,7 +163,10 @@ int main()
 		} else if (game_metadata["Result"] == "1/2-1/2") {
 			result = 0;
 		} else {
-			std::cerr << "Can't read result " << game_metadata["Result"] << std::endl;
+			std::cerr << "Can't read result " << game_metadata["Result"] << " " << game_metadata.size() << " length " << movelist.size() << " last move " << movelist.back().first << " " << movelist.back().second << std::endl;
+			for (std::map<std::string, std::string>::iterator iter = game_metadata.begin(); iter != game_metadata.end(); iter++) {
+				std::cerr << iter->first << ": " << iter->second << std::endl;
+			}
 			abort();
 		}
 		std::cout << result << " ";

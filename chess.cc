@@ -21,6 +21,8 @@ inline BoardPos add_vector(BoardPos bp, int delta_rank, int delta_file);
 BoardPos get_source_pos(move_t move);
 BoardPos get_dest_pos(move_t move);
 
+int get_castle_bit(Color color, bool kingside);
+
 template <class T>
 T abs(T a)
 {
@@ -99,6 +101,9 @@ BoardPos get_dest_pos(move_t move)
 
 BoardPos make_board_pos(int rank, int file)
 {
+	if (file < 0 || file >= 8) {
+		std::cout << "break here" << std::endl;
+	}
 	assert(rank >= 0 && rank < 8);
 	assert(file >= 0 && file < 8);
 	
@@ -204,7 +209,10 @@ void Board::set_fen(const std::string &fen)
 	unsigned int pos = 0;
 	while (pos < fen.length()) {
 		char c = fen[pos++];
-		if (c == '/') {
+		if (c == ' ') {
+			break;
+		}
+		else if (c == '/') {
 			rank--; 
 			file = 1; 
 			continue;
@@ -232,6 +240,44 @@ void Board::set_fen(const std::string &fen)
 			}
 		} else {
 			file++;
+		}
+	}
+	
+	char c; 
+	// next comes the color
+	while ((c = fen[pos++]) != 0 && c != ' ') {
+		switch(c) {
+			case 'w': side_to_play = White; break;
+			case 'b': side_to_play = Black; break;
+			case ' ': break;
+			case 0: return;
+			default: std::cerr << "Can't read fen" << fen << std::endl; abort();
+		}
+	}
+	if (c == 0) {
+		return;
+	}
+	castle = 0;
+	while ((c = fen[pos++]) != 0 && c != ' ') {
+		// castle status
+		switch(c) {
+			case 'k': castle |= 1 << get_castle_bit(Black, true); break;
+			case 'K': castle |= 1 << get_castle_bit(White, true); break;
+			case 'q': castle |= 1 << get_castle_bit(Black, false); break;
+			case 'Q': castle |= 1 << get_castle_bit(White, false); break;
+			case '-': case ' ': break;
+			case 0: return;
+			default: std::cerr << "Can't read fen" << fen << std::endl; abort();
+		}
+	}
+	
+	if (c == 0) {
+		return;
+	}
+	
+	if ((c = fen[pos++]) != 0) {
+		if (c >= 'a' && c <= 'h') {
+			enpassant_target = c - 'a';
 		}
 	}
 	
@@ -808,6 +854,18 @@ void Board::undo_move(move_t move)
 	// flags
 	side_to_play = color;
 	in_check = move & MOVE_FROM_CHECK;
+	if ((move & INVALIDATES_CASTLE) != 0) {
+		if ((moved_piece & PIECE_MASK) == KING) {
+			if (color == White) {
+				castle |= 0x3;
+			} else {
+				castle |= 0xc;
+			}
+		} else {
+			int bit = get_castle_bit(color, get_board_file(sourcepos) == 7);
+			castle |= (1 << bit);
+		}
+	}
 	
 	set_piece(sourcepos, moved_piece);
 	set_piece(destpos, captured_piece);
@@ -825,7 +883,7 @@ void Board::undo_move(move_t move)
 				set_piece(make_board_pos(get_board_rank(destpos), 0), make_piece(ROOK, color));
 				set_piece(make_board_pos(get_board_rank(destpos), 3), EMPTY);
 				break;
-			case 7:
+			case 6:
 				set_piece(make_board_pos(get_board_rank(destpos), 7), make_piece(ROOK, color));
 				set_piece(make_board_pos(get_board_rank(destpos), 5), EMPTY);
 				break;
@@ -859,7 +917,11 @@ bool Board::removes_check(move_t move, Color color) const
 	bool might_remove_check = false;
 	
 	// captures
-	if (destpiece != EMPTY) {
+	if (destpiece != EMPTY || (move & ENPASSANT_FLAG)) {
+		if ((move & ENPASSANT_FLAG) != 0) {
+			destpos = make_board_pos(get_board_rank(sourcepos), get_board_file(destpos));
+			destpiece = get_piece(destpos);
+		}
 		std::vector<move_t> precluded_moves;
 		calculate_moves(get_opposite_color(color), destpos, destpiece, precluded_moves, true);
 		for (unsigned int i = 0; i < precluded_moves.size(); i++) {

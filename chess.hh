@@ -32,6 +32,7 @@ const int BlackMask = 8;
 typedef unsigned char BoardPos;
 
 BoardPos make_board_pos(int rank, int file);
+Color get_opposite_color(Color color);
 
 class Board
 {
@@ -44,6 +45,7 @@ public:
 	piece_t get_piece(BoardPos) const;
 	void get_fen(std::ostream &os) const;
 	void set_fen(const std::string &fen);
+	bool king_in_check(Color) const;
 
 	void apply_move(move_t);
 	void undo_move(move_t);
@@ -75,7 +77,6 @@ private:
 	void invalidate_castle(Color);
 	void invalidate_castle_side(Color, bool kingside);
 	move_t make_move(BoardPos source, piece_t source_piece, BoardPos dest, piece_t dest_piece, piece_t promote) const;
-	bool king_in_check(Color) const;
 	bool removes_check(move_t move, Color color) const;
 
 	char data[MEMORY_SIZE];
