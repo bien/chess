@@ -23,7 +23,7 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
 		}
 		else if (line != "") {
 			int pos = -1;
-			unsigned int space, endmove;
+			int space, endmove;
 			bool done = false;
 			while (!done && line.find('.', pos+1) != std::string::npos) {
 				pos = line.find('.', pos+1);
