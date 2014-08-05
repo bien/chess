@@ -63,13 +63,17 @@ private:
 	move_t invalid_move(const std::string &s) const;
 
 	void set_piece(BoardPos, piece_t);
-	void get_moves(Color, std::vector<move_t> &moves, bool exclude_pawn_advance=false, piece_t limit_to_this_piece=0) const;
 	bool discovers_check(move_t, Color) const;
 	BoardPos find_piece(piece_t) const;
-	void calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance) const;
+
+	// support mode: include pawn captures to same color, include piece captures to same color
+	void get_moves(Color, std::vector<move_t> &moves, bool support_mode=false, piece_t limit_to_this_piece=0) const;
+	void calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance, bool support_mode) const;
+
 	void pawn_advance(BoardPos bp, Color piece_color, std::vector<move_t> &moves) const;
-	void pawn_capture(BoardPos bp, char dfile, Color piece_color, std::vector<move_t> &moves) const;
+	void pawn_capture(BoardPos bp, char dfile, Color piece_color, bool support_mode, std::vector<move_t> &moves) const;
 	void pawn_move(BoardPos source, BoardPos dest, std::vector<move_t> &moves) const;
+
 	void single_move(BoardPos base, piece_t, char drank, char dfile, Color capture, std::vector<move_t> &moves) const;
 	BoardPos get_capture(BoardPos base, char drank, char dfile, Color capture) const;
 	void repeated_move(BoardPos base, piece_t, char drank, char dfile, Color capture, std::vector<move_t> &moves) const;

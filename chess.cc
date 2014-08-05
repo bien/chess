@@ -5,10 +5,10 @@
 #include "chess.hh"
 
 const BoardPos InvalidPos = 8;
-const int CAPTURED_PIECE_MASK = 0x70000;
+//const int CAPTURED_PIECE_MASK = 0x70000;
 const int MOVE_FROM_CHECK = 0x80000;
 const int ENPASSANT_STATE_MASK = 0xf00000;
-const int PROMOTE_MASK = 0x7000000;
+//const int PROMOTE_MASK = 0x7000000;
 const int ENPASSANT_FLAG = 0x8000000;
 const int INVALIDATES_CASTLE = 0x10000000;
 
@@ -101,9 +101,6 @@ BoardPos get_dest_pos(move_t move)
 
 BoardPos make_board_pos(int rank, int file)
 {
-	if (file < 0 || file >= 8) {
-		std::cout << "break here" << std::endl;
-	}
 	assert(rank >= 0 && rank < 8);
 	assert(file >= 0 && file < 8);
 	
@@ -526,20 +523,22 @@ void Board::pawn_move(BoardPos source, BoardPos dest, std::vector<move_t> &moves
 	piece_t capture = get_piece(dest);
 	if (get_board_rank(dest) == 0 || get_board_rank(dest) == 7)
 	{
-		moves.push_back(make_move(source, pawn, dest, capture, KNIGHT));
-		moves.push_back(make_move(source, pawn, dest, capture, BISHOP));
-		moves.push_back(make_move(source, pawn, dest, capture, ROOK));
 		moves.push_back(make_move(source, pawn, dest, capture, QUEEN));
+		moves.push_back(make_move(source, pawn, dest, capture, KNIGHT));
+		moves.push_back(make_move(source, pawn, dest, capture, ROOK));
+		moves.push_back(make_move(source, pawn, dest, capture, BISHOP));
 	}
 	else {
 		moves.push_back(make_move(source, pawn, dest, capture, 0));
 	}
 }
-void Board::pawn_capture(BoardPos bp, char dfile, Color piece_color, std::vector<move_t> &moves) const
+void Board::pawn_capture(BoardPos bp, char dfile, Color piece_color, bool support_mode, std::vector<move_t> &moves) const
 {
 	BoardPos dest = add_vector(bp, piece_color == White ? 1 : -1, dfile);
 	piece_t square = get_piece(dest);
-	if ((square & PIECE_MASK) && ((piece_color == White && (square & 0x8)) || (piece_color == Black && ((square & 0x8) == 0))))
+	Color capture_color = get_opposite_color(piece_color);
+	Color target_piece_color = get_color(square);
+	if ((support_mode && is_legal_pos(dest)) || ((square & PIECE_MASK) != 0 && capture_color == target_piece_color))
 	{
 		pawn_move(bp, dest, moves);
 	}
@@ -566,43 +565,49 @@ void Board::pawn_advance(BoardPos bp, Color piece_color, std::vector<move_t> &mo
 	}
 }
 
-void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance) const
+void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance, bool support_mode) const
 {
 	if (((color == White && (piece & 0x08) == 0) || (color == Black && (piece & 0x08))))
 	{
+		Color color_capture;
+		if (support_mode) {
+			color_capture = color;
+		} else {
+			color_capture = get_opposite_color(color);
+		}
 		switch (piece & 0x07)
 		{
 			case ROOK:
-				repeated_move(bp, piece, 1, 0, get_opposite_color(color), moves);
-				repeated_move(bp, piece, -1, 0, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 0, 1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 0, -1, get_opposite_color(color), moves);
+				repeated_move(bp, piece, 1, 0, color_capture, moves);
+				repeated_move(bp, piece, -1, 0, color_capture, moves);
+				repeated_move(bp, piece, 0, 1, color_capture, moves);
+				repeated_move(bp, piece, 0, -1, color_capture, moves);
 				break;
 			case BISHOP:
-				repeated_move(bp, piece, 1, 1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, -1, 1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, -1, -1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 1, -1, get_opposite_color(color), moves);
+				repeated_move(bp, piece, 1, 1, color_capture, moves);
+				repeated_move(bp, piece, -1, 1, color_capture, moves);
+				repeated_move(bp, piece, -1, -1, color_capture, moves);
+				repeated_move(bp, piece, 1, -1, color_capture, moves);
 				break;
 			case QUEEN:
-				repeated_move(bp, piece, 1, 0, get_opposite_color(color), moves);
-				repeated_move(bp, piece, -1, 0, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 0, 1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 0, -1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 1, 1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, -1, 1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, -1, -1, get_opposite_color(color), moves);
-				repeated_move(bp, piece, 1, -1, get_opposite_color(color), moves);
+				repeated_move(bp, piece, 1, 0, color_capture, moves);
+				repeated_move(bp, piece, -1, 0, color_capture, moves);
+				repeated_move(bp, piece, 0, 1, color_capture, moves);
+				repeated_move(bp, piece, 0, -1, color_capture, moves);
+				repeated_move(bp, piece, 1, 1, color_capture, moves);
+				repeated_move(bp, piece, -1, 1, color_capture, moves);
+				repeated_move(bp, piece, -1, -1, color_capture, moves);
+				repeated_move(bp, piece, 1, -1, color_capture, moves);
 				break;
 			case KING:
-				single_move(bp, piece, 1, 0, get_opposite_color(color), moves);
-				single_move(bp, piece, -1, 0, get_opposite_color(color), moves);
-				single_move(bp, piece, 0, 1, get_opposite_color(color), moves);
-				single_move(bp, piece, 0, -1, get_opposite_color(color), moves);
-				single_move(bp, piece, 1, 1, get_opposite_color(color), moves);
-				single_move(bp, piece, -1, 1, get_opposite_color(color), moves);
-				single_move(bp, piece, -1, -1, get_opposite_color(color), moves);
-				single_move(bp, piece, 1, -1, get_opposite_color(color), moves);
+				single_move(bp, piece, 1, 0, color_capture, moves);
+				single_move(bp, piece, -1, 0, color_capture, moves);
+				single_move(bp, piece, 0, 1, color_capture, moves);
+				single_move(bp, piece, 0, -1, color_capture, moves);
+				single_move(bp, piece, 1, 1, color_capture, moves);
+				single_move(bp, piece, -1, 1, color_capture, moves);
+				single_move(bp, piece, -1, -1, color_capture, moves);
+				single_move(bp, piece, 1, -1, color_capture, moves);
 				if (can_castle(color, true) && ((bp == make_board_pos(0, 4) && color == White) || (bp == make_board_pos(7, 4) && color == Black))) {
 					// king-side castling
 					BoardPos kingrook = get_capture(bp, 0, 1, color);
@@ -619,18 +624,18 @@ void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector
 				}
 				break;
 			case KNIGHT:
-				single_move(bp, piece, 1, 2, get_opposite_color(color), moves);
-				single_move(bp, piece, 2, 1, get_opposite_color(color), moves);
-				single_move(bp, piece, -1, 2, get_opposite_color(color), moves);
-				single_move(bp, piece, -2, 1, get_opposite_color(color), moves);
-				single_move(bp, piece, -1, -2, get_opposite_color(color), moves);
-				single_move(bp, piece, -2, -1, get_opposite_color(color), moves);
-				single_move(bp, piece, 1, -2, get_opposite_color(color), moves);
-				single_move(bp, piece, 2, -1, get_opposite_color(color), moves);
+				single_move(bp, piece, 1, 2, color_capture, moves);
+				single_move(bp, piece, 2, 1, color_capture, moves);
+				single_move(bp, piece, -1, 2, color_capture, moves);
+				single_move(bp, piece, -2, 1, color_capture, moves);
+				single_move(bp, piece, -1, -2, color_capture, moves);
+				single_move(bp, piece, -2, -1, color_capture, moves);
+				single_move(bp, piece, 1, -2, color_capture, moves);
+				single_move(bp, piece, 2, -1, color_capture, moves);
 				break;
 			case PAWN:
-				pawn_capture(bp, 1, color, moves);
-				pawn_capture(bp, -1, color, moves);
+				pawn_capture(bp, 1, color, support_mode, moves);
+				pawn_capture(bp, -1, color, support_mode, moves);
 				if (!exclude_pawn_advance) {
 					pawn_advance(bp, color, moves);
 				}
@@ -639,7 +644,7 @@ void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector
 	}
 }
 
-void Board::get_moves(Color color, std::vector<move_t> &moves, bool exclude_pawn_advance, piece_t piece) const
+void Board::get_moves(Color color, std::vector<move_t> &moves, bool support_mode, piece_t piece) const
 {
 	piece_t colored_piece = make_piece(piece, color);
 	for (BoardPos i = (make_board_pos(0, 0) & 0xfe); i <= (make_board_pos(7, 7) | 0x1); i += 2)
@@ -648,14 +653,14 @@ void Board::get_moves(Color color, std::vector<move_t> &moves, bool exclude_pawn
 		if (twosquare & 0x77) {
 			if ((color == Black && (twosquare & 0x88)) || (color == White && ((twosquare & 0x88) != 0x88))) {
 				if (piece == 0) {
-					calculate_moves(color, i, twosquare >> 4, moves, exclude_pawn_advance);
-					calculate_moves(color, i+1, twosquare & 0xf, moves, exclude_pawn_advance);
+					calculate_moves(color, i, twosquare >> 4, moves, support_mode, support_mode);
+					calculate_moves(color, i+1, twosquare & 0xf, moves, support_mode, support_mode);
 				} else {
 					if (twosquare >> 4 == colored_piece) {
-						calculate_moves(color, i, twosquare >> 4, moves, exclude_pawn_advance);
+						calculate_moves(color, i, twosquare >> 4, moves, support_mode, support_mode);
 					}
 					if ((twosquare & 0xf) == colored_piece) {
-						calculate_moves(color, i+1, twosquare & 0xf, moves, exclude_pawn_advance);
+						calculate_moves(color, i+1, twosquare & 0xf, moves, support_mode, support_mode);
 					}
 				}
 			}
@@ -923,7 +928,7 @@ bool Board::removes_check(move_t move, Color color) const
 			destpiece = get_piece(destpos);
 		}
 		std::vector<move_t> precluded_moves;
-		calculate_moves(get_opposite_color(color), destpos, destpiece, precluded_moves, true);
+		calculate_moves(get_opposite_color(color), destpos, destpiece, precluded_moves, true, false);
 		for (unsigned int i = 0; i < precluded_moves.size(); i++) {
 			if (get_dest_pos(precluded_moves[i]) == king) {
 				might_remove_check = true;
@@ -951,7 +956,7 @@ bool Board::king_in_check(Color color) const
 	BoardPos king = find_piece(make_piece(KING, color));
 	std::vector<move_t> opponent_moves;
 	for (piece_t piece_type = 1; piece_type <= 6; piece_type++) {
-		calculate_moves(color, king, make_piece(piece_type, color), opponent_moves, true);
+		calculate_moves(color, king, make_piece(piece_type, color), opponent_moves, true, false);
 		for (unsigned int i = 0; i < opponent_moves.size(); i++) {
 			BoardPos attacker = get_dest_pos(opponent_moves[i]);
 			if (get_piece(attacker) == make_piece(piece_type, get_opposite_color(color))) {

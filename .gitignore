@@ -6,3 +6,5 @@ games/*.zip
 *.dot
 *.features
 *.exe
+testexe
+feature

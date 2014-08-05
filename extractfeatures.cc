@@ -7,7 +7,6 @@
 
 unsigned int distance_from_center(int rank, int file);
 unsigned int diagonal_moves(int rank, int file);
-unsigned int diagonal_moves(int rank, int file); 
 
 template <typename T>
 T max(T a, T b)
@@ -162,6 +161,8 @@ int main(int argc, char **argv)
 			result = -1;
 		} else if (game_metadata["Result"] == "1/2-1/2") {
 			result = 0;
+		} else if (game_metadata["Result"] == "*") {
+			continue;
 		} else {
 			std::cerr << "Can't read result " << game_metadata["Result"] << std::endl;
 			abort();
