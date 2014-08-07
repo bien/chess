@@ -39,7 +39,7 @@ int main(int argc, char **argv)
 		movelist.clear();
 		game_metadata.clear();
 		read_pgn(puzzles, game_metadata, movelist);
-		if (game_metadata["FEN"] != "") {
+		if (game_metadata["FEN"] != "" && game_metadata["Black"] == "White to move") {
 			b.set_fen(game_metadata["FEN"]);
 			bool result = false; 
 			if (game_metadata["White"] == "Mate in one") {
@@ -52,6 +52,8 @@ int main(int argc, char **argv)
 			attempts++;
 			if (result) {
 				passed++;
+			} else {
+				std::cout << " in " << game_metadata["Event"] << std::endl;
 			}
 		}
 	}

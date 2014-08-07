@@ -37,8 +37,16 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
 					endmove = line.length();
 					done = true;
 				}
-				movelist.push_back(std::pair<std::string, std::string>(
-					line.substr(pos + 1, space - pos - 1), line.substr(space+1, endmove - space - 1)));
+				if (line[pos+1] == '.') {
+					while (line[++pos] == '.')
+						;
+					movelist.push_back(std::pair<std::string, std::string>(
+						"", line.substr(pos + 1, space - pos - 1)));
+
+				} else {
+					movelist.push_back(std::pair<std::string, std::string>(
+						line.substr(pos + 1, space - pos - 1), line.substr(space+1, endmove - space - 1)));
+				}
 				pos = endmove + 1;
 			}
 		}
