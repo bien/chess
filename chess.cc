@@ -204,6 +204,7 @@ void Board::set_fen(const std::string &fen)
 {
 	unsigned char rank = 8, file = 1;
 	unsigned int pos = 0;
+	reset();
 	while (pos < fen.length()) {
 		char c = fen[pos++];
 		if (c == ' ') {

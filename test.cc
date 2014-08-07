@@ -226,13 +226,6 @@ int main()
 	int score;
 	int nodecount;
 
-	// bug in fen loading
-	std::string fen1 = "8/7R/k1b1B3/p1P5/pP1K4/P5r1/5p2/8 w - - 0 1";
-	b.set_fen(fen1);
-	boardtext.str("");
-	boardtext << b;
-	assert_equals(fen1, boardtext.str());
-
 	// white has mate in 1
 	b.set_fen("3B1n2/NP2P3/b7/2kp2N1/8/2Kp4/8/8 w - - 0 1");
 	move = minimax(b, SimpleEvaluation(), 2, White, score, nodecount);
