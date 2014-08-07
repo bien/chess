@@ -80,13 +80,6 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 		} else if (subtree_score < INT_MIN / 2) {
 			subtree_score++;
 		} 
-		/*
-		if (depth == 4 || subtree_score > INT_MAX / 2 || subtree_score < INT_MIN / 2) {
-			std::ostringstream movetext;
-			b.print_move(*iter, movetext);
-
-			std::cout << "evaluated " << movetext.str() << " at depth=" << depth << " score=" << subtree_score << " vs current best " << best_score << std::endl;
-		}*/
 		if (iter == moves.begin() || subtree_score > best_score) {
 			best_score = subtree_score;
 			best_move = *iter;

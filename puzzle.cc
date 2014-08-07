@@ -5,23 +5,20 @@
 #include "chess.hh"
 #include "pgn.hh"
 
-template <class T>
-void assert_equals(T expected, T actual)
-{
-	if (expected != actual) {
-		std::cout << "Test failed: expected " << expected << " but got " << actual << std::endl;
-		abort();
-	}
-}
-
 void expect_move(Board &b, int depth, const std::string &expected_move)
 {
 	int score;
 	int nodecount;
 
-	move_t move = alphabeta(b, SimpleEvaluation(), 2, White, score, nodecount);
-	assert_equals(INT_MAX-depth*2+1, score);
-	assert_equals(b.read_move(expected_move, White), move);
+	move_t move = alphabeta(b, SimpleEvaluation(), depth+1, White, score, nodecount);
+	move_t expected_move_parsed = b.read_move(expected_move, White);
+	if (expected_move_parsed != move || score != INT_MAX-depth*2+1) {
+		std::cout << b << std::endl;
+		std::cout << "expected " << expected_move << " but got ";
+		b.print_move(move, std::cout);
+		std::cout << std::endl;
+		abort();
+	}
 }
 
 int main(int argc, char **argv)

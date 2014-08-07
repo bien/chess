@@ -277,7 +277,7 @@ void Board::set_fen(const std::string &fen)
 			enpassant_target = c - 'a';
 		}
 	}
-	
+	in_check = king_in_check(side_to_play);
 }
 
 unsigned char read_piece(unsigned char c)
@@ -347,6 +347,8 @@ move_t Board::read_move(const std::string &s, Color color) const
 			}
 			else if (s[pos] == '+') {
 				check = true;
+			} else if (s[pos] == '#') {
+				// mate = true;
 			}
 			else if (s[pos] == '=') {
 				switch (s[pos + 1]) {
@@ -680,7 +682,9 @@ void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_t
 			// lazily compute covered_squares once for all moves
 			if (covered_squares == 0) {
 				std::vector<move_t> opposite_color_moves;
-				get_moves(get_opposite_color(color), opposite_color_moves, true);
+				Board king_free(*this);
+				king_free.set_piece(get_source_pos(moves[i]), EMPTY);
+				king_free.get_moves(get_opposite_color(color), opposite_color_moves, true);
 				for (unsigned int j = 0; j < opposite_color_moves.size(); j++) {
 					BoardPos bp = get_dest_pos(opposite_color_moves[j]);
 					bitboard_setbit(covered_squares, get_board_rank(bp) * 8 + get_board_file(bp), 1);
@@ -705,6 +709,7 @@ void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_t
 		else if (in_check && !removes_check(moves[i], color)) {
 			is_illegal = true;
 		}
+
 		if (is_illegal) {
 			moves.erase(moves.begin() + i);
 			i--;
