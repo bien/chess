@@ -985,6 +985,7 @@ bool Board::king_in_check(Color color) const
 {
 	BoardPos king = find_piece(make_piece(KING, color));
 	std::vector<move_t> opponent_moves;
+	opponent_moves.reserve(32);
 	for (piece_t piece_type = 1; piece_type <= 6; piece_type++) {
 		calculate_moves(color, king, make_piece(piece_type, color), opponent_moves, true, false);
 		for (unsigned int i = 0; i < opponent_moves.size(); i++) {

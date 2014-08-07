@@ -47,6 +47,7 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 		return sign * eval.evaluate(b);
 	}
 	std::vector<move_t> moves;
+	moves.reserve(50);
 	b.legal_moves(color, moves);
 	
 	if (moves.empty()) {
