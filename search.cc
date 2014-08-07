@@ -58,7 +58,7 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 			return 0;
 		}
 	}
-	
+
 	move_t best_move = 0;
 	int best_score = 0;
 	
@@ -77,7 +77,7 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 		// checkmate decay
 		if (subtree_score > INT_MAX / 2) {
 			subtree_score--;
-		} else if (subtree_score < INT_MIN / 2) {
+		} else if (subtree_score < -INT_MAX / 2) {
 			subtree_score++;
 		} 
 		if (iter == moves.begin() || subtree_score > best_score) {
@@ -87,8 +87,9 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 		if (best_score > alpha) {
 			alpha = best_score;
 		}
-		if (use_pruning && alpha > beta) {
+		if (use_pruning && alpha >= beta) {
 			// prune this branch
+			score = best_score;
 			return 0;
 		}
 	}

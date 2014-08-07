@@ -277,6 +277,30 @@ void Board::set_fen(const std::string &fen)
 			enpassant_target = c - 'a';
 		}
 	}
+	while (pos < fen.size() && fen[pos++] == ' ')
+		;
+
+	int halfmoves = 0;
+	move_count = 0;
+	bool on_halfmoves = true;
+	while (pos < fen.size() && (c = fen[pos++]) != 0) {
+		switch(c) {
+			case ' ': on_halfmoves = false; break;
+			case 0: break;
+			default:
+				if (c <= '9' && c >= '0') {
+					if (on_halfmoves) {
+						halfmoves = halfmoves * 10 + (c - '0');
+					} else {
+						move_count = move_count * 10 + (c - '0');
+					}
+				}
+				else {
+					std::cerr << "Can't read fen" << fen << std::endl; abort();
+				}
+				break;
+		}
+	}
 	in_check = king_in_check(side_to_play);
 }
 
@@ -1078,7 +1102,7 @@ void Board::get_fen(std::ostream &os) const
 	} else {
 		os << static_cast<char>(enpassant_target + 'a') << "3";
 	}
-	os << " 0 0";
+	os << " 0 " << move_count;
 }
 
 std::ostream &operator<<(std::ostream &os, const Board &b)

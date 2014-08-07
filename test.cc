@@ -113,7 +113,7 @@ int main()
 
 	boardtext.str("");
 	boardtext << b;
-	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 0"), boardtext.str());
+	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"), boardtext.str());
 	
 	assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(3, 4)));
 	assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(1, 4)));
@@ -158,7 +158,7 @@ int main()
 	
 	boardtext.str("");
 	boardtext << b;
-	assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 0"), boardtext.str());
+	assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 23"), boardtext.str());
 	
 	// play in reverse
 	assert_equals(moverecord.size(), boardrecord.size());
@@ -181,14 +181,14 @@ int main()
 	b.apply_move(move);
 	boardtext.str("");
 	boardtext << b;
-	assert_equals(std::string("4r1k1/1p1brpbp/1npp2p1/q1n5/p1PNPPP1/2N4P/PPQ2B1K/3RRB2 w KQk - 0 0"), boardtext.str());
+	assert_equals(std::string("4r1k1/1p1brpbp/1npp2p1/q1n5/p1PNPPP1/2N4P/PPQ2B1K/3RRB2 w KQk - 0 1"), boardtext.str());
 	
 	b.set_fen("8/4k3/5p2/3BP1pP/5KP1/8/2b5/8 w - g6 0 0");
 	move = b.read_move("hxg6", White);
 	b.apply_move(move);
 	boardtext.str("");
 	boardtext << b;
-	assert_equals(std::string("8/4k3/5pP1/3BP3/5KP1/8/2b5/8 b - - 0 0"), boardtext.str());
+	assert_equals(std::string("8/4k3/5pP1/3BP3/5KP1/8/2b5/8 b - - 0 1"), boardtext.str());
 
 	// play the rest of the Fischer games
 	while (!fischer.eof()) {
@@ -223,9 +223,17 @@ int main()
 	assert_equals(0, static_cast<int>(legal_black.size()));
 	assert_equals(true, b.king_in_check(Black));
 
-	// white has mate in 1
 	int score;
 	int nodecount;
+
+	// bug in fen loading
+	std::string fen1 = "8/7R/k1b1B3/p1P5/pP1K4/P5r1/5p2/8 w - - 0 1";
+	b.set_fen(fen1);
+	boardtext.str("");
+	boardtext << b;
+	assert_equals(fen1, boardtext.str());
+
+	// white has mate in 1
 	b.set_fen("3B1n2/NP2P3/b7/2kp2N1/8/2Kp4/8/8 w - - 0 1");
 	move = minimax(b, SimpleEvaluation(), 2, White, score, nodecount);
 	assert_equals(INT_MAX-1, score);
@@ -237,15 +245,16 @@ int main()
 	// white has mate in 2
 	b.set_fen("r4kr1/1b2R1n1/pq4p1/4Q3/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
 	move = minimax(b, SimpleEvaluation(), 4, White, score, nodecount);
-	movetext.str("");
-	b.print_move(move, movetext);
 	assert_equals(INT_MAX-3, score);
 	assert_equals(b.read_move("Rf7+", White), move);
 	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
-	movetext.str("");
-	b.print_move(move, movetext);
 	assert_equals(INT_MAX-3, score);
 	assert_equals(b.read_move("Rf7+", White), move);
+
+	b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - b6 0 1");
+	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
+	assert_equals(b.read_move("Kc3", White), move);
+	assert_equals(INT_MAX-3, score);
 
 	return 0;
 }
