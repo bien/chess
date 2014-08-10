@@ -1,11 +1,15 @@
 chess
 =====
-game.py plays chess in python.  It's super slow so I started working on a c++ version: run "make test".  It doesn't work yet though.
+game.py plays chess in python.  It's super slow so I started working on a c++ version: run "make test".  It won't play you in a game though.
 
-To download training data, run "data.sh"
+To download training data, run "data.sh".
+
+The tests expect a file called "polgar - fixed.pgn" which is an unzipped version of "polgar_5334_fixed.7z", which can be found here: http://www.chess.am/pgn/
 
 
-Results
+Latest test results
 ====
- Puzzles solved: 3120/3600 using 39484197 nodes at 119248 nodes/sec or 10.8725 puzzles/sec
- Puzzles solved: 3088/3600 using 12410288 nodes at 56394.8 nodes/sec or 16.3591 puzzles/sec
+ ...
+ Puzzles solved: 3544/3600 using 17869580 nodes at 125356 nodes/sec or 25.2543 puzzles/sec
+ ...
+ Puzzles solved: 3807/4066 using 50362439 nodes at 125046 nodes/sec or 10.0955 puzzles/sec
