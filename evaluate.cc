@@ -1,8 +1,9 @@
 #include "evaluate.hh"
+#include <algorithm>
 
-unsigned int distance_from_center(int rank, int file);
-unsigned int diagonal_moves(int rank, int file);
-
+unsigned distance_from_center(int rank, int file);
+unsigned diagonal_moves(int rank, int file);
+void count_pieces(Board &b, int file, int &black, int &white, piece_t piece, int rank_to_exclude = -1);
 
 template <typename T>
 T max(T a, T b)
@@ -14,7 +15,7 @@ T max(T a, T b)
 	}
 }
 
-unsigned int distance_from_center(int rank, int file)
+unsigned distance_from_center(int rank, int file)
 {
 	int absrank = abs(3 - rank);
 	int absfile = abs(3 - file);
@@ -22,9 +23,133 @@ unsigned int distance_from_center(int rank, int file)
 	return diag + max(0, absrank - diag) + max(0, absfile - diag);
 }
 
-unsigned int diagonal_moves(int rank, int file)
+unsigned diagonal_moves(int rank, int file)
 {
 	return 16 - abs(rank - file) - abs(7 - file - rank);
+}
+
+double SimpleEvaluation::compute_scores(int qct, int bct, int rct, int nct, int pct, int rpct, int ppawn, 
+		int isopawn, int dblpawn, int nscore, int bscore, int kscore, int rhopenfile, int rfopenfile, int qscore) const
+{
+	return qct*100 + rct*48 + bct*11 + nct*47 + pct*21 - rpct*2 + ppawn*10 - isopawn*3 - dblpawn*4 - nscore*4 + bscore*3 - kscore + rhopenfile*9 + rfopenfile*14 + qscore*1;
+}
+
+void count_pieces(Board &b, int file, int &black, int &white, piece_t piece, int rank_to_exclude)
+{
+	black = 0;
+	white = 0;
+	for (int rank = 1; rank < 7; rank++) {
+		if (rank == rank_to_exclude) {
+			continue;
+		}
+		piece_t pawn_cand = b.get_piece(make_board_pos(rank, file));
+		if ((pawn_cand & PIECE_MASK) == piece) {
+			if ((piece & BlackMask) != 0) {
+				black++;
+			} else {
+				white++;
+			}
+		}
+	}
+}
+
+// computes delta score for adding piece at bp
+int SimpleEvaluation::delta_evaluate_piece(Board &b, piece_t piece, int rank, int file) const
+{
+	// piece count scores
+	int qct = 0, bct = 0, rct = 0, nct = 0, pct = 0, rpct = 0;
+	// pawn structure scores
+	int ppawn = 0, isopawn = 0, dblpawn = 0;
+	// piece position scores
+	int nscore = 0, bscore = 0, kscore = 0, rhopenfile = 0, rfopenfile = 0,  qscore = 0;
+
+	Color color = get_color(piece);
+	int colormultiplier = 1;
+	if (color == Black) {
+		colormultiplier = -1;
+	}
+
+	switch (piece & PIECE_MASK) {
+		case QUEEN: qct += colormultiplier; 
+			qscore += colormultiplier * diagonal_moves(rank, file);
+			break;
+		case BISHOP: bct += colormultiplier;
+			bscore += colormultiplier * diagonal_moves(rank, file);
+			break;
+		case ROOK: rct += colormultiplier; 
+			{
+				int blackpawns = 0, whitepawns = 0;
+				count_pieces(b, file, blackpawns, whitepawns, PAWN, -1);
+				if ((color == Black && blackpawns == 0) || (color == White && whitepawns == 0)) {
+					rhopenfile += colormultiplier;
+				}
+				if (blackpawns == 0 && whitepawns == 0) {
+					rfopenfile += colormultiplier;
+				}
+			}
+			break;
+		case KNIGHT: nct += colormultiplier; 
+			nscore += colormultiplier * distance_from_center(rank, file);
+			break;
+		case PAWN: pct += colormultiplier; 
+			{
+				if (file == 0 || file == 7) {
+					rpct += colormultiplier;
+				}
+				// count doubled pawns
+				int blackpawns = 0, whitepawns = 0;
+				count_pieces(b, file, blackpawns, whitepawns, PAWN, rank);
+				if ((color == White && whitepawns == 1) || (color == Black && blackpawns == 1)) {
+					dblpawn += colormultiplier;
+				}
+				// count open files
+				int blackrooks = 0, whiterooks = 0;
+				count_pieces(b, file, blackrooks, whiterooks, ROOK, -1);
+				if (color == White && whitepawns == 0) {
+					if (whiterooks > 0) {
+						rhopenfile -= whiterooks;
+						if (blackpawns == 0) {
+							rfopenfile -= whiterooks;
+						}
+					}
+					if (blackrooks > 0) {
+						if (blackpawns == 0) {
+							rfopenfile += blackrooks;
+						}
+
+					}
+				} else if (color == Black && blackpawns == 0) {
+					if (blackrooks > 0) {
+						rhopenfile += blackrooks;
+						if (whitepawns == 0) {
+							rfopenfile -= blackrooks;
+						}
+					}
+					if (whiterooks > 0) {
+						rfopenfile += whiterooks;
+					}
+				}
+				// skip computation of isopawn and ppawn because it's complicated
+			}
+			break;
+		case KING:
+			kscore += colormultiplier * distance_from_center(rank, file);
+			break;
+	}
+	return compute_scores(qct, bct, rct, nct, pct, rpct, ppawn, isopawn, dblpawn, nscore, bscore, kscore, rhopenfile, rfopenfile, qscore);
+}
+
+int SimpleEvaluation::delta_evaluate(Board &b, move_t move, int previous_score) const
+{
+	piece_t active_piece = b.get_piece(get_source_pos(move));
+	piece_t captured_piece = b.get_piece(get_dest_pos(move));
+	char dest_rank = get_board_rank(get_dest_pos(move));
+	char dest_file = get_board_file(get_dest_pos(move));
+	char src_rank = get_board_rank(get_source_pos(move));
+	char src_file = get_board_file(get_source_pos(move));
+
+	return previous_score + delta_evaluate_piece(b, active_piece, dest_rank, dest_file) - delta_evaluate_piece(b, active_piece, src_rank, src_file)
+		- delta_evaluate_piece(b, captured_piece, dest_rank, dest_file);
 }
 
 int SimpleEvaluation::evaluate(const Board &b) const {
@@ -119,6 +244,6 @@ int SimpleEvaluation::evaluate(const Board &b) const {
 			ppawn -= 1;
 		}
 	}
-	return qct*100 + rct*48 + bct*11 + nct*47 + pct*21 - rpct*2 + ppawn*10 - isopawn*3 - dblpawn*4 - nscore*4 + bscore*3 - kscore + rhopenfile*9 + rfopenfile*14 + qscore*1;
+	return compute_scores(qct, bct, rct, nct, pct, rpct, ppawn, isopawn, dblpawn, nscore, bscore, kscore, rhopenfile, rfopenfile, qscore);
 }
 

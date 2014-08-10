@@ -8,10 +8,7 @@
 #include "search.hh"
 #include "evaluate.hh"
 
-char get_board_rank(BoardPos bp);
-char get_board_file(BoardPos bp);
 void get_vector(BoardPos origin, BoardPos bp, char &drank, char &dfile);
-BoardPos make_board_pos(int rank, int file);
 
 BoardPos get_source_pos(move_t move);
 BoardPos get_dest_pos(move_t move);
@@ -58,8 +55,8 @@ void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
 int main()
 {
 	Board b;
-	for (char r = 0; r < 8; r++) {
-		for (char f = 0; f < 8; f++) {
+	for (unsigned char r = 0; r < 8; r++) {
+		for (unsigned char f = 0; f < 8; f++) {
 			BoardPos bp = make_board_pos(r, f);
 			assert_equals(f, get_board_file(bp));
 			assert_equals(r, get_board_rank(bp));
@@ -229,25 +226,29 @@ int main()
 	// white has mate in 1
 	b.set_fen("3B1n2/NP2P3/b7/2kp2N1/8/2Kp4/8/8 w - - 0 1");
 	move = minimax(b, SimpleEvaluation(), 2, White, score, nodecount);
-	assert_equals(INT_MAX-1, score);
 	assert_equals(b.read_move("exf8=Q", White), move);
+	assert_equals(VERY_GOOD - 1, score);
 	move = alphabeta(b, SimpleEvaluation(), 2, White, score, nodecount);
-	assert_equals(INT_MAX-1, score);
+	assert_equals(VERY_GOOD - 1, score);
 	assert_equals(b.read_move("exf8=Q", White), move);
 
 	// white has mate in 2
 	b.set_fen("r4kr1/1b2R1n1/pq4p1/4Q3/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
 	move = minimax(b, SimpleEvaluation(), 4, White, score, nodecount);
-	assert_equals(INT_MAX-3, score);
+	assert_equals(VERY_GOOD - 1, score);
 	assert_equals(b.read_move("Rf7+", White), move);
 	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
-	assert_equals(INT_MAX-3, score);
+	assert_equals(VERY_GOOD - 1, score);
 	assert_equals(b.read_move("Rf7+", White), move);
 
 	b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - b6 0 1");
 	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
 	assert_equals(b.read_move("Kc3", White), move);
-	assert_equals(INT_MAX-3, score);
+	assert_equals(VERY_GOOD - 1, score);
 
+	b.set_fen("8/8/5p2/5B2/8/1K1R4/8/2k5 w - - 0 1");
+	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
+	assert_equals(b.read_move("Bg4", White), move);
+	assert_equals(VERY_GOOD - 1, score);
 	return 0;
 }

@@ -24,6 +24,9 @@ const int KING = 6;
 const int INVALID = 8;
 const int PIECE_MASK = 7;
 
+const int VERY_GOOD = 1 << 30;
+const int VERY_BAD = -VERY_GOOD;
+
 enum Color { White, Black };
 
 const int WhiteMask = 0;
@@ -33,6 +36,16 @@ typedef unsigned char BoardPos;
 
 BoardPos make_board_pos(int rank, int file);
 Color get_opposite_color(Color color);
+
+BoardPos get_source_pos(move_t move);
+BoardPos get_dest_pos(move_t move);
+piece_t get_promotion(move_t move, Color color);
+
+piece_t make_piece(piece_t type, Color color);
+
+unsigned char get_board_rank(BoardPos bp);
+unsigned char get_board_file(BoardPos bp);
+Color get_color(piece_t piece);
 
 class Board
 {
@@ -90,8 +103,6 @@ private:
 	char enpassant_target;
 	short move_count;
 };
-
-piece_t make_piece(piece_t type, Color color);
 
 std::ostream &operator<<(std::ostream &os, const Board &b);
 

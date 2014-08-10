@@ -12,14 +12,9 @@ const int ENPASSANT_STATE_MASK = 0xf00000;
 const int ENPASSANT_FLAG = 0x8000000;
 const int INVALIDATES_CASTLE = 0x10000000;
 
-unsigned char get_board_rank(BoardPos bp);
-unsigned char get_board_file(BoardPos bp);
 bool is_legal_pos(BoardPos bp);
 void get_vector(BoardPos origin, BoardPos bp, char &drank, char &dfile);
 inline BoardPos add_vector(BoardPos bp, int delta_rank, int delta_file);
-
-BoardPos get_source_pos(move_t move);
-BoardPos get_dest_pos(move_t move);
 
 int get_castle_bit(Color color, bool kingside);
 
