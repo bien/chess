@@ -37,6 +37,11 @@ int main(int argc, char **argv)
 	int nodes = 0;
 	double elapsed = 0;
 
+	if (!puzzles) {
+	  std::cerr << "Couldn't read " << argv[1] << std::endl;
+	  exit(1);
+	}
+
 	while (!puzzles.eof()) {
 		movelist.clear();
 		game_metadata.clear();
