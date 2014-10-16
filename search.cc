@@ -3,13 +3,12 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
-#include <unordered_map>
 #include <iostream>
 #include <sstream>
 
 bool search_debug = false;
 
-move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, int &score, int alpha, int beta, bool use_pruning, int &nodecount);
+move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, int &score, int alpha, int beta, bool use_pruning, int &nodecount, std::unordered_map<uint64_t, std::pair<int, int> > &transposition_table);
 
 int Evaluation::delta_evaluate(Board &b, move_t move, int previous_score) const
 {
@@ -20,20 +19,20 @@ int Evaluation::delta_evaluate(Board &b, move_t move, int previous_score) const
 	return score;
 }
 
-move_t minimax(Board &b, const Evaluation &eval, int depth, Color color, int &score, int &nodecount)
+move_t minimax(Board &b, const Evaluation &eval, int depth, Color color, int &score, int &nodecount, std::unordered_map<uint64_t, std::pair<int, int> > &transposition_table)
 {
 	nodecount = 0;
-	move_t result = nega_alphabeta(b, eval, depth, color, score, 0, 0, false, nodecount);
+	move_t result = nega_alphabeta(b, eval, depth, color, score, 0, 0, false, nodecount, transposition_table);
 	if (color == Black) {
 		score = -score;
 	}
 	return result;
 }
 
-move_t alphabeta(Board &b, const Evaluation &eval, int depth, Color color, int &score, int &nodecount)
+move_t alphabeta(Board &b, const Evaluation &eval, int depth, Color color, int &score, int &nodecount, std::unordered_map<uint64_t, std::pair<int, int> > &transposition_table)
 {
 	nodecount = 0;
-	move_t result = nega_alphabeta(b, eval, depth, color, score, VERY_BAD, VERY_GOOD, true, nodecount);
+	move_t result = nega_alphabeta(b, eval, depth, color, score, VERY_BAD, VERY_GOOD, true, nodecount, transposition_table);
 	if (color == Black) {
 		score = -score;
 	}
@@ -53,11 +52,21 @@ struct PrecomputedComparator {
 	std::unordered_map<move_t, int> cmp;
 };
 
-move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, int &score, int alpha, int beta, bool use_pruning, int &nodecount)
+move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, int &score, int alpha, int beta, bool use_pruning, int &nodecount, std::unordered_map<uint64_t, std::pair<int, int> > &transposition_table)
 {
 	int initial_alpha = alpha, initial_beta = beta;
 	nodecount++;
 	int sign = color == White ? 1 : -1;
+	
+	// check transposition table
+	std::unordered_map<uint64_t, std::pair<int, int> >::iterator transpose = transposition_table.find(b.get_hash());
+	if (transpose != transposition_table.end()) {
+		if (transpose->second.first >= depth) {
+			score = transpose->second.second;
+			return 0;
+		}
+	}
+	
 	if (depth == 0) {
 		return sign * eval.evaluate(b);
 	}
@@ -96,7 +105,7 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 			subtree_score = sign * eval.delta_evaluate(b, *iter, currentnodescore);
 		} else {
 			b.apply_move(*iter);
-			submove = nega_alphabeta(b, eval, depth - 1, get_opposite_color(color), subtree_score, -beta, -alpha, use_pruning, nodecount);
+			submove = nega_alphabeta(b, eval, depth - 1, get_opposite_color(color), subtree_score, -beta, -alpha, use_pruning, nodecount, transposition_table);
 			b.undo_move(*iter);
 			subtree_score = -subtree_score;
 		}
@@ -141,5 +150,9 @@ move_t nega_alphabeta(Board &b, const Evaluation &eval, int depth, Color color, 
 	}
 	
 	score = best_score;
+	
+	// write to transposition table
+	transposition_table[b.get_hash()] = std::pair<int, int>(depth, score);
+
 	return best_move;
 }

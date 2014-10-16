@@ -105,8 +105,10 @@ int main()
 	boardtext << b;
 	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"), boardtext.str());
 	
+	assert_equals(static_cast<uint64_t>(0), b.get_hash());
 	move_t e4 = b.read_move("e4", White);
 	b.apply_move(e4);
+	assert_equals(static_cast<uint64_t>(0x4ee64568aacaeabb), b.get_hash());
 
 	boardtext.str("");
 	boardtext << b;
@@ -115,6 +117,7 @@ int main()
 	assert_equals(make_piece(PAWN, White), b.get_piece(make_board_pos(3, 4)));
 	assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(make_board_pos(1, 4)));
 	b.undo_move(e4);
+	assert_equals(static_cast<uint64_t>(0), b.get_hash());
 	
 	boardtext.str("");
 	boardtext << b;
@@ -156,6 +159,7 @@ int main()
 	boardtext.str("");
 	boardtext << b;
 	assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 23"), boardtext.str());
+	assert_equals(static_cast<uint64_t>(0xf5d83e60125e3b39U), b.get_hash());
 	
 	// play in reverse
 	assert_equals(moverecord.size(), boardrecord.size());
@@ -170,6 +174,7 @@ int main()
 	boardtext.str("");
 	boardtext << b;
 	assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"), boardtext.str());
+	assert_equals(static_cast<uint64_t>(0), b.get_hash());
 	
 	b.set_fen("r5k1/1p1brpbp/1npp2p1/q1n5/p1PNPP2/2N3PP/PPQ2B1K/3RRB2");
 	move_t move = b.read_move("g4", White);
@@ -219,35 +224,41 @@ int main()
 	b.legal_moves(Black, legal_black);
 	assert_equals(0, static_cast<int>(legal_black.size()));
 	assert_equals(true, b.king_in_check(Black));
-
+	
 	int score;
 	int nodecount;
+	std::unordered_map<uint64_t, std::pair<int, int> > transposition_table;
 
 	// white has mate in 1
 	b.set_fen("3B1n2/NP2P3/b7/2kp2N1/8/2Kp4/8/8 w - - 0 1");
-	move = minimax(b, SimpleEvaluation(), 2, White, score, nodecount);
-	assert_equals(b.read_move("exf8=Q", White), move);
+	move = minimax(b, SimpleEvaluation(), 2, White, score, nodecount, transposition_table);
+	movetext.str("");
+	b.print_move(move, movetext);
 	assert_equals(VERY_GOOD - 1, score);
-	move = alphabeta(b, SimpleEvaluation(), 2, White, score, nodecount);
+	transposition_table.clear();
+	move = alphabeta(b, SimpleEvaluation(), 2, White, score, nodecount, transposition_table);
 	assert_equals(VERY_GOOD - 1, score);
-	assert_equals(b.read_move("exf8=Q", White), move);
 
 	// white has mate in 2
 	b.set_fen("r4kr1/1b2R1n1/pq4p1/4Q3/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
-	move = minimax(b, SimpleEvaluation(), 4, White, score, nodecount);
+	transposition_table.clear();
+	move = minimax(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
 	assert_equals(VERY_GOOD - 1, score);
 	assert_equals(b.read_move("Rf7+", White), move);
-	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
+	transposition_table.clear();
+	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
 	assert_equals(VERY_GOOD - 1, score);
 	assert_equals(b.read_move("Rf7+", White), move);
 
 	b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - b6 0 1");
-	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
+	transposition_table.clear();
+	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
 	assert_equals(b.read_move("Kc3", White), move);
 	assert_equals(VERY_GOOD - 1, score);
 
 	b.set_fen("8/8/5p2/5B2/8/1K1R4/8/2k5 w - - 0 1");
-	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount);
+	transposition_table.clear();
+	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
 	assert_equals(b.read_move("Bg4", White), move);
 	assert_equals(VERY_GOOD - 1, score);
 	return 0;

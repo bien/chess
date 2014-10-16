@@ -26,6 +26,7 @@ const int PIECE_MASK = 7;
 
 const int VERY_GOOD = 1 << 30;
 const int VERY_BAD = -VERY_GOOD;
+const int ZOBRIST_HASH_COUNT = 6*2*64 + 1 + 4 + 8;
 
 enum Color { White, Black };
 
@@ -65,9 +66,14 @@ public:
 	void print_move(move_t, std::ostream &os) const;
 	
 	move_t read_move(const std::string &s, Color color) const;
+	uint64_t get_hash() const { return hash; }
 	
 private:
 	void standard_initial();
+	void update_zobrist_hashing_piece(BoardPos pos, piece_t piece, bool adding);
+	void update_zobrist_hashing_castle(Color, bool kingside, bool enabling);
+	void update_zobrist_hashing_move();
+	void update_zobrist_hashing_enpassant(int file, bool enabling);
 	
 	char fen_repr(piece_t p) const;
 	void fen_flush(std::ostream &os, int &empty) const;
@@ -102,6 +108,9 @@ private:
 	char castle;
 	char enpassant_target;
 	short move_count;
+	uint64_t hash;
+	
+	static uint64_t zobrist_hashes[ZOBRIST_HASH_COUNT];
 };
 
 std::ostream &operator<<(std::ostream &os, const Board &b);

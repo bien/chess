@@ -6,20 +6,27 @@
 #include "chess.hh"
 #include "pgn.hh"
 
-bool expect_move(Board &b, int depth, const std::string &expected_move, int &nodecount)
+bool expect_move(Board &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
 {
 	int score;
+	std::unordered_map<uint64_t, std::pair<int, int> > transposition_table;
 
-	move_t move = alphabeta(b, SimpleEvaluation(), depth*2, White, score, nodecount);
-	move_t expected_move_parsed = b.read_move(expected_move, White);
-	if (expected_move_parsed != move) {
-		std::cout << b << std::endl;
-		std::cout << "expected " << expected_move << " but got ";
-		b.print_move(move, std::cout);
-		std::cout << std::endl;
+	move_t move = alphabeta(b, SimpleEvaluation(), depth*2, White, score, nodecount, transposition_table);
+	for (std::vector<std::string>::const_iterator iter = expected_move.begin(); iter != expected_move.end(); iter++) {
+		move_t expected_move_parsed = b.read_move(*iter, White);
+		if (expected_move_parsed == move) {
+			return true;
+		}
+	}
+	if (expected_move.size() == 0) {
+		std::cerr << "Error: couldn't find expected move" << std::endl;
 		return false;
 	}
-	return true;
+	std::cout << b << std::endl;
+	std::cout << "expected " << expected_move.front() << " but got ";
+	b.print_move(move, std::cout);
+	std::cout << std::endl;
+	return false;
 }
 
 int main(int argc, char **argv)
@@ -30,7 +37,7 @@ int main(int argc, char **argv)
 	}
 	std::ifstream puzzles(argv[1]);
 	std::map<std::string, std::string> game_metadata;
-	std::vector<std::pair<std::string, std::string> > movelist;
+	std::map<std::pair<int, bool>, std::vector<std::string> > move_choices;
 	Board b;
 	int passed = 0;
 	int attempts = 0;
@@ -43,21 +50,23 @@ int main(int argc, char **argv)
 	}
 
 	while (!puzzles.eof()) {
-		movelist.clear();
+		move_choices.clear();
 		game_metadata.clear();
-		read_pgn(puzzles, game_metadata, movelist);
+		pgn_move_choices(puzzles, game_metadata, move_choices);
 		if (game_metadata["FEN"] != "" && game_metadata["Black"] == "White to move") {
 			b.set_fen(game_metadata["FEN"]);
 			bool result = false; 
 			int puzzle_nodecount = 0;
 			clock_t start = clock();
+			int depth = 3;
 			if (game_metadata["White"] == "Mate in one") {
-				result = expect_move(b, 1, movelist[0].first, puzzle_nodecount);
+				depth = 1;
 			} else if (game_metadata["White"] == "Mate in two") {
-				result = expect_move(b, 2, movelist[0].first, puzzle_nodecount);
+				depth = 2;
 			} else if (game_metadata["White"] == "Mate in three") {
-				result = expect_move(b, 3, movelist[0].first, puzzle_nodecount);
+				depth = 3;
 			}
+			result = expect_move(b, depth, move_choices[std::pair<int, bool>(1, true)], puzzle_nodecount);
 			elapsed += (clock() - start) *1.0 / CLOCKS_PER_SEC;
 			attempts++;
 			nodes += puzzle_nodecount;
