@@ -225,41 +225,39 @@ int main()
 	assert_equals(0, static_cast<int>(legal_black.size()));
 	assert_equals(true, b.king_in_check(Black));
 	
-	int score;
-	int nodecount;
-	std::unordered_map<uint64_t, std::pair<int, int> > transposition_table;
-
 	// white has mate in 1
+	SimpleEvaluation simple;
+	Search search(&simple);
 	b.set_fen("3B1n2/NP2P3/b7/2kp2N1/8/2Kp4/8/8 w - - 0 1");
-	move = minimax(b, SimpleEvaluation(), 2, White, score, nodecount, transposition_table);
+	move = search.minimax(b, 2, White);
 	movetext.str("");
 	b.print_move(move, movetext);
-	assert_equals(VERY_GOOD - 1, score);
-	transposition_table.clear();
-	move = alphabeta(b, SimpleEvaluation(), 2, White, score, nodecount, transposition_table);
-	assert_equals(VERY_GOOD - 1, score);
+	assert_equals(VERY_GOOD - 1, search.score);
+	search.reset();
+	move = search.alphabeta(b, 2, White);
+	assert_equals(VERY_GOOD - 1, search.score);
 
 	// white has mate in 2
 	b.set_fen("r4kr1/1b2R1n1/pq4p1/4Q3/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
-	transposition_table.clear();
-	move = minimax(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
-	assert_equals(VERY_GOOD - 1, score);
+	search.reset();
+	move = search.minimax(b, 4, White);
+	assert_equals(VERY_GOOD - 1, search.score);
 	assert_equals(b.read_move("Rf7+", White), move);
-	transposition_table.clear();
-	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
-	assert_equals(VERY_GOOD - 1, score);
+	search.reset();
+	move = search.alphabeta(b, 4, White);
+	assert_equals(VERY_GOOD - 1, search.score);
 	assert_equals(b.read_move("Rf7+", White), move);
 
 	b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - b6 0 1");
-	transposition_table.clear();
-	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
+	search.reset();
+	move = search.alphabeta(b, 4, White);
 	assert_equals(b.read_move("Kc3", White), move);
-	assert_equals(VERY_GOOD - 1, score);
+	assert_equals(VERY_GOOD - 1, search.score);
 
 	b.set_fen("8/8/5p2/5B2/8/1K1R4/8/2k5 w - - 0 1");
-	transposition_table.clear();
-	move = alphabeta(b, SimpleEvaluation(), 4, White, score, nodecount, transposition_table);
+	search.reset();
+	move = search.alphabeta(b, 4, White);
 	assert_equals(b.read_move("Bg4", White), move);
-	assert_equals(VERY_GOOD - 1, score);
+	assert_equals(VERY_GOOD - 1, search.score);
 	return 0;
 }

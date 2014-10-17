@@ -8,10 +8,11 @@
 
 bool expect_move(Board &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
 {
-	int score;
-	std::unordered_map<uint64_t, std::pair<int, int> > transposition_table;
+	SimpleEvaluation simple;
+	Search search(&simple);
 
-	move_t move = alphabeta(b, SimpleEvaluation(), depth*2, White, score, nodecount, transposition_table);
+	move_t move = search.alphabeta(b, depth*2, White);
+	nodecount = search.nodecount;
 	for (std::vector<std::string>::const_iterator iter = expected_move.begin(); iter != expected_move.end(); iter++) {
 		move_t expected_move_parsed = b.read_move(*iter, White);
 		if (expected_move_parsed == move) {
