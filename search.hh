@@ -3,6 +3,7 @@
 
 #include "chess.hh"
 #include <unordered_map>
+#include <tuple>
 
 extern bool search_debug;
 
@@ -12,20 +13,42 @@ public:
 	virtual int delta_evaluate(Board &b, move_t move, int previous_score) const;
 };
 
+struct TranspositionEntry {
+	short depth;
+	int lower;
+	int upper;
+	move_t move;
+	
+	TranspositionEntry() 
+		: depth(0), lower(VERY_BAD), upper(VERY_GOOD), move(-1)
+	{}
+		
+	TranspositionEntry(const TranspositionEntry &entry)
+		: depth(entry.depth), lower(entry.lower), upper(entry.upper), move(entry.move)
+	{}
+};
+
 struct Search {
-	Search(const Evaluation *eval);
+	Search(const Evaluation *eval, int transposition_table_size=1000 * 1000 * 50);
 	move_t minimax(Board &b, int depth, Color color);
 	move_t alphabeta(Board &b, const int depth, Color color);
-	move_t nega_alphabeta(Board &b, int depth, Color color, int &score, int alpha, int beta);
 	
 	void reset();
 	
 	int score;
 	int nodecount;
-	std::unordered_map<uint64_t, std::pair<int, int> > transposition_table;
+	// hash -> depth, (max, min)
+	int transposition_table_size;
 	bool use_transposition_table;
+	std::unordered_map<uint64_t, TranspositionEntry> transposition_table;
 	bool use_pruning;
 	const Evaluation *eval;
+	int min_score_prune_sorting;
+	bool use_mtdf;
+	
+private:
+	move_t alphabeta_with_memory(Board &b, int depth, Color color, int &score, int alpha, int beta);
+	move_t mtdf(Board &b, int depth, Color color, int &score, int guess);
 };
 
 #endif
