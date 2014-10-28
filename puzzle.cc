@@ -6,11 +6,8 @@
 #include "chess.hh"
 #include "pgn.hh"
 
-bool expect_move(Board &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
+bool expect_move(Search &search, Board &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
 {
-	SimpleEvaluation simple;
-	Search search(&simple);
-
 	move_t move = search.alphabeta(b, depth*2, White);
 	nodecount = search.nodecount;
 	for (std::vector<std::string>::const_iterator iter = expected_move.begin(); iter != expected_move.end(); iter++) {
@@ -24,7 +21,7 @@ bool expect_move(Board &b, int depth, const std::vector<std::string> &expected_m
 		return false;
 	}
 	std::cout << b << std::endl;
-	std::cout << "expected " << expected_move.front() << " but got ";
+	std::cout << "at depth=" << depth << " expected " << expected_move.front() << " but got ";
 	b.print_move(move, std::cout);
 	std::cout << std::endl;
 	return false;
@@ -49,10 +46,16 @@ int main(int argc, char **argv)
 	  std::cerr << "Couldn't read " << argv[1] << std::endl;
 	  exit(1);
 	}
+	
+	SimpleEvaluation simple;
+	Search search(&simple);
+	search.use_transposition_table = true;
+	search.use_mtdf = true;
 
 	while (!puzzles.eof()) {
 		move_choices.clear();
 		game_metadata.clear();
+		search.reset();
 		pgn_move_choices(puzzles, game_metadata, move_choices);
 		if (game_metadata["FEN"] != "" && game_metadata["Black"] == "White to move") {
 			b.set_fen(game_metadata["FEN"]);
@@ -61,13 +64,13 @@ int main(int argc, char **argv)
 			clock_t start = clock();
 			int depth = 3;
 			if (game_metadata["White"] == "Mate in one") {
-				depth = 1;
-			} else if (game_metadata["White"] == "Mate in two") {
 				depth = 2;
+			} else if (game_metadata["White"] == "Mate in two") {
+				depth = 4;
 			} else if (game_metadata["White"] == "Mate in three") {
-				depth = 3;
+				depth = 6;
 			}
-			result = expect_move(b, depth, move_choices[std::pair<int, bool>(1, true)], puzzle_nodecount);
+			result = expect_move(search, b, depth, move_choices[std::pair<int, bool>(1, true)], puzzle_nodecount);
 			elapsed += (clock() - start) *1.0 / CLOCKS_PER_SEC;
 			attempts++;
 			nodes += puzzle_nodecount;

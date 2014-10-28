@@ -8,6 +8,8 @@
 #include "search.hh"
 #include "evaluate.hh"
 
+extern bool search_debug;
+
 void get_vector(BoardPos origin, BoardPos bp, char &drank, char &dfile);
 
 BoardPos get_source_pos(move_t move);
@@ -232,32 +234,50 @@ int main()
 	move = search.minimax(b, 2, White);
 	movetext.str("");
 	b.print_move(move, movetext);
-	assert_equals(VERY_GOOD - 1, search.score);
+	assert_equals(VERY_GOOD + 1, search.score);
 	search.reset();
 	move = search.alphabeta(b, 2, White);
-	assert_equals(VERY_GOOD - 1, search.score);
+	assert_equals(VERY_GOOD + 1, search.score);
 
 	// white has mate in 2
 	b.set_fen("r4kr1/1b2R1n1/pq4p1/4Q3/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
 	search.reset();
 	move = search.minimax(b, 4, White);
-	assert_equals(VERY_GOOD - 1, search.score);
+	assert_equals(VERY_GOOD + 1, search.score);
 	assert_equals(b.read_move("Rf7+", White), move);
 	search.reset();
 	move = search.alphabeta(b, 4, White);
-	assert_equals(VERY_GOOD - 1, search.score);
+	assert_equals(VERY_GOOD + 1, search.score);
 	assert_equals(b.read_move("Rf7+", White), move);
 
 	b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - b6 0 1");
 	search.reset();
 	move = search.alphabeta(b, 4, White);
 	assert_equals(b.read_move("Kc3", White), move);
-	assert_equals(VERY_GOOD - 1, search.score);
+	assert_equals(VERY_GOOD + 1, search.score);
 
 	b.set_fen("8/8/5p2/5B2/8/1K1R4/8/2k5 w - - 0 1");
 	search.reset();
 	move = search.alphabeta(b, 4, White);
 	assert_equals(b.read_move("Bg4", White), move);
-	assert_equals(VERY_GOOD - 1, search.score);
+	assert_equals(VERY_GOOD + 1, search.score);
+	
+	b.set_fen("3q1rk1/5pbp/5Qp1/8/8/2B5/5PPP/6K1 w - - 0 1");
+	search.reset();
+	move = search.alphabeta(b, 2, White);
+	assert_equals(b.read_move("Qxg7", White), move);
+	assert_equals(VERY_GOOD + 1, search.score);
+	
+	b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - - 0 1");
+	search.reset();
+	move = search.alphabeta(b, 4, White);
+	assert_equals(b.read_move("Kc3", White), move);
+	assert_equals(VERY_GOOD + 1, search.score);
+
+	b.set_fen("5n2/2PPk1PR/8/4K3/8/8/8/8 w - - 0 1");
+	search.reset();
+	move = search.alphabeta(b, 4, White);
+	assert_equals(b.read_move("g8=N#", White), move);
+	assert_equals(VERY_GOOD + 3, search.score);
 	return 0;
 }

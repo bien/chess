@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <set>
 
 bool search_debug = false;
 
@@ -32,13 +33,21 @@ int Evaluation::delta_evaluate(Board &b, move_t move, int previous_score) const
 move_t Search::minimax(Board &b, int depth, Color color)
 {
 	nodecount = 0;
+	bool old_pruning = use_pruning;
+	bool old_mtdf = use_mtdf;
+	bool old_trans_table = use_transposition_table;
 	use_pruning = false;
 	use_mtdf = false;
-	move_t result = alphabeta_with_memory(b, depth, color, score, 0, 0);
+	use_transposition_table = false;
+	std::pair<move_t, int> result = alphabeta_with_memory(b, depth, color, 0, 0);
+	score = result.second;
 	if (color == Black) {
 		score = -score;
 	}
-	return result;
+	use_pruning = old_pruning;
+	use_mtdf = old_mtdf;
+	use_transposition_table = old_trans_table;
+	return result.first;
 }
 
 move_t Search::alphabeta(Board &b, int depth, Color color)
@@ -48,14 +57,17 @@ move_t Search::alphabeta(Board &b, int depth, Color color)
 	if (use_mtdf) {
 		result = mtdf(b, depth, color, score, eval->evaluate(b));
 	} else {
-		result = alphabeta_with_memory(b, depth, color, score, VERY_BAD, VERY_GOOD);
+		std::pair<move_t, int> sub = alphabeta_with_memory(b, depth, color, SCORE_MIN, SCORE_MAX);
+		score = sub.second;
+		result = sub.first;
 	}
 	return result;
 }
 
 Search::Search(const Evaluation *eval, int transposition_table_size)
-	: score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), transposition_table(transposition_table_size), use_pruning(true), eval(eval), min_score_prune_sorting(3), use_mtdf(true)
-{}
+	: score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(3), use_mtdf(true)
+{
+}
 
 
 void Search::reset()
@@ -86,9 +98,12 @@ struct PrecomputedComparator {
 move_t Search::mtdf(Board &b, int depth, Color color, int &score, int guess)
 {
 	score = guess;
-	int upperbound = VERY_GOOD;
-	int lowerbound = VERY_BAD;
+	int upperbound = SCORE_MAX;
+	int lowerbound = SCORE_MIN;
 	move_t move = 0;
+	if (false) {
+		std::cout << "mtdf guess=" << guess << " depth=" << depth << std::endl;
+	}
 	
 	do {
 		int beta;
@@ -97,23 +112,30 @@ move_t Search::mtdf(Board &b, int depth, Color color, int &score, int guess)
 		} else {
 			beta = score;
 		}
-		move = alphabeta_with_memory(b, depth, color, score, beta - 1, beta);
+		std::pair<move_t, int> result = alphabeta_with_memory(b, depth, color, beta - 1, beta);
+		move = result.first;
+		score = result.second;
 		if (score < beta) {
-			upperbound = score;
+			upperbound = result.second;
 		} else {
-			lowerbound = score;
+			lowerbound = result.second;
+		}
+		if (false) {
+			std::cout << "  mtdf a=" << beta - 1 << " b=" << beta << " score=" << score << " upper=" << upperbound << " lower=" << lowerbound << " move=";
+			b.print_move(move, std::cout);
+			std::cout << std::endl;
 		}
 	} while (lowerbound < upperbound);
+	
 	return move;
 }
 
-move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &score, int alpha, int beta)
+std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color color, int alpha, int beta)
 {
 	nodecount++;
 	int is_white = color == White ? 1 : -1;
 	TranspositionEntry bounds;
 	bounds.depth = depth;
-	int call_alpha = alpha, call_beta = beta;
 	
 	// check transposition table
 	if (use_transposition_table) {
@@ -122,11 +144,9 @@ move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &scor
 			if (transpose->second.depth >= depth) {
 				// found something at appropriate depth
 				if (transpose->second.lower >= beta) {
-					score = transpose->second.lower;
-					return 0;
+					return std::pair<move_t, int>(transpose->second.move, transpose->second.lower);
 				} else if (transpose->second.upper <= alpha) {
-					score = transpose->second.upper;
-					return 0;
+					return std::pair<move_t, int>(transpose->second.move, transpose->second.upper);
 				}
 				bounds = transpose->second;
 				alpha = max(alpha, bounds.lower);
@@ -136,7 +156,7 @@ move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &scor
 	}
 	
 	if (depth == 0) {
-		return eval->evaluate(b);
+		return std::pair<move_t, int>(0, eval->evaluate(b));
 	}
 	int original_alpha = alpha;
 	int original_beta = beta;
@@ -146,11 +166,9 @@ move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &scor
 	
 	if (moves.empty()) {
 		if (b.king_in_check(color)) {
-			score = is_white * (VERY_GOOD - depth);
-			return 0;
+			return std::pair<move_t, int>(0, is_white * (VERY_BAD - depth));
 		} else {
-			score = 0;
-			return 0;
+			return std::pair<move_t, int>(0, 0);
 		}
 	}
 
@@ -159,6 +177,8 @@ move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &scor
 
 	int currentnodescore = eval->evaluate(b);
 	std::unordered_map<move_t, int> scores(moves.size() * 2);
+	std::unordered_map<move_t, uint64_t> hashes(moves.size() * 2);
+	std::set<move_t> pruned;
 
 	if (depth > min_score_prune_sorting) {
 		for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
@@ -170,41 +190,61 @@ move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &scor
 	}
 	for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
 		int subtree_score;
-		int submove = 0;
+		move_t submove = 0;
 		if (depth == 1) {
 			subtree_score = eval->delta_evaluate(b, *iter, currentnodescore);
 		} else {
 			b.apply_move(*iter);
-			submove = alphabeta_with_memory(b, depth - 1, get_opposite_color(color), subtree_score, alpha, beta);
+			std::pair<move_t, int> child = alphabeta_with_memory(b, depth - 1, get_opposite_color(color), alpha, beta);
+			subtree_score = child.second;
+			submove = child.first;
+			hashes[*iter] = b.get_hash();
 			b.undo_move(*iter);
 		}
 		
 		if (search_debug) {
-			moves[*iter] = subtree_score;
+			scores[*iter] = subtree_score;
+			if (submove == -1) {
+				pruned.insert(*iter);
+			}
 		}
 
-		// ignore pruned branches
-		if (submove == -1) {
-			continue;
-		}
 		if (iter == moves.begin() || (color == White && subtree_score > best_score) || (color == Black && subtree_score < best_score)) {
 			best_score = subtree_score;
-			best_move = *iter;
+			// ignore pruned branches
+			if (submove != -1 || best_move == 0) {
+				best_move = *iter;
+			}
 		}
-		if (color == White) {
-			alpha = max(alpha, best_score);
-		}
-		else {
-			beta = min(beta, best_score);
-		}
-		if (use_pruning && alpha > beta) {
-			// prune this branch
-			best_move = -1;
-			break;
+		if (use_pruning) {
+			if (color == White) {
+				alpha = max(alpha, best_score);
+			}
+			else {
+				beta = min(beta, best_score);
+			}
+			if (alpha > beta) {
+				// prune this branch
+				best_move = -1;
+				break;
+			}
 		}
 	}
-
-	score = best_score;
+	
+	if (search_debug) {
+		std::cout << "ab depth=" << depth << " color=" << color << " a=" << original_alpha << " b=" << original_beta << " h=" << std::hex << b.get_hash() << std::dec << std::endl;
+		for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
+			std::cout << "  move=";
+			b.print_move(*iter, std::cout);
+			std::cout << " score=" << scores[*iter];
+			if (pruned.find(*iter) != pruned.end()) {
+				std::cout << "p";
+			} else if (best_move == *iter) {
+				std::cout << "*";
+			}
+			std::cout << " h=" << std::hex << hashes[*iter] << std::dec << std::endl;
+		}
+	}
 
 	// write to transposition table
 	if (use_transposition_table && transposition_table.size() < transposition_table_size) {
@@ -219,5 +259,5 @@ move_t Search::alphabeta_with_memory(Board &b, int depth, Color color, int &scor
 		}
 		transposition_table[b.get_hash()] = bounds;
 	}
-	return best_move;
+	return std::pair<move_t, int>(best_move, best_score);
 }

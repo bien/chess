@@ -26,6 +26,9 @@ const int PIECE_MASK = 7;
 
 const int VERY_GOOD = 1 << 30;
 const int VERY_BAD = -VERY_GOOD;
+const int SCORE_MAX = VERY_GOOD + 1000;
+const int SCORE_MIN = VERY_BAD - 1000;
+
 const int ZOBRIST_HASH_COUNT = 6*2*64 + 1 + 4 + 8;
 
 enum Color { White, Black };

@@ -8,6 +8,9 @@ void pgn_move_choices(std::istream &input, std::map<std::string, std::string> &m
 		char buf[256];
 		input.getline(buf, sizeof(buf), '\n');
 		line = buf;
+		if (line.size() < 1) {
+			continue;
+		}
 		if (line[line.length() - 1] == '\r') {
 			line = line.substr(0, line.length() - 1);
 		}

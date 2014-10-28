@@ -4,6 +4,7 @@
 #include "chess.hh"
 #include <unordered_map>
 #include <tuple>
+#include <utility>
 
 extern bool search_debug;
 
@@ -20,7 +21,7 @@ struct TranspositionEntry {
 	move_t move;
 	
 	TranspositionEntry() 
-		: depth(0), lower(VERY_BAD), upper(VERY_GOOD), move(-1)
+		: depth(0), lower(SCORE_MIN), upper(SCORE_MAX), move(-1)
 	{}
 		
 	TranspositionEntry(const TranspositionEntry &entry)
@@ -47,7 +48,7 @@ struct Search {
 	bool use_mtdf;
 	
 private:
-	move_t alphabeta_with_memory(Board &b, int depth, Color color, int &score, int alpha, int beta);
+	std::pair<move_t, int> alphabeta_with_memory(Board &b, int depth, Color color, int alpha, int beta);
 	move_t mtdf(Board &b, int depth, Color color, int &score, int guess);
 };
 
