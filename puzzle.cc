@@ -8,7 +8,7 @@
 
 bool expect_move(Search &search, Board &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
 {
-	move_t move = search.alphabeta(b, depth*2, White);
+	move_t move = search.alphabeta(b, depth, White);
 	nodecount = search.nodecount;
 	for (std::vector<std::string>::const_iterator iter = expected_move.begin(); iter != expected_move.end(); iter++) {
 		move_t expected_move_parsed = b.read_move(*iter, White);

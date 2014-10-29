@@ -24,7 +24,7 @@ const int KING = 6;
 const int INVALID = 8;
 const int PIECE_MASK = 7;
 
-const int VERY_GOOD = 1 << 30;
+const int VERY_GOOD = 10000;
 const int VERY_BAD = -VERY_GOOD;
 const int SCORE_MAX = VERY_GOOD + 1000;
 const int SCORE_MIN = VERY_BAD - 1000;
@@ -70,6 +70,8 @@ public:
 	
 	move_t read_move(const std::string &s, Color color) const;
 	uint64_t get_hash() const { return hash; }
+	
+	Color get_side_to_play() const { return side_to_play; }
 	
 private:
 	void standard_initial();

@@ -8,8 +8,6 @@
 #include "search.hh"
 #include "evaluate.hh"
 
-extern bool search_debug;
-
 void get_vector(BoardPos origin, BoardPos bp, char &drank, char &dfile);
 
 BoardPos get_source_pos(move_t move);

@@ -16,6 +16,9 @@ testexe: chess.o test.o pgn.o search.o evaluate.o
 puzzles: chess.o pgn.o search.o evaluate.o puzzle.o
 	$(CXX) $^ -o $@
 
+fensolve: chess.o pgn.o search.o evaluate.o fensolve.o
+	$(CXX) $^ -o $@
+
 opening: opening.o search.o evaluate.o chess.o
 	$(CXX) $^ -o $@
 	

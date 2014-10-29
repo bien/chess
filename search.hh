@@ -6,7 +6,7 @@
 #include <tuple>
 #include <utility>
 
-extern bool search_debug;
+extern int search_debug;
 
 class Evaluation {
 public:

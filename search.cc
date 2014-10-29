@@ -7,7 +7,7 @@
 #include <sstream>
 #include <set>
 
-bool search_debug = false;
+int search_debug = 0;
 
 template<class T>
 T max(T a, T b)
@@ -101,7 +101,7 @@ move_t Search::mtdf(Board &b, int depth, Color color, int &score, int guess)
 	int upperbound = SCORE_MAX;
 	int lowerbound = SCORE_MIN;
 	move_t move = 0;
-	if (false) {
+	if (search_debug) {
 		std::cout << "mtdf guess=" << guess << " depth=" << depth << std::endl;
 	}
 	
@@ -120,7 +120,7 @@ move_t Search::mtdf(Board &b, int depth, Color color, int &score, int guess)
 		} else {
 			lowerbound = result.second;
 		}
-		if (false) {
+		if (search_debug) {
 			std::cout << "  mtdf a=" << beta - 1 << " b=" << beta << " score=" << score << " upper=" << upperbound << " lower=" << lowerbound << " move=";
 			b.print_move(move, std::cout);
 			std::cout << std::endl;
@@ -212,7 +212,7 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 		if (iter == moves.begin() || (color == White && subtree_score > best_score) || (color == Black && subtree_score < best_score)) {
 			best_score = subtree_score;
 			// ignore pruned branches
-			if (submove != -1 || best_move == 0) {
+			if (submove != -1) {
 				best_move = *iter;
 			}
 		}
@@ -231,7 +231,7 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 		}
 	}
 	
-	if (search_debug) {
+	if (search_debug > 1) {
 		std::cout << "ab depth=" << depth << " color=" << color << " a=" << original_alpha << " b=" << original_beta << " h=" << std::hex << b.get_hash() << std::dec << std::endl;
 		for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
 			std::cout << "  move=";
@@ -247,7 +247,7 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 	}
 
 	// write to transposition table
-	if (use_transposition_table && transposition_table.size() < transposition_table_size) {
+	if (use_transposition_table && transposition_table.size() < transposition_table_size && bounds.depth == depth) {
 		if (best_score <= original_alpha) {
 			bounds.upper = best_score;
 		} else if (best_score > original_alpha && best_score < original_beta) {
