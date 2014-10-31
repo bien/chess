@@ -27,6 +27,17 @@ bool expect_move(Search &search, Board &b, int depth, const std::vector<std::str
 	return false;
 }
 
+void get_first_move_choices(const std::map<std::pair<int, bool>, std::vector<std::string> > &move_choices, std::vector<std::string> &first_moves)
+{
+	int best_move = 1000;
+	for (auto iter = move_choices.begin(); iter != move_choices.end(); iter++) {
+		if (iter->first.second == true && iter->first.first < best_move) {
+			first_moves = iter->second;
+			best_move = iter->first.first;
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	if (argc != 2) {
@@ -36,6 +47,7 @@ int main(int argc, char **argv)
 	std::ifstream puzzles(argv[1]);
 	std::map<std::string, std::string> game_metadata;
 	std::map<std::pair<int, bool>, std::vector<std::string> > move_choices;
+	std::vector<std::string> first_move;
 	Board b;
 	int passed = 0;
 	int attempts = 0;
@@ -70,7 +82,8 @@ int main(int argc, char **argv)
 			} else if (game_metadata["White"] == "Mate in three") {
 				depth = 6;
 			}
-			result = expect_move(search, b, depth, move_choices[std::pair<int, bool>(1, true)], puzzle_nodecount);
+			get_first_move_choices(move_choices, first_move);
+			result = expect_move(search, b, depth, first_move, puzzle_nodecount);
 			elapsed += (clock() - start) *1.0 / CLOCKS_PER_SEC;
 			attempts++;
 			nodes += puzzle_nodecount;
