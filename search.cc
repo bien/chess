@@ -142,6 +142,14 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 	TranspositionEntry bounds;
 	bounds.depth = depth;
 	
+	// cutoff early if alpha or beta is impossibly high (ie if there is a checkmate higher in the tree)
+	if (alpha > VERY_GOOD + depth) {
+		return std::pair<move_t, int>(0, alpha);
+	}
+	else if (beta < VERY_BAD - depth) {
+		return std::pair<move_t, int>(0, beta);
+	}
+
 	// check transposition table
 	if (use_transposition_table) {
 		auto transpose = transposition_table.find(b.get_hash());
