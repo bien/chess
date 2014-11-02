@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <set>
+#include <map>
 
 int search_debug = 0;
 
@@ -65,7 +66,7 @@ move_t Search::alphabeta(Board &b, int depth, Color color)
 }
 
 Search::Search(const Evaluation *eval, int transposition_table_size)
-	: score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(3), use_mtdf(true)
+	: score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true)
 {
 }
 
@@ -78,20 +79,24 @@ void Search::reset()
 }
 
 struct PrecomputedComparator {
-	PrecomputedComparator(std::unordered_map<move_t, int> cmp, bool invert) {
-		this->cmp = cmp;
-		this->invert = invert;
-	}
+	PrecomputedComparator(std::unordered_map<move_t, int> *cmp, bool invert) :
+		cmp(cmp), invert(invert)
+	{}
 
 	bool operator()(move_t a, move_t b) {
+		if (cmp->find(a) == cmp->end()) {
+			return false;
+		} else if (cmp->find(b) == cmp->end()) {
+			return true;
+		}
 		if (invert) {
-			return cmp[a] <= cmp[b];
+			return (*cmp)[b] < (*cmp)[a];
 		} else {
-			return cmp[a] > cmp[b];
+			return (*cmp)[a] < (*cmp)[b];
 		}
 	}
 
-	std::unordered_map<move_t, int> cmp;
+	std::unordered_map<move_t, int> *cmp;
 	bool invert;
 };
 
@@ -163,7 +168,7 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 	std::vector<move_t> moves;
 	moves.reserve(50);
 	b.legal_moves(color, moves);
-	
+
 	if (moves.empty()) {
 		if (b.king_in_check(color)) {
 			return std::pair<move_t, int>(0, is_white * (VERY_BAD - depth));
@@ -176,7 +181,7 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 	int best_score = 0;
 
 	int currentnodescore = eval->evaluate(b);
-	std::unordered_map<move_t, int> scores(moves.size() * 2);
+	std::unordered_map<move_t, int> scores;
 	std::unordered_map<move_t, uint64_t> hashes(moves.size() * 2);
 	std::set<move_t> pruned;
 
@@ -184,9 +189,9 @@ std::pair<move_t, int> Search::alphabeta_with_memory(Board &b, int depth, Color 
 		for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
 			scores[*iter] = eval->delta_evaluate(b, *iter, currentnodescore);
 		}
-		if (depth > min_score_prune_sorting) {
-			std::sort(moves.begin(), moves.end(), PrecomputedComparator(scores, color));
-		}
+
+		PrecomputedComparator comp(&scores, color);
+		std::sort(moves.begin(), moves.end(), comp);
 	}
 	for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
 		int subtree_score;
