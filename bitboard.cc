@@ -115,18 +115,41 @@ const char charboard_initialization[] = { 4, 2, 3, 5, 6, 3, 2, 4,
 	 struct is_pawn_capture {
 		 template<board_pos_t src, board_pos_t dest>
 		 struct move {
-			 const static int rankdiff = (src / 8) - (dest / 8);
+			 const static int rankdiff = (dest / 8) - (src / 8);
 			 const static int filediff = Abs<(src % 8) - (dest % 8)>::value;
-			 const static bool value = filediff == 1 && rankdiff == (is_white ? -1 : 1);
+			 const static bool value = filediff == 1 && rankdiff == (is_white ? 1 : -1);
+		 };
+	 };
+	 template <bool is_white>
+	 struct is_pawn_simple_move {
+		 template <board_pos_t src, board_pos_t dest>
+		 struct move {
+			 const static int rankdiff = (dest / 8) - (src / 8);
+			 const static int filediff = Abs<(src % 8) - (dest % 8)>::value;
+			 const static bool value = filediff == 0 && rankdiff == (is_white ? 1 : -1);
+		 };
+	 };
+	 template <bool is_white>
+	 struct is_pawn_double_move {
+		 template <board_pos_t src, board_pos_t dest>
+		 struct move {
+			 const static int rankdiff = (dest / 8) - (src / 8);
+			 const static int filediff = Abs<(src % 8) - (dest % 8)>::value;
+			 const static bool value = filediff == 0 && rankdiff == (is_white ? 2 : -2) && src / 8 == (is_white ? 1 : 6);
 		 };
 	 };
 	 typedef generate_array<64, CreateBitboard<BitArrays::is_knight_move>::Generator>::result knight_moves;
 	 typedef generate_array<64, CreateBitboard<BitArrays::is_king_move>::Generator>::result king_moves;
+	 typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_capture<true>::move >::Generator>::result white_pawn_captures;
+	 typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_capture<false>::move >::Generator>::result black_pawn_captures;
+	 typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_simple_move<true>::move >::Generator>::result white_pawn_simple_moves;
+	 typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_simple_move<false>::move >::Generator>::result black_pawn_simple_moves;
+	 typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_double_move<true>::move >::Generator>::result white_pawn_double_moves;
+	 typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_double_move<false>::move >::Generator>::result black_pawn_double_moves;
 	 
 //	 typedef generate_array<64, CreateCollision> collision_table;
  };
  /*
- typedef generate_array<64, CreateBitboard<BitArrays::is_king_move>::Generator>::result king_moves;
  typedef generate_array<64, CreateBitboard<BitArrays::is_bishop_move>::Generator>::result bishop_moves;
  typedef generate_array<64, CreateBitboard<BitArrays::is_rook_move>::Generator>::result rook_moves;
  typedef generate_array<64, CreateBitboard<BitArrays::is_pawn_capture<true>::move>::Generator>::result white_pawn_captures;
@@ -145,7 +168,7 @@ Bitboard::Bitboard()
 	memcpy(charboard, charboard_initialization, sizeof(charboard_initialization));
 }
 
-void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t illegal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const
+void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const
 {
 	int shift_amount = 0;
 		
@@ -158,7 +181,7 @@ void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t illegal_dest, co
 		shift_amount += pos;
 		piece_bitmask = piece_bitmask >> pos;
 		
-		uint64_t dest_bitmask = piece_moves[src] & ~illegal_dest;
+		uint64_t dest_bitmask = piece_moves[src] & legal_dest;
 		int dest_shift_amount = 0;
 		while (dest_bitmask) {
 			int destpos = ffsll(dest_bitmask);
@@ -172,33 +195,23 @@ void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t illegal_dest, co
 	}
 }
 
-void Bitboard::get_directional_moves(uint64_t piece_bitmask, uint64_t capture_dest, uint64_t illegal_dest, uint64_t *piece_moves, std::vector<move_t> &moves) const
-{
-	int shift_amount = 0;
-	while (piece_bitmask) {
-		int pos = ffsll(piece_bitmask);
-		assert(pos >= 0);
-		shift_amount += pos + 1;
-		piece_bitmask = piece_bitmask >> (shift_amount + 1);
-		int src = pos + shift_amount;
-		
-		uint64_t destcand = piece_moves[src] & ~illegal_dest;
-		int dest_shift_amount = 0;
-		while (destcand >> dest_shift_amount) {
-			int destpos = ffsll(destcand >> dest_shift_amount);
-			assert(destpos >= 0);
-			dest_shift_amount += destpos + 1;
-			int dest = destpos >> (dest_shift_amount + 1);
-			moves.push_back(make_move(src, dest));
-		}
-	}	
-}
-
 void Bitboard::legal_moves(bool is_white, std::vector<move_t> &moves) const
 {
 	int color = is_white ? 0 : 7;
-	get_point_moves(piece_bitmasks[knight + color], piece_bitmasks[all + color], BitArrays::knight_moves::data, moves);
-	get_point_moves(piece_bitmasks[king + color], piece_bitmasks[all + color], BitArrays::king_moves::data, moves);
+	int othercolor = is_white ? 7 : 0;
+	get_point_moves(piece_bitmasks[knight + color], ~piece_bitmasks[all + color], BitArrays::knight_moves::data, moves);
+	get_point_moves(piece_bitmasks[king + color], ~piece_bitmasks[all + color], BitArrays::king_moves::data, moves);
+	uint64_t empty_squares = ~piece_bitmasks[all + color] & ~piece_bitmasks[all + othercolor];
+
+	if (is_white) {
+		get_point_moves(piece_bitmasks[pawn + color], piece_bitmasks[all + othercolor], BitArrays::white_pawn_captures::data, moves);
+		get_point_moves(piece_bitmasks[pawn + color], empty_squares, BitArrays::white_pawn_simple_moves::data, moves);
+		get_point_moves(piece_bitmasks[pawn + color], empty_squares & ((empty_squares & 0xff0000) << 8), BitArrays::white_pawn_double_moves::data, moves);
+	} else {
+		get_point_moves(piece_bitmasks[pawn + color], piece_bitmasks[all + !color], BitArrays::black_pawn_captures::data, moves);
+		get_point_moves(piece_bitmasks[pawn + color], empty_squares, BitArrays::black_pawn_simple_moves::data, moves);
+		get_point_moves(piece_bitmasks[pawn + color], empty_squares & ((empty_squares & 0xff0000000000) >> 8), BitArrays::black_pawn_double_moves::data, moves);
+	}
 }
 
 void Bitboard::print_pos(char pos, std::ostream &os) const

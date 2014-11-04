@@ -42,8 +42,7 @@ public:
 	
 private:
 	void print_pos(char pos, std::ostream &os) const;
-	void get_point_moves(uint64_t piece_bitmask, uint64_t illegal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const;
-	void get_directional_moves(uint64_t piece_bitmask, uint64_t capture_dest, uint64_t illegal_dest, uint64_t *piece_moves, std::vector<move_t> &moves) const;
+	void get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const;
 	
 	Color side_to_play;
 	bool in_check;
