@@ -1,6 +1,9 @@
+-include Makefile.deps
 CXXFLAGS = -Wall -g -Wno-c++11-extensions -O2
 SRCS = extractfeatures.cc chess.cc pgn.cc search.cc evaluate.cc test.cc puzzle.cc opening.cc
 
+all: Makefile.deps test
+	
 feature: extractfeatures.o chess.o pgn.o
 	$(CXX) $^ -o $@
 
@@ -33,4 +36,4 @@ clean:
 	unzip -p $< | ./feature > $@
 	
 Makefile.deps: Makefile $(SRCS)
-	$(CXX) -MM $(SRCS) > $@
+	$(CXX) $(CXXFLAGS) -MM $(SRCS) > $@

@@ -66,7 +66,7 @@ move_t Search::alphabeta(Board &b, int depth, Color color)
 }
 
 Search::Search(const Evaluation *eval, int transposition_table_size)
-	: score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true)
+	: score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(4), use_mtdf(true)
 {
 }
 
@@ -106,6 +106,7 @@ move_t Search::mtdf(Board &b, int depth, Color color, int &score, int guess)
 	int upperbound = SCORE_MAX;
 	int lowerbound = SCORE_MIN;
 	move_t move = 0;
+	int cumulative_nodes = nodecount;
 	if (search_debug) {
 		std::cout << "mtdf guess=" << guess << " depth=" << depth << std::endl;
 	}
@@ -128,7 +129,8 @@ move_t Search::mtdf(Board &b, int depth, Color color, int &score, int guess)
 		if (search_debug) {
 			std::cout << "  mtdf a=" << beta - 1 << " b=" << beta << " score=" << score << " upper=" << upperbound << " lower=" << lowerbound << " move=";
 			b.print_move(move, std::cout);
-			std::cout << std::endl;
+			std::cout << " nodes=" << nodecount - cumulative_nodes << std::endl;
+			cumulative_nodes = nodecount;
 		}
 	} while (lowerbound < upperbound);
 	

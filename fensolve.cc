@@ -35,8 +35,7 @@ int main(int argc, char **argv)
 	
 	SimpleEvaluation simple;
 	Search search(&simple);
-	search.use_transposition_table = true;
-	search.use_mtdf = true;
+	search.min_score_prune_sorting = 5;
 	
 	clock_t start = clock();
 	move_t move = search.alphabeta(b, depth, b.get_side_to_play());

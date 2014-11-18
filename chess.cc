@@ -121,7 +121,25 @@ piece_t get_captured_piece(move_t move, Color color)
 	return make_piece((move >> 16) & PIECE_MASK, color);
 }
 
-move_t Board::make_move(BoardPos source, piece_t source_piece, BoardPos dest, piece_t dest_piece, piece_t promote) const
+void SimpleBoard::get_source(move_t move, unsigned char &rank, unsigned char &file) const
+{
+	BoardPos bp = get_source_pos(move);
+	rank = get_board_rank(bp);
+	file = get_board_file(bp);
+}
+void SimpleBoard::get_dest(move_t move, unsigned char &rank, unsigned char &file) const
+{
+	BoardPos bp = get_dest_pos(move);
+	rank = get_board_rank(bp);
+	file = get_board_file(bp);
+}
+
+move_t SimpleBoard::make_move(unsigned char srcrank, unsigned char srcfile, unsigned char source_piece, unsigned char destrank, unsigned char destfile, unsigned char captured_piece, unsigned char promote) const
+{
+	return make_move(make_board_pos(srcrank, srcfile), source_piece, make_board_pos(destrank, destfile), captured_piece, promote);
+}
+
+move_t SimpleBoard::make_move(BoardPos source, piece_t source_piece, BoardPos dest, piece_t dest_piece, piece_t promote) const
 {
 	move_t move = get_board_rank(source) << 12 | get_board_file(source) << 8 | get_board_rank(dest) << 4 | get_board_file(dest);
 	move |= (promote & PIECE_MASK) << 24; 
@@ -134,8 +152,8 @@ move_t Board::make_move(BoardPos source, piece_t source_piece, BoardPos dest, pi
 	if (in_check) {
 		move |= MOVE_FROM_CHECK;
 	}
-	if (enpassant_target != -1) {
-		move |= (0xf & enpassant_target) << 20;
+	if (enpassant_file != -1) {
+		move |= (0xf & enpassant_file) << 20;
 	} else {
 		move |= ENPASSANT_STATE_MASK;
 	}
@@ -173,7 +191,12 @@ piece_t make_piece(piece_t type, Color color)
 	}
 }
 
-piece_t Board::get_piece(BoardPos bp) const
+piece_t SimpleBoard::get_piece(unsigned char rank, unsigned char file) const
+{
+	return get_piece(make_board_pos(rank, file));
+}
+
+piece_t SimpleBoard::get_piece(BoardPos bp) const
 {
 	unsigned char twosquare = data[bp >> 1];
 	if (bp & 0x1) {
@@ -183,7 +206,13 @@ piece_t Board::get_piece(BoardPos bp) const
 	}
 }
 
-void Board::set_piece(BoardPos bp, piece_t piece)
+void SimpleBoard::set_piece(unsigned char rank, unsigned char file, piece_t piece)
+{
+	BoardPos bp = make_board_pos(rank, file);
+	set_piece(bp, piece);
+}
+
+void SimpleBoard::set_piece(BoardPos bp, piece_t piece)
 {
 	unsigned char twosquare = data[bp >> 1];
 	if (bp & 0x1) {
@@ -194,261 +223,29 @@ void Board::set_piece(BoardPos bp, piece_t piece)
 	data[bp >> 1] = twosquare;
 }
 
-move_t Board::invalid_move(const std::string &s) const
-{
-	std::cerr << "Can't read move " << s << std::endl;
-	std::cerr << *this << std::endl;
-	abort();
-}
 
-void Board::set_fen(const std::string &fen)
-{
-	unsigned char rank = 8, file = 1;
-	unsigned int pos = 0;
-	reset();
-	while (pos < fen.length()) {
-		char c = fen[pos++];
-		if (c == ' ') {
-			break;
-		}
-		else if (c == '/') {
-			rank--; 
-			file = 1; 
-			continue;
-		}
-			
-		BoardPos bp = make_board_pos(rank-1, file-1);
-		switch (c) {
-			case 'p': set_piece(bp, PAWN | BlackMask); break;
-			case 'r': set_piece(bp, ROOK | BlackMask); break;
-			case 'n': set_piece(bp, KNIGHT | BlackMask); break;
-			case 'b': set_piece(bp, BISHOP | BlackMask); break;
-			case 'q': set_piece(bp, QUEEN | BlackMask); break;
-			case 'k': set_piece(bp, KING | BlackMask); break;
-			case 'P': set_piece(bp, PAWN); break;
-			case 'R': set_piece(bp, ROOK); break;
-			case 'N': set_piece(bp, KNIGHT); break;
-			case 'B': set_piece(bp, BISHOP); break;
-			case 'Q': set_piece(bp, QUEEN); break;
-			case 'K': set_piece(bp, KING); break;
-		}
-		if (c > '0' && c < '9') {
-			for (int i = 0; i < c - '0'; i++) {
-				set_piece(make_board_pos(rank-1, file-1), EMPTY);
-				file++;
-			}
-		} else {
-			file++;
-		}
-	}
-	
-	char c; 
-	// next comes the color
-	while ((c = fen[pos++]) != 0 && c != ' ') {
-		switch(c) {
-			case 'w': side_to_play = White; break;
-			case 'b': side_to_play = Black; break;
-			case ' ': break;
-			case 0: return;
-			default: std::cerr << "Can't read fen" << fen << std::endl; abort();
-		}
-	}
-	if (c == 0) {
-		return;
-	}
-	castle = 0;
-	while ((c = fen[pos++]) != 0 && c != ' ') {
-		// castle status
-		switch(c) {
-			case 'k': castle |= 1 << get_castle_bit(Black, true); break;
-			case 'K': castle |= 1 << get_castle_bit(White, true); break;
-			case 'q': castle |= 1 << get_castle_bit(Black, false); break;
-			case 'Q': castle |= 1 << get_castle_bit(White, false); break;
-			case '-': case ' ': break;
-			case 0: return;
-			default: std::cerr << "Can't read fen" << fen << std::endl; abort();
-		}
-	}
-	
-	if (c == 0) {
-		return;
-	}
-	
-	if ((c = fen[pos++]) != 0) {
-		if (c >= 'a' && c <= 'h') {
-			enpassant_target = c - 'a';
-		}
-	}
-	while (pos < fen.size() && fen[pos++] == ' ')
-		;
-
-	int halfmoves = 0;
-	move_count = 0;
-	bool on_halfmoves = true;
-	while (pos < fen.size() && (c = fen[pos++]) != 0) {
-		switch(c) {
-			case ' ': on_halfmoves = false; break;
-			case 0: break;
-			default:
-				if (c <= '9' && c >= '0') {
-					if (on_halfmoves) {
-						halfmoves = halfmoves * 10 + (c - '0');
-					} else {
-						move_count = move_count * 10 + (c - '0');
-					}
-				}
-				else {
-					std::cerr << "Can't read fen" << fen << std::endl; abort();
-				}
-				break;
-		}
-	}
-	in_check = king_in_check(side_to_play);
-}
-
-unsigned char read_piece(unsigned char c)
-{
-	switch (c) {
-		case 'N': return KNIGHT;
-		case 'R': return ROOK; 
-		case 'B': return BISHOP; 
-		case 'Q': return QUEEN; 
-		case 'K': return KING; 
-		case 'P': return PAWN; 
-	}
-	return 0;
-}
-
-move_t Board::read_move(const std::string &s, Color color) const
-{
-	int pos = 0;
-	bool castle = false;
-	bool queenside_castle = false;
-	bool check = false;
-	
-	piece_t piece;
-	int srcrank = INVALID;
-	int srcfile = INVALID;
-	int destfile = INVALID;
-	int destrank = INVALID;
-	int promotion = 0;
-
-	std::vector<move_t> candidates;
-	
-	if (s[pos] == 'O') {
-		castle = true;
-	}
-	else if (s[pos] >= 'A' && s[pos] <= 'Z') {
-		piece = read_piece(s[pos++]);
-	} else {
-		piece = PAWN;
-	}
-	if (castle) {
-		if (s[++pos] != '-') {
-			invalid_move(s);
-		}
-		if (s[++pos] != 'O') {
-			invalid_move(s);
-		}
-		if (s[pos + 1] == '-' && s[pos + 2] == 'O') {
-			queenside_castle = true;
-			pos += 2;
-		}
-		if (s[pos+1] == '+') {
-			check = true;
-		}
-	} else {
-		while (s[pos] != 0) {
-			if (s[pos] >= '1' && s[pos] <= '8') {
-				if (destrank != INVALID) {
-					srcrank = destrank;
-				}
-				destrank = s[pos] - '1';
-			}
-			else if (s[pos] >= 'a' && s[pos] <= 'h') {
-				if (destfile != INVALID) {
-					srcfile = destfile;
-				}
-				destfile = s[pos] - 'a';
-			}
-			else if (s[pos] == '+') {
-				check = true;
-			} else if (s[pos] == '#') {
-				// mate = true;
-			}
-			else if (s[pos] == '=') {
-				switch (s[pos + 1]) {
-					case 'q': case 'Q': promotion = QUEEN; break;
-					case 'r': case 'R': promotion = ROOK; break;
-					case 'n': case 'N': promotion = KNIGHT; break;
-					case 'b': case 'B': promotion = BISHOP; break;
-					default: invalid_move(s); break;
-				}
-				pos += 1;
-			} else if (s[pos] != 'x') {
-				invalid_move(s);
-			}
-			pos++;
-		}
-	}
-	if (castle) {
-		piece_t piece = make_piece(KING, color);
-		if (queenside_castle) {
-			if (color == White) {
-				return make_move(make_board_pos(0, 4), piece, make_board_pos(0, 2), EMPTY, 0);
-			} else {
-				return make_move(make_board_pos(7, 4), piece, make_board_pos(7, 2), EMPTY, 0);
-			}
-		} else {
-			if (color == White) {
-				return make_move(make_board_pos(0, 4), piece, make_board_pos(0, 6), EMPTY, 0);
-			} else {
-				return make_move(make_board_pos(7, 4), piece, make_board_pos(7, 6), EMPTY, 0);
-			}
-		}
-	} else {
-		legal_moves(color, candidates, piece);
-		for (unsigned int i = 0; i < candidates.size(); i++) {
-			move_t move = candidates[i];
-			BoardPos cdestpos = get_dest_pos(move);
-			BoardPos csourcepos = get_source_pos(move);
-			piece_t csourcepiece = get_piece(csourcepos);
-			piece_t cpromote = get_promotion(move, color);
-			if (piece == (PIECE_MASK & csourcepiece) && (srcrank == INVALID || srcrank == get_board_rank(csourcepos)) && (srcfile == INVALID || srcfile == get_board_file(csourcepos)) && (destrank == INVALID || destrank == get_board_rank(cdestpos)) && (destfile == INVALID || destfile == get_board_file(cdestpos)) && (promotion == (cpromote & PIECE_MASK))) {
-				return move;
-			}
-		}
-		std::cout << "couldn't find legal moves among: " << std::endl;
-		for (unsigned int i = 0; i < candidates.size(); i++) {
-			print_move(candidates[i], std::cout);
-			std::cout << std::endl;
-		}
-	}
-	return invalid_move(s);
-}
-
-Board::Board()
+SimpleBoard::SimpleBoard()
 {
 	reset();
 }
 
-void Board::reset()
+void SimpleBoard::reset()
 {
 	standard_initial();
 	side_to_play = White;
 	castle = 0x0f;
 	in_check = false;
-	enpassant_target = -1;
+	enpassant_file = -1;
 	move_count = 0;
 }
 
-Board::Board(const Board &copy)
-	: side_to_play(copy.side_to_play), in_check(copy.in_check), castle(copy.castle), enpassant_target(copy.enpassant_target), move_count(copy.move_count)
+SimpleBoard::SimpleBoard(const SimpleBoard &copy)
+	: side_to_play(copy.side_to_play), in_check(copy.in_check), castle(copy.castle), enpassant_file(copy.enpassant_file), move_count(copy.move_count)
 {
 	memcpy(this->data, copy.data, sizeof(data)); 
 }
 
-int get_castle_bit(Color color, bool kingside)
+int SimpleBoard::get_castle_bit(Color color, bool kingside) const
 {
 	int bit = 0;
 	if (kingside) {
@@ -460,19 +257,19 @@ int get_castle_bit(Color color, bool kingside)
 	return bit;
 }
 
-bool Board::can_castle(Color color, bool kingside) const
+bool SimpleBoard::can_castle(Color color, bool kingside) const
 {
 	int bit = get_castle_bit(color, kingside);
 	return castle & (1 << bit);
 }
 
-void Board::invalidate_castle(Color color)
+void SimpleBoard::invalidate_castle(Color color)
 {
 	invalidate_castle_side(color, true);
 	invalidate_castle_side(color, false);
 }
 
-void Board::invalidate_castle_side(Color color, bool kingside)
+void SimpleBoard::invalidate_castle_side(Color color, bool kingside)
 {
 	if (can_castle(color, kingside)) {
 		update_zobrist_hashing_castle(color, kingside, false);
@@ -491,13 +288,13 @@ const unsigned char initial_board[] = { 0x84, 0x23, 0x56, 0x32, 0x48,
 								0x8c, 0xab, 0xde, 0xba, 0xc8
 };
 
-void Board::standard_initial()
+void SimpleBoard::standard_initial()
 {
 	memset(data, 0x88, sizeof(data));
 	memcpy(&data[MEMORY_FILES * 2 / 2], initial_board, sizeof(initial_board));	
 }
 
-void Board::repeated_move(BoardPos base, piece_t piece, char drank, char dfile, Color capture, std::vector<move_t> &moves) const
+void SimpleBoard::repeated_move(BoardPos base, piece_t piece, char drank, char dfile, Color capture, std::vector<move_t> &moves) const
 {
 	BoardPos pos = base;
 	while (true) {
@@ -516,7 +313,7 @@ void Board::repeated_move(BoardPos base, piece_t piece, char drank, char dfile, 
 	} 
 }
 
-BoardPos Board::get_capture(BoardPos base, char drank, char dfile, Color capture) const
+BoardPos SimpleBoard::get_capture(BoardPos base, char drank, char dfile, Color capture) const
 {
 	BoardPos pos = base;
 	while (true) {
@@ -534,7 +331,7 @@ BoardPos Board::get_capture(BoardPos base, char drank, char dfile, Color capture
 	} 
 }
 
-void Board::single_move(BoardPos base, piece_t piece, char drank, char dfile, Color capture, std::vector<move_t> &moves) const
+void SimpleBoard::single_move(BoardPos base, piece_t piece, char drank, char dfile, Color capture, std::vector<move_t> &moves) const
 {
 	BoardPos pos = base;
 	pos = add_vector(pos, drank, dfile);
@@ -545,7 +342,7 @@ void Board::single_move(BoardPos base, piece_t piece, char drank, char dfile, Co
 	} 
 }
 
-void Board::pawn_move(BoardPos source, BoardPos dest, std::vector<move_t> &moves) const
+void SimpleBoard::pawn_move(BoardPos source, BoardPos dest, std::vector<move_t> &moves) const
 {
 	piece_t pawn = get_piece(source);
 	piece_t capture = get_piece(dest);
@@ -560,7 +357,7 @@ void Board::pawn_move(BoardPos source, BoardPos dest, std::vector<move_t> &moves
 		moves.push_back(make_move(source, pawn, dest, capture, 0));
 	}
 }
-void Board::pawn_capture(BoardPos bp, char dfile, Color piece_color, bool support_mode, std::vector<move_t> &moves) const
+void SimpleBoard::pawn_capture(BoardPos bp, char dfile, Color piece_color, bool support_mode, std::vector<move_t> &moves) const
 {
 	BoardPos dest = add_vector(bp, piece_color == White ? 1 : -1, dfile);
 	piece_t square = get_piece(dest);
@@ -571,13 +368,13 @@ void Board::pawn_capture(BoardPos bp, char dfile, Color piece_color, bool suppor
 		pawn_move(bp, dest, moves);
 	}
 	// en passant captures
-	else if (square == EMPTY && enpassant_target == get_board_file(dest) && get_board_rank(bp) == (piece_color == White ? 4 : 3) && piece_color == side_to_play)
+	else if (square == EMPTY && enpassant_file == get_board_file(dest) && get_board_rank(bp) == (piece_color == White ? 4 : 3) && piece_color == side_to_play)
 	{
 		pawn_move(bp, dest, moves);
 	}
 }
 
-void Board::pawn_advance(BoardPos bp, Color piece_color, std::vector<move_t> &moves) const
+void SimpleBoard::pawn_advance(BoardPos bp, Color piece_color, std::vector<move_t> &moves) const
 {
 	int direction = piece_color == White ? 1 : -1;
 	BoardPos dest = add_vector(bp, direction, 0);
@@ -593,7 +390,7 @@ void Board::pawn_advance(BoardPos bp, Color piece_color, std::vector<move_t> &mo
 	}
 }
 
-void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance, bool support_mode) const
+void SimpleBoard::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector<move_t> &moves, bool exclude_pawn_advance, bool support_mode) const
 {
 	if (((color == White && (piece & 0x08) == 0) || (color == Black && (piece & 0x08))))
 	{
@@ -672,7 +469,7 @@ void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector
 	}
 }
 
-void Board::get_moves(Color color, std::vector<move_t> &moves, bool support_mode, piece_t piece) const
+void SimpleBoard::get_moves(Color color, std::vector<move_t> &moves, bool support_mode, piece_t piece) const
 {
 	piece_t colored_piece = make_piece(piece, color);
 	for (BoardPos i = (make_board_pos(0, 0) & 0xfe); i <= (make_board_pos(7, 7) | 0x1); i += 2)
@@ -696,7 +493,7 @@ void Board::get_moves(Color color, std::vector<move_t> &moves, bool support_mode
 	}
 }
 
-void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_to_limit) const
+void SimpleBoard::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_to_limit) const
 {
 	get_moves(color, moves, false, piece_to_limit);
 	uint64_t covered_squares = 0;
@@ -708,7 +505,7 @@ void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_t
 			// lazily compute covered_squares once for all moves
 			if (covered_squares == 0) {
 				std::vector<move_t> opposite_color_moves;
-				Board king_free(*this);
+				SimpleBoard king_free(*this);
 				king_free.set_piece(get_source_pos(moves[i]), EMPTY);
 				king_free.get_moves(get_opposite_color(color), opposite_color_moves, true);
 				for (unsigned int j = 0; j < opposite_color_moves.size(); j++) {
@@ -743,7 +540,12 @@ void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_t
 	}
 }
 
-BoardPos Board::find_piece(piece_t piece) const
+void SimpleBoard::update()
+{
+	in_check = king_in_check(side_to_play);
+}
+
+BoardPos SimpleBoard::find_piece(piece_t piece) const
 {
 	for (BoardPos i = (make_board_pos(0, 0) & 0xfe); i <= (make_board_pos(7, 7) | 0x1); i += 2)
 	{
@@ -775,7 +577,7 @@ bool get_unit_vector(char drank, char dfile, char &unit_drank, char &unit_dfile)
 }
 
 // color indicates which king would be checked
-bool Board::discovers_check(move_t move, Color color) const
+bool SimpleBoard::discovers_check(move_t move, Color color) const
 {
 	BoardPos source = get_source_pos(move);
 	BoardPos king = find_piece(make_piece(KING, color));
@@ -820,7 +622,7 @@ bool Board::discovers_check(move_t move, Color color) const
 	return false;
 }
 
-void Board::apply_move(move_t move)
+void SimpleBoard::apply_move(move_t move)
 {
 	BoardPos destpos = get_dest_pos(move);
 	BoardPos sourcepos = get_source_pos(move);
@@ -832,11 +634,11 @@ void Board::apply_move(move_t move)
 	set_piece(destpos, sourcepiece);
 	set_piece(sourcepos, EMPTY);
 
-	if (enpassant_target != -1) {
-		update_zobrist_hashing_enpassant(enpassant_target, false);
+	if (enpassant_file != -1) {
+		update_zobrist_hashing_enpassant(enpassant_file, false);
 	}
 	
-	enpassant_target = -1;
+	enpassant_file = -1;
 
 	if ((sourcepiece & PIECE_MASK) == KING) {
 		invalidate_castle(color);
@@ -878,11 +680,11 @@ void Board::apply_move(move_t move)
 		// set enpassant capability
 		if (abs(get_board_rank(destpos) - get_board_rank(sourcepos)) == 2) {
 			update_zobrist_hashing_enpassant(get_board_file(destpos), true);
-			enpassant_target = get_board_file(destpos);
+			enpassant_file = get_board_file(destpos);
 		}
 		// pawn promote
 		else if (get_board_rank(destpos) == 0 || get_board_rank(destpos) == 7) {
-			resultpiece = get_promotion(move, color);
+			resultpiece = ::get_promotion(move, color);
 			set_piece(destpos, resultpiece);
 		}
 		// enpassant capture
@@ -906,7 +708,7 @@ void Board::apply_move(move_t move)
 	
 }
 
-void Board::undo_move(move_t move)
+void SimpleBoard::undo_move(move_t move)
 {
 	BoardPos destpos = get_dest_pos(move);
 	BoardPos sourcepos = get_source_pos(move);
@@ -930,7 +732,7 @@ void Board::undo_move(move_t move)
 	update_zobrist_hashing_piece(destpos, moved_piece, false);
 
 	// promote
-	piece_t promote = get_promotion(move, color);
+	piece_t promote = ::get_promotion(move, color);
 	if (promote & PIECE_MASK) {
 		moved_piece = make_piece(PAWN, color);
 	}
@@ -963,26 +765,26 @@ void Board::undo_move(move_t move)
 		update_zobrist_hashing_piece(rookdest, rook, false);
 	}
 	
-	if (enpassant_target != -1) {
-		update_zobrist_hashing_enpassant(enpassant_target, false);
+	if (enpassant_file != -1) {
+		update_zobrist_hashing_enpassant(enpassant_file, false);
 	}
 
 	// en passant capture
 	if (move & ENPASSANT_FLAG) {
 		set_piece(make_board_pos(get_board_rank(sourcepos), get_board_file(destpos)), make_piece(PAWN, get_opposite_color(color)));
 	}
-	enpassant_target = (move >> 20) & 0xf;
-	if (enpassant_target > 8) {
-		enpassant_target = -1;
+	enpassant_file = (move >> 20) & 0xf;
+	if (enpassant_file > 8) {
+		enpassant_file = -1;
 	} else {
-		update_zobrist_hashing_enpassant(enpassant_target, true);
+		update_zobrist_hashing_enpassant(enpassant_file, true);
 	}
 	if (color == White) {
 		move_count--;
 	}
 }
 
-bool Board::removes_check(move_t move, Color color) const
+bool SimpleBoard::removes_check(move_t move, Color color) const
 {
 	// to remove check, the move must a) move the king, b) capture the threatening piece, or c) block a threatening piece
 	//  these are not sufficient conditions since they do not account for double check or discovering another check
@@ -1019,12 +821,12 @@ bool Board::removes_check(move_t move, Color color) const
 		return false;
 	}
 	
-	Board copy(*this);
+	SimpleBoard copy(*this);
 	copy.apply_move(move);
 	return !copy.king_in_check(color);
 }
 
-bool Board::king_in_check(Color color) const
+bool SimpleBoard::king_in_check(Color color) const
 {
 	BoardPos king = find_piece(make_piece(KING, color));
 	std::vector<move_t> opponent_moves;
@@ -1042,115 +844,8 @@ bool Board::king_in_check(Color color) const
 	return false;
 }
 
-void Board::print_move(move_t move, std::ostream &os) const
-{
-	BoardPos destpos = get_dest_pos(move);
-	BoardPos sourcepos = get_source_pos(move);
-	os << static_cast<char>(get_board_file(sourcepos) + 'a') << static_cast<char>(get_board_rank(sourcepos) + '1') << '-' << static_cast<char>(get_board_file(destpos) + 'a') << static_cast<char>(get_board_rank(destpos) + '1');
-	piece_t promotion = get_promotion(move, White);
-	if (promotion > 0) {
-		os << "=";
-		switch (promotion) {
-			case BISHOP: os << "B"; break;
-			case KNIGHT: os << "N"; break;
-			case ROOK: os << "R"; break;
-			case QUEEN: os << "Q"; break;
-		}
-	}
-}
 
-char Board::fen_repr(piece_t p) const
-{
-	switch (p) {
-	case EMPTY: return 'x';
-	case PAWN: return 'P';
-	case KNIGHT: return 'N';
-	case BISHOP: return 'B';
-	case ROOK: return 'R';
-	case QUEEN: return 'Q';
-	case KING: return 'K';
-	case PAWN | BlackMask: return 'p';
-	case KNIGHT | BlackMask: return 'n';
-	case BISHOP | BlackMask: return 'b';
-	case ROOK | BlackMask: return 'r';
-	case QUEEN | BlackMask: return 'q';
-	case KING | BlackMask: return 'k';
-	default: return 'X';
-	}
-}
-
-void Board::fen_flush(std::ostream &os, int &empty) const
-{
-	if (empty > 0) {
-		os << empty;
-		empty = 0;
-	}
-}
-
-void Board::fen_handle_space(piece_t piece, std::ostream &os, int &empty) const
-{
-	char c = fen_repr(piece);
-	if (c == 'x') {
-		empty++;
-	}
-	else if (c == 'X') {
-		std::cout << "Error printing fen representation" << std::endl;
-		abort();
-	}
-	else if (empty > 0) {
-		fen_flush(os, empty);
-		os << c;
-	}
-	else {
-		os << c;
-	}
-}
-
-void Board::get_fen(std::ostream &os) const
-{
-	int empty = 0;
-	for (int rank = 8; rank >= 1; rank--) {
-		for (int file = 1; file <= 8; file++) {
-			fen_handle_space(get_piece(make_board_pos(rank-1, file-1)), os, empty);
-		}
-		fen_flush(os, empty);
-		if (rank > 1) {
-				os << "/";
-		}
-	}
-	switch (side_to_play) {
-		case White: os << " w"; break;
-		case Black: os << " b"; break;
-		default: abort();
-	}
-	os << " ";
-	if (can_castle(White, true)) {
-		os << "K";
-	}
-	if (can_castle(White, false)) {
-		os << "Q";
-	}
-	if (can_castle(Black, true)) {
-		os << "k";
-	} 
-	if (can_castle(Black, false)) {
-		os << "q";
-	}
-	if (!castle) {
-		os << "-";
-	}
-	os << " ";
-	if (enpassant_target < 0 || enpassant_target >= 8) {
-		os << "-";
-	} else if (side_to_play == White) {
-		os << static_cast<char>(enpassant_target + 'a') << "6";
-	} else {
-		os << static_cast<char>(enpassant_target + 'a') << "3";
-	}
-	os << " 0 " << move_count;
-}
-
-void Board::update_zobrist_hashing_piece(BoardPos pos, piece_t piece, bool adding)
+void SimpleBoard::update_zobrist_hashing_piece(BoardPos pos, piece_t piece, bool adding)
 {
 	Color color = get_color(piece);
 	int pt = (piece & PIECE_MASK) - 1;
@@ -1161,13 +856,13 @@ void Board::update_zobrist_hashing_piece(BoardPos pos, piece_t piece, bool addin
 //		std::cout << hash << std::endl << std::dec;
 	}
 }
-void Board::update_zobrist_hashing_move()
+void SimpleBoard::update_zobrist_hashing_move()
 {
 //	std::cout << std::hex << "mo " << 64*6*2 << ": (" << zobrist_hashes[64*6*2] << ") "<< hash << " ";
 	hash ^= zobrist_hashes[64*6*2];
 //	std::cout << hash << std::endl << std::dec;
 }
-void Board::update_zobrist_hashing_castle(Color color, bool kingside, bool enabling)
+void SimpleBoard::update_zobrist_hashing_castle(Color color, bool kingside, bool enabling)
 {
 	int index = 0;
 	if (color == Black) {
@@ -1176,16 +871,12 @@ void Board::update_zobrist_hashing_castle(Color color, bool kingside, bool enabl
 	if (kingside) {
 		index += 1;
 	}
-//	std::cout << std::hex << "ca " << 64*6*2+1+index << ": " << hash << " ";
 	hash ^= zobrist_hashes[64*6*2 + 1 + index];
-//	std::cout << hash << std::endl << std::dec;
 }
-void Board::update_zobrist_hashing_enpassant(int file, bool enabling)
+void SimpleBoard::update_zobrist_hashing_enpassant(int file, bool enabling)
 {
 	assert(file >= 0 && file < 8);
-//	std::cout << std::hex << "ep " << 64*6*2+1+4+file << " " << file << ": (" << zobrist_hashes[64*6*2+1+4+file] << ") " << hash << " ";
 	hash ^= zobrist_hashes[64*6*2 + 1 + 4 + file];
-//	std::cout << hash << std::endl << std::dec;
 }
 
 std::ostream &operator<<(std::ostream &os, const Board &b)
@@ -1194,7 +885,7 @@ std::ostream &operator<<(std::ostream &os, const Board &b)
 	return os;
 }
 
-uint64_t Board::zobrist_hashes[] = {0xe02111c7659eae86L, 0x6da4e7350d2011b3L, 0x83cd50fcc552e5e9L, 0x78615f6439c6c6b4L, 0x51c92cc23497add2L,
+uint64_t SimpleBoard::zobrist_hashes[] = {0xe02111c7659eae86L, 0x6da4e7350d2011b3L, 0x83cd50fcc552e5e9L, 0x78615f6439c6c6b4L, 0x51c92cc23497add2L,
 0xc8fc6be58ad5a05fL, 0xd5e910e9d62f114dL, 0x7ef0daa1916a9daaL, 0xc6aac4139c2cc032L, 0x9003d09f97066fc5L, 0x6a78933e52670af4L, 0x6ad0ad6da26c3d19L,
 0xefdc626850a3e9d9L, 0x23fbf0da01209946L, 0xff26e2a098ce09c0L, 0x95199b3215da66b0L, 0x7d6367bdd38c52faL, 0xf17fe7c7cf19d2b4L, 0x4837f5aba116f8a2L,
 0x4f66830006502645L, 0xa4f58972cc89f3fcL, 0xdea8789b9dbbe477L, 0xad7b4393cd4bb600L, 0x6b10f5f748599647L, 0x85a319181ea35747L, 0x246fecd9109c5d52L,

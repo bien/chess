@@ -228,6 +228,16 @@ void Bitboard::print_move(move_t move, std::ostream &os) const
 	print_pos(dest, os);
 }
 
+void Bitboard::get_fen(std::ostream &os) const
+{
+}
+
+void Bitboard::set_fen(const std::string &fen)
+{
+	
+}
+
+
 int main()
 {
 	Bitboard b;

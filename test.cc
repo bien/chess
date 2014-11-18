@@ -222,8 +222,8 @@ int main()
 	b.set_fen("6r1/7k/2p1pPp1/3p4/8/7R/5PPP/5K2 b - - 1 1");
 	legal_black.clear();
 	b.legal_moves(Black, legal_black);
-	assert_equals(0, static_cast<int>(legal_black.size()));
 	assert_equals(true, b.king_in_check(Black));
+	assert_equals(0, static_cast<int>(legal_black.size()));
 	
 	// white has mate in 1
 	SimpleEvaluation simple;

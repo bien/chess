@@ -61,8 +61,6 @@ int main(int argc, char **argv)
 	
 	SimpleEvaluation simple;
 	Search search(&simple);
-	search.use_transposition_table = true;
-	search.use_mtdf = true;
 
 	while (!puzzles.eof()) {
 		move_choices.clear();
@@ -93,7 +91,7 @@ int main(int argc, char **argv)
 				std::cout << " in " << game_metadata["Event"] << std::endl;
 			}
 			if (attempts % 200 == 0) {
-				std::cout << "Puzzles solved: " << passed << "/" << attempts << " using " << nodes << " nodes at " << nodes/elapsed << " nodes/sec or " << attempts/elapsed << " puzzles/sec" << std::endl;
+				std::cout << "Puzzles solved: " << game_metadata["Event"] << " " << passed << "/" << attempts << " using " << nodes << " nodes at " << nodes/elapsed << " nodes/sec or " << attempts/elapsed << " puzzles/sec" << std::endl;
 
 			}
 		}
