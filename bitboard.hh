@@ -4,23 +4,12 @@
 #include <ostream>
 #include <vector>
 
-typedef unsigned short move_t;
+typedef uint32_t move_t;
 typedef unsigned char piece_t;
 typedef unsigned char board_pos_t;
 
-const int EMPTY = 0;
-const int PAWN = 1;
-const int KNIGHT = 2;
-const int BISHOP = 3;
-const int ROOK = 4;
-const int QUEEN = 5;
-const int KING = 6;
-const int INVALID = 8;
-const int PIECE_MASK = 7;
-
-enum Color { White, Black };
-
 const int bitmask_types = 7;
+const int ALL = 0;
 
 class Bitboard
 {
@@ -29,29 +18,36 @@ public:
 	void reset();
 
 	void legal_moves(bool is_white, std::vector<move_t> &moves) const;
-	piece_t get_piece(board_pos_t) const;
-	void get_fen(std::ostream &os) const;
-	void set_fen(const std::string &fen);
 	bool king_in_check(Color) const;
 
 	void apply_move(move_t);
 	void undo_move(move_t);
-	void print_move(move_t, std::ostream &os) const;
 	
-	move_t read_move(const std::string &s, Color color) const;
+	piece_t get_piece(unsigned char rank, unsigned char file) const;
+	void set_piece(unsigned char rank, unsigned char file, piece_t);
+	void update(); // called whenever the board is updated
+	void get_source(move_t move, unsigned char &rank, unsigned char &file) const;
+	void get_dest(move_t move, unsigned char &rank, unsigned char &file) const;
+	unsigned char get_promotion(move_t move) const;
+
+	move_t make_move(unsigned char srcrank, unsigned char srcfile, unsigned char source_piece, unsigned char destrank, unsigned char destfile, unsigned char captured_piece, unsigned char promote) const;
 	
-private:
-	void print_pos(char pos, std::ostream &os) const;
-	void get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const;
-	
+protected:
 	Color side_to_play;
-	bool in_check;
-	char castle;
-	char enpassant_target;
+	char enpassant_file;
 	short move_count;
+	char castle;
+	int get_castle_bit(Color color, bool kingside) const;
+	bool can_castle(Color color, bool kingside) const;
+
+private:
+	void get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const;
+	move_t make_move(board_pos_t src, board_pos_t dest) const;
 	
-	char charboard[64];
-	uint64_t piece_bitmasks[2*bitmask_types];
+	bool in_check;
+	
+	unsigned char charboard[32];
+	uint64_t piece_bitmasks[15];
 };
 
 std::ostream &operator<<(std::ostream &os, const Bitboard &b);

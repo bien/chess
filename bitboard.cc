@@ -4,39 +4,36 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <iostream>
+#include "fenboard.hh"
 #include "bitboard.hh"
 
-move_t make_move(board_pos_t src, board_pos_t dest)
+move_t Bitboard::make_move(board_pos_t src, board_pos_t dest) const
 {
-	return (static_cast<int>(dest) << 6) | src;
+	return (static_cast<int>(dest) << 6) | src | (in_check << 18) | (castle << 19) | (enpassant_file << 23);
+}
+
+void Bitboard::get_source(move_t move, unsigned char &rank, unsigned char &file) const
+{
+	file = move & 0x7;
+	rank = (move >> 3) & 0x7;
+}
+
+void Bitboard::get_dest(move_t move, unsigned char &rank, unsigned char &file) const
+{
+	file = (move >> 6) & 0x7;
+	rank = (move >> 9) & 0x7;
+}
+
+unsigned char Bitboard::get_promotion(move_t move) const
+{
+	return (move >> 12) & 0x7;
+}
+
+move_t Bitboard::make_move(unsigned char srcrank, unsigned char srcfile, unsigned char source_piece, unsigned char destrank, unsigned char destfile, unsigned char captured_piece, unsigned char promote) const
+{
+	return srcfile | (srcrank << 3) | (destfile << 6) | (destrank << 12) | ((promote & PIECE_MASK) << 15) | (in_check << 18) | (castle << 19) | (enpassant_file << 23);
 }
 	
-enum bitboard_pieces { pawn, knight, bishop, rook, queen, king, all };
-
-// bitboard: &1 = a1, &2 = b1, &4=c1, etc.
-const uint64_t bitboard_initialization[] = { 0xff00, 0x42, 0x24, 0x81, 0x08, 0x10, 0xffff,
-	0xffL << 48, 0x42L << 56, 0x24L << 56, 0x81L << 56, 0x8L << 56, 0x10L << 56, 0xffffL << 48 };
-
-const char charboard_initialization[] = { 4, 2, 3, 5, 6, 3, 2, 4,
-	 						 1, 1, 1, 1, 1, 1, 1, 1,
-						 	 0, 0, 0, 0, 0, 0, 0, 0,
-						 	 0, 0, 0, 0, 0, 0, 0, 0,
-						 	 0, 0, 0, 0, 0, 0, 0, 0,
-						 	 0, 0, 0, 0, 0, 0, 0, 0,
-							 9, 9, 9, 9, 9, 9, 9, 9,
-							 0xc, 0xa, 0xb, 0xd, 0xe, 0xb, 0xa, 0xc
-						 };
-/*						 
- const char charboard_initialization_nibble[] = { 0x42, 0x35, 0x63, 0x24,
- 	0x11, 0x11, 0x11, 0x11,
- 	0, 0, 0, 0,
- 	0, 0, 0, 0,
- 	0, 0, 0, 0,
- 	0, 0, 0, 0,
- 	0x99, 0x99, 0x99, 0x99,
- 	0xca, 0xbd, 0xeb, 0xac
- };
-*/						 
  template<uint64_t... args> 
  struct ArrayHolder {
  	static const uint64_t data[sizeof...(args)];
@@ -100,16 +97,16 @@ const char charboard_initialization[] = { 4, 2, 3, 5, 6, 3, 2, 4,
 		 const static bool value = rankdiff == 1 && filediff == 1;	 	
 	 };
 	 template<board_pos_t src, board_pos_t dest>
-	 struct is_rook_move {
+	 struct is_vertical_move {
 		 const static int rankdiff = Abs<(src / 8) - (dest / 8)>::value;
 		 const static int filediff = Abs<(src % 8) - (dest % 8)>::value;
-		 const static bool value = (rankdiff == 0 || filediff == 0) && rankdiff != filediff;
+		 const static bool value = (filediff == 0) && src != dest;
 	 };
 	 template<board_pos_t src, board_pos_t dest>
-	 struct is_bishop_move {
+	 struct is_horizontal_move {
 		 const static int rankdiff = Abs<(src / 8) - (dest / 8)>::value;
 		 const static int filediff = Abs<(src % 8) - (dest % 8)>::value;
-		 const static bool value = rankdiff == filediff && filediff != 0;	 	
+		 const static bool value = rankdiff == 0 && src != dest;	 	
 	 };
 	 template <bool is_white>
 	 struct is_pawn_capture {
@@ -157,15 +154,19 @@ const char charboard_initialization[] = { 4, 2, 3, 5, 6, 3, 2, 4,
 */
  
 Bitboard::Bitboard()
-	: side_to_play(White), 	
-	  in_check(false),
-		castle(0x0f),
-		enpassant_target(-1),
-		move_count(0)
-
 {
-	memcpy(piece_bitmasks, bitboard_initialization, sizeof(bitboard_initialization));
-	memcpy(charboard, charboard_initialization, sizeof(charboard_initialization));
+	reset();
+}
+
+void Bitboard::reset()
+{
+	side_to_play = White;
+	in_check = false;
+	castle = 0x0f;
+	enpassant_file = -1;
+	move_count = 0;
+	memset(piece_bitmasks, 0, sizeof(piece_bitmasks));
+	memset(charboard, 0, sizeof(charboard));
 }
 
 void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const
@@ -197,51 +198,96 @@ void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, cons
 
 void Bitboard::legal_moves(bool is_white, std::vector<move_t> &moves) const
 {
-	int color = is_white ? 0 : 7;
-	int othercolor = is_white ? 7 : 0;
-	get_point_moves(piece_bitmasks[knight + color], ~piece_bitmasks[all + color], BitArrays::knight_moves::data, moves);
-	get_point_moves(piece_bitmasks[king + color], ~piece_bitmasks[all + color], BitArrays::king_moves::data, moves);
-	uint64_t empty_squares = ~piece_bitmasks[all + color] & ~piece_bitmasks[all + othercolor];
+	int color = is_white ? 0 : 8;
+	int othercolor = is_white ? 8 : 0;
+	get_point_moves(piece_bitmasks[KNIGHT + color], ~piece_bitmasks[ALL + color], BitArrays::knight_moves::data, moves);
+	get_point_moves(piece_bitmasks[KING + color], ~piece_bitmasks[ALL + color], BitArrays::king_moves::data, moves);
+	uint64_t empty_squares = ~piece_bitmasks[ALL + color] & ~piece_bitmasks[ALL + othercolor];
 
 	if (is_white) {
-		get_point_moves(piece_bitmasks[pawn + color], piece_bitmasks[all + othercolor], BitArrays::white_pawn_captures::data, moves);
-		get_point_moves(piece_bitmasks[pawn + color], empty_squares, BitArrays::white_pawn_simple_moves::data, moves);
-		get_point_moves(piece_bitmasks[pawn + color], empty_squares & ((empty_squares & 0xff0000) << 8), BitArrays::white_pawn_double_moves::data, moves);
+		get_point_moves(piece_bitmasks[PAWN + color], piece_bitmasks[ALL + othercolor], BitArrays::white_pawn_captures::data, moves);
+		get_point_moves(piece_bitmasks[PAWN + color], empty_squares, BitArrays::white_pawn_simple_moves::data, moves);
+		get_point_moves(piece_bitmasks[PAWN + color], empty_squares & ((empty_squares & 0xff0000) << 8), BitArrays::white_pawn_double_moves::data, moves);
 	} else {
-		get_point_moves(piece_bitmasks[pawn + color], piece_bitmasks[all + !color], BitArrays::black_pawn_captures::data, moves);
-		get_point_moves(piece_bitmasks[pawn + color], empty_squares, BitArrays::black_pawn_simple_moves::data, moves);
-		get_point_moves(piece_bitmasks[pawn + color], empty_squares & ((empty_squares & 0xff0000000000) >> 8), BitArrays::black_pawn_double_moves::data, moves);
+		get_point_moves(piece_bitmasks[PAWN + color], piece_bitmasks[ALL + !color], BitArrays::black_pawn_captures::data, moves);
+		get_point_moves(piece_bitmasks[PAWN + color], empty_squares, BitArrays::black_pawn_simple_moves::data, moves);
+		get_point_moves(piece_bitmasks[PAWN + color], empty_squares & ((empty_squares & 0xff0000000000) >> 8), BitArrays::black_pawn_double_moves::data, moves);
 	}
 }
 
-void Bitboard::print_pos(char pos, std::ostream &os) const
+piece_t Bitboard::get_piece(unsigned char rank, unsigned char file) const
 {
-	os << static_cast<char>((pos % 8) + 'a') << static_cast<char>((pos / 8) + '1');
+	int bp = rank * 8 + file;
+	unsigned char twosquare = charboard[bp / 2];
+	if (file % 1 == 0) {
+		return twosquare & 0xf;
+	} else {
+		return (twosquare >> 4) & 0xf;
+	}
 }
 
-void Bitboard::print_move(move_t move, std::ostream &os) const
+void Bitboard::set_piece(unsigned char rank, unsigned char file, piece_t piece)
 {
-	char dest = (move >> 6);
-	char src = (move & 0x3f);
-	print_pos(src, os);
-	os << "-";
-	print_pos(dest, os);
+	int bp = rank * 8 + file;
+	unsigned char twosquare = charboard[bp / 2];
+	if (file % 2 == 0) {
+		charboard[bp / 2] = (twosquare & 0xf0) | piece;
+	} else {
+		charboard[bp / 2] = (twosquare & 0x0f) | (piece << 4);
+	}
 }
 
-void Bitboard::get_fen(std::ostream &os) const
+void Bitboard::update() // called whenever the board is updated
 {
+	// FIXME set in_check
+	memset(piece_bitmasks, 0, sizeof(piece_bitmasks));
+	for (int i = 0; i < 32; i++) {
+		unsigned char twosquare = charboard[i];
+		if (twosquare & 0x7) {
+			piece_bitmasks[twosquare & 0xf] |= (1ULL << (2*i));
+		}
+		if (twosquare & 0x70) {
+			piece_bitmasks[twosquare >> 4] |= (1ULL << (2*i + 1));
+		}
+	}
+	for (int color = 0; color <= 1; color++) {
+		for (int piece = 1; piece <= 6; piece++) {
+			piece_bitmasks[color * 8] |= piece_bitmasks[color * 8 + piece];
+		}
+	}
 }
 
-void Bitboard::set_fen(const std::string &fen)
+int Bitboard::get_castle_bit(Color color, bool kingside) const
 {
-	
+	int bit = 0;
+	if (kingside) {
+		bit += 1;
+	}
+	if (color == Black) {
+		bit += 2;
+	}
+	return bit;
+}
+
+
+bool Bitboard::can_castle(Color color, bool kingside) const
+{
+	int bit = get_castle_bit(color, kingside);
+	return castle & (1 << bit);
 }
 
 
 int main()
 {
-	Bitboard b;
+	FenBoard<Bitboard> b;
+	b.set_starting_position();
+	b.get_fen(std::cout);
+	std::cout << std::endl;
 	std::vector<move_t> moves;
+	for (int i = 0; i < 4; i++) {
+		b.set_piece(1, i, EMPTY);
+	}
+	b.update();
 	
 	b.legal_moves(true, moves);
 	for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
