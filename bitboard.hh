@@ -43,6 +43,9 @@ protected:
 private:
 	void get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, const uint64_t *piece_moves, std::vector<move_t> &moves) const;
 	move_t make_move(board_pos_t src, board_pos_t dest) const;
+	uint64_t compute_slide_dest(uint64_t raw, uint64_t legal, uint64_t stop_slide, int origin, bool stop_at_first_positive) const;
+	void read_bitmask_moves(int src, uint64_t dest_bitmask, std::vector<move_t> &moves) const;
+	void get_slide_moves(uint64_t piece_bitmask, uint64_t empty, uint64_t capture_targets, uint64_t blockers, const uint64_t *piece_moves, std::vector<move_t> &moves) const;
 	
 	bool in_check;
 	
