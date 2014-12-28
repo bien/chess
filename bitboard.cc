@@ -197,7 +197,11 @@ uint64_t Bitboard::compute_slide_dest(uint64_t raw, uint64_t legal, uint64_t sto
 	
 	// positive direction
 	uint64_t shift_amount = origin + 1;
-	raw >>= shift_amount;
+	if (shift_amount == 64) {
+		raw = 0;
+	} else {
+		raw = raw >> shift_amount;
+	}
 	while (raw) {
 		int pos = ffsll(raw);
 		uint64_t dest = pos + shift_amount - 1;
@@ -236,10 +240,8 @@ void Bitboard::read_bitmask_moves(int src, uint64_t dest_bitmask, std::vector<mo
 	while (dest_bitmask) {
 		int destpos = flsll(dest_bitmask) - 1;
 		moves.push_back(make_move(src, destpos));
-		(static_cast<const FenBoard<Bitboard> *>(this))->print_move(moves.back(), std::cout);
-		std::cout << std::endl;
 		
-		dest_bitmask &= ~(1UL << destpos);
+		dest_bitmask &= ~(1ULL << destpos);
 	}
 }
 
@@ -265,8 +267,6 @@ void Bitboard::get_point_moves(uint64_t piece_bitmask, uint64_t legal_dest, cons
 		while (dest_bitmask) {
 			int destpos = flsll(dest_bitmask) - 1;
 			moves.push_back(make_move(src, destpos));
-			(static_cast<const FenBoard<Bitboard> *>(this))->print_move(moves.back(), std::cout);
-			std::cout << std::endl;
 			dest_bitmask &= ~(1UL << destpos);
 		}
 	}
@@ -279,14 +279,11 @@ void Bitboard::legal_moves(bool is_white, std::vector<move_t> &moves) const
 	uint64_t empty_squares = ~piece_bitmasks[ALL + color] & ~piece_bitmasks[ALL + othercolor];
 
 	// knight moves
-	std::cout << "knight moves" << std::endl;
 	get_point_moves(piece_bitmasks[KNIGHT + color], ~piece_bitmasks[ALL + color], BitArrays::knight_moves::data, moves);
 	// king moves
-	std::cout << "king moves" << std::endl;
 	get_point_moves(piece_bitmasks[KING + color], ~piece_bitmasks[ALL + color], BitArrays::king_moves::data, moves);
 
 	// pawn moves
-	std::cout << "pawn moves" << std::endl;
 	if (is_white) {
 		get_point_moves(piece_bitmasks[PAWN + color], piece_bitmasks[ALL + othercolor], BitArrays::white_pawn_captures::data, moves);
 		get_point_moves(piece_bitmasks[PAWN + color], empty_squares, BitArrays::white_pawn_simple_moves::data, moves);
@@ -298,17 +295,12 @@ void Bitboard::legal_moves(bool is_white, std::vector<move_t> &moves) const
 	}
 	
 	// rook/queen moves
-	std::cout << "r/q horizontal moves" << std::endl;
 	get_slide_moves(piece_bitmasks[ROOK + color] | piece_bitmasks[QUEEN + color], empty_squares, piece_bitmasks[ALL + othercolor], piece_bitmasks[ALL + color], BitArrays::horizontal_moves::data, moves);
-	std::cout << "r/q vertical moves" << std::endl;
 	get_slide_moves(piece_bitmasks[ROOK + color] | piece_bitmasks[QUEEN + color], empty_squares, piece_bitmasks[ALL + othercolor], piece_bitmasks[ALL + color], BitArrays::vertical_moves::data, moves);
 	
 	// bishop/queen moves
-	std::cout << "b/q moves" << std::endl;
-	get_slide_moves(piece_bitmasks[ROOK + color] | piece_bitmasks[QUEEN + color], empty_squares, piece_bitmasks[ALL + othercolor], piece_bitmasks[ALL + color], BitArrays::diagleft_moves::data, moves);
-	get_slide_moves(piece_bitmasks[ROOK + color] | piece_bitmasks[QUEEN + color], empty_squares, piece_bitmasks[ALL + othercolor], piece_bitmasks[ALL + color], BitArrays::diagright_moves::data, moves);
-	std::cout << "done" << std::endl;
-	
+	get_slide_moves(piece_bitmasks[BISHOP + color] | piece_bitmasks[QUEEN + color], empty_squares, piece_bitmasks[ALL + othercolor], piece_bitmasks[ALL + color], BitArrays::diagleft_moves::data, moves);
+	get_slide_moves(piece_bitmasks[BISHOP + color] | piece_bitmasks[QUEEN + color], empty_squares, piece_bitmasks[ALL + othercolor], piece_bitmasks[ALL + color], BitArrays::diagright_moves::data, moves);
 }
 
 piece_t Bitboard::get_piece(unsigned char rank, unsigned char file) const
@@ -386,8 +378,14 @@ int main()
 	b.update();
 	b.get_fen(std::cout);
 	std::cout << std::endl;
-	
 	b.legal_moves(true, moves);
+	for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
+		b.print_move(*iter, std::cout);
+		std::cout << std::endl;
+	}
+
+	moves.clear();
+	b.legal_moves(false, moves);
 	for (std::vector<move_t>::iterator iter = moves.begin(); iter != moves.end(); iter++) {
 		b.print_move(*iter, std::cout);
 		std::cout << std::endl;
