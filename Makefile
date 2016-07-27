@@ -9,7 +9,7 @@ chess: moves.o chess.o
 
 bitboard: bitboard.o
 	$(CXX) $^ -o $@
-	
+
 testexe: chess.o test.o pgn.o search.o evaluate.o
 	$(CXX) $^ -o $@
 
@@ -21,7 +21,7 @@ fensolve: chess.o pgn.o search.o evaluate.o fensolve.o
 
 opening: opening.o search.o evaluate.o chess.o
 	$(CXX) $^ -o $@
-	
+
 test: testexe puzzles
 	./testexe
 	./puzzles "polgar - fixed.pgn"
@@ -31,6 +31,6 @@ clean:
 
 %.features: games/%.zip feature
 	unzip -p $< | ./feature > $@
-	
+
 Makefile.deps: Makefile $(SRCS)
 	$(CXX) -MM $(SRCS) > $@
