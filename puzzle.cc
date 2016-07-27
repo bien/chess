@@ -6,7 +6,7 @@
 #include "chess.hh"
 #include "pgn.hh"
 
-bool expect_move(Search &search, Board &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
+bool expect_move(Search &search, FenBoard &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
 {
 	move_t move = search.alphabeta(b, depth, White);
 	nodecount = search.nodecount;
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 	std::map<std::string, std::string> game_metadata;
 	std::map<std::pair<int, bool>, std::vector<std::string> > move_choices;
 	std::vector<std::string> first_move;
-	Board b;
+	SimpleBoard b;
 	int passed = 0;
 	int attempts = 0;
 	int nodes = 0;
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	  std::cerr << "Couldn't read " << argv[1] << std::endl;
 	  exit(1);
 	}
-	
+
 	SimpleEvaluation simple;
 	Search search(&simple);
 
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 		pgn_move_choices(puzzles, game_metadata, move_choices);
 		if (game_metadata["FEN"] != "" && game_metadata["Black"] == "White to move") {
 			b.set_fen(game_metadata["FEN"]);
-			bool result = false; 
+			bool result = false;
 			int puzzle_nodecount = 0;
 			clock_t start = clock();
 			int depth = 3;

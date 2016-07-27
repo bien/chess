@@ -31,7 +31,7 @@ unsigned int diagonal_moves(int rank, int file)
 	return 16 - abs(rank - file) - abs(7 - file - rank);
 }
 
-void print_features(const Board &b, std::ostream &os)
+void print_features(const FenBoard &b, std::ostream &os)
 {
 	// piece count scores
 	int qct = 0, bct = 0, rct = 0, nct = 0, pct = 0, rpct = 0;
@@ -41,10 +41,10 @@ void print_features(const Board &b, std::ostream &os)
 	int ppawn = 0, isopawn = 0, dblpawn = 0;
 	// piece position scores
 	int nscore = 0, bscore = 0, kscore = 0, rhopenfile = 0, rfopenfile = 0,  qscore = 0;
-	
+
 	for (int rank = 0; rank < 8; rank++) {
 		for (int file = 0; file < 8; file++) {
-			piece_t piece = b.get_piece(make_board_pos(rank, file));
+			piece_t piece = b.get_piece(rank, file);
 			if (piece & PIECE_MASK) {
 				int accum = 1;
 				int colorindex = 0;
@@ -53,16 +53,16 @@ void print_features(const Board &b, std::ostream &os)
 					colorindex = 1;
 				}
 				switch (piece & PIECE_MASK) {
-				case QUEEN: 
+				case QUEEN:
 					qct += accum;
 					qscore += accum * diagonal_moves(rank, file);
 					break;
-				case BISHOP: 
-					bct += accum; 
+				case BISHOP:
+					bct += accum;
 					bscore += accum * diagonal_moves(rank, file);
 					break;
-				case ROOK: 
-					rct += accum; 
+				case ROOK:
+					rct += accum;
 					if (colorindex == 1 && pawns[file+8] == 0) {
 						rhopenfile--;
 						if (pawns[file] == 0) {
@@ -71,7 +71,7 @@ void print_features(const Board &b, std::ostream &os)
 					} else if (colorindex == 0) {
 						bool whitepawn = false, blackpawn = false;
 						for (int rr = rank + 1; rr < 7; rr++) {
-							piece_t candpawn = b.get_piece(make_board_pos(rr, file));
+							piece_t candpawn = b.get_piece(rr, file);
 							if (candpawn == PAWN) {
 								whitepawn = true;
 								break;
@@ -87,15 +87,15 @@ void print_features(const Board &b, std::ostream &os)
 						}
 					}
 					break;
-				case KNIGHT: 
-					nct += accum; 
+				case KNIGHT:
+					nct += accum;
 					nscore += distance_from_center(rank, file) * accum;
 					break;
 				case KING:
 					kscore += distance_from_center(rank, file) * accum;
 					break;
-				case PAWN: 
-					pct += accum; 
+				case PAWN:
+					pct += accum;
 					if (file == 0 || file == 7) {
 						rpct += accum;
 					}
@@ -103,7 +103,7 @@ void print_features(const Board &b, std::ostream &os)
 						dblpawn += accum;
 					}
 					if (colorindex == 0 || pawns[colorindex * 8 + file] == 0) {
-						pawns[colorindex * 8 + file] = rank; 
+						pawns[colorindex * 8 + file] = rank;
 					}
 					break;
 				}
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 {
 	std::map<std::string, std::string> game_metadata;
 	std::vector<std::pair<std::string, std::string> > movelist;
-	Board b;
+	SimpleBoard b;
 	std::istream *input_stream = &std::cin;
 	if (argc > 1) {
 		input_stream = new std::ifstream(argv[1]);
@@ -171,6 +171,6 @@ int main(int argc, char **argv)
 		print_features(b, std::cout);
 		std::cout << std::endl;
 	}
-	
+
 	return 0;
 }

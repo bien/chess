@@ -1,9 +1,9 @@
 -include Makefile.deps
-CXXFLAGS = -Wall -g -Wno-c++11-extensions -O2
-SRCS = extractfeatures.cc chess.cc pgn.cc search.cc evaluate.cc test.cc puzzle.cc opening.cc
+CXXFLAGS = -Wall -g -Wno-c++11-extensions
+SRCS = extractfeatures.cc chess.cc pgn.cc search.cc evaluate.cc test.cc puzzle.cc opening.cc bitboard.cc
 
 all: Makefile.deps test
-	
+
 feature: extractfeatures.o chess.o pgn.o
 	$(CXX) $^ -o $@
 
@@ -12,11 +12,11 @@ chess: moves.o chess.o
 
 bitboard: bitboard.o
 	$(CXX) $^ -o $@
-	
-testexe: chess.o test.o pgn.o search.o evaluate.o
+
+testexe: chess.o test.o pgn.o search.o evaluate.o fenboard.o bitboard.o
 	$(CXX) $^ -o $@
 
-puzzles: chess.o pgn.o search.o evaluate.o puzzle.o
+puzzles: chess.o pgn.o search.o evaluate.o puzzle.o bitboard.o fenboard.o
 	$(CXX) $^ -o $@
 
 fensolve: chess.o pgn.o search.o evaluate.o fensolve.o
@@ -24,7 +24,7 @@ fensolve: chess.o pgn.o search.o evaluate.o fensolve.o
 
 opening: opening.o search.o evaluate.o chess.o
 	$(CXX) $^ -o $@
-	
+
 test: testexe puzzles
 	./testexe
 	./puzzles "polgar - fixed.pgn"
@@ -34,6 +34,6 @@ clean:
 
 %.features: games/%.zip feature
 	unzip -p $< | ./feature > $@
-	
+
 Makefile.deps: Makefile $(SRCS)
 	$(CXX) $(CXXFLAGS) -MM $(SRCS) > $@
