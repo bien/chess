@@ -101,7 +101,7 @@ BoardPos make_board_pos(int rank, int file)
 {
 	assert(rank >= 0 && rank < 8);
 	assert(file >= 0 && file < 8);
-	
+
 	return ((MEMORY_RANKS - LOGICAL_RANKS) / 2 + rank) * MEMORY_FILES + (MEMORY_FILES - LOGICAL_FILES) / 2 + file;
 }
 
@@ -124,12 +124,12 @@ piece_t get_captured_piece(move_t move, Color color)
 move_t Board::make_move(BoardPos source, piece_t source_piece, BoardPos dest, piece_t dest_piece, piece_t promote) const
 {
 	move_t move = get_board_rank(source) << 12 | get_board_file(source) << 8 | get_board_rank(dest) << 4 | get_board_file(dest);
-	move |= (promote & PIECE_MASK) << 24; 
+	move |= (promote & PIECE_MASK) << 24;
 	move |= (dest_piece & PIECE_MASK) << 16;
 	if (((source_piece & PIECE_MASK) == PAWN) && (get_board_file(source) != get_board_file(dest)) && (dest_piece == EMPTY)) {
 		move |= ENPASSANT_FLAG;
 	}
-	
+
 	// save misc state
 	if (in_check) {
 		move |= MOVE_FROM_CHECK;
@@ -212,11 +212,11 @@ void Board::set_fen(const std::string &fen)
 			break;
 		}
 		else if (c == '/') {
-			rank--; 
-			file = 1; 
+			rank--;
+			file = 1;
 			continue;
 		}
-			
+
 		BoardPos bp = make_board_pos(rank-1, file-1);
 		switch (c) {
 			case 'p': set_piece(bp, PAWN | BlackMask); break;
@@ -241,8 +241,8 @@ void Board::set_fen(const std::string &fen)
 			file++;
 		}
 	}
-	
-	char c; 
+
+	char c;
 	// next comes the color
 	while ((c = fen[pos++]) != 0 && c != ' ') {
 		switch(c) {
@@ -269,11 +269,11 @@ void Board::set_fen(const std::string &fen)
 			default: std::cerr << "Can't read fen" << fen << std::endl; abort();
 		}
 	}
-	
+
 	if (c == 0) {
 		return;
 	}
-	
+
 	if ((c = fen[pos++]) != 0) {
 		if (c >= 'a' && c <= 'h') {
 			enpassant_target = c - 'a';
@@ -310,11 +310,11 @@ unsigned char read_piece(unsigned char c)
 {
 	switch (c) {
 		case 'N': return KNIGHT;
-		case 'R': return ROOK; 
-		case 'B': return BISHOP; 
-		case 'Q': return QUEEN; 
-		case 'K': return KING; 
-		case 'P': return PAWN; 
+		case 'R': return ROOK;
+		case 'B': return BISHOP;
+		case 'Q': return QUEEN;
+		case 'K': return KING;
+		case 'P': return PAWN;
 	}
 	return 0;
 }
@@ -325,7 +325,7 @@ move_t Board::read_move(const std::string &s, Color color) const
 	bool castle = false;
 	bool queenside_castle = false;
 	bool check = false;
-	
+
 	piece_t piece;
 	int srcrank = INVALID;
 	int srcfile = INVALID;
@@ -334,7 +334,7 @@ move_t Board::read_move(const std::string &s, Color color) const
 	int promotion = 0;
 
 	std::vector<move_t> candidates;
-	
+
 	if (s[pos] == 'O') {
 		castle = true;
 	}
@@ -445,7 +445,7 @@ void Board::reset()
 Board::Board(const Board &copy)
 	: side_to_play(copy.side_to_play), in_check(copy.in_check), castle(copy.castle), enpassant_target(copy.enpassant_target), move_count(copy.move_count)
 {
-	memcpy(this->data, copy.data, sizeof(data)); 
+	memcpy(this->data, copy.data, sizeof(data));
 }
 
 int get_castle_bit(Color color, bool kingside)
@@ -494,7 +494,7 @@ const unsigned char initial_board[] = { 0x84, 0x23, 0x56, 0x32, 0x48,
 void Board::standard_initial()
 {
 	memset(data, 0x88, sizeof(data));
-	memcpy(&data[MEMORY_FILES * 2 / 2], initial_board, sizeof(initial_board));	
+	memcpy(&data[MEMORY_FILES * 2 / 2], initial_board, sizeof(initial_board));
 }
 
 void Board::repeated_move(BoardPos base, piece_t piece, char drank, char dfile, Color capture, std::vector<move_t> &moves) const
@@ -513,7 +513,7 @@ void Board::repeated_move(BoardPos base, piece_t piece, char drank, char dfile, 
 			// found wrong color or edge of the board
 			break;
 		}
-	} 
+	}
 }
 
 BoardPos Board::get_capture(BoardPos base, char drank, char dfile, Color capture) const
@@ -531,7 +531,7 @@ BoardPos Board::get_capture(BoardPos base, char drank, char dfile, Color capture
 			// found wrong color or edge of the board
 			return InvalidPos;
 		}
-	} 
+	}
 }
 
 void Board::single_move(BoardPos base, piece_t piece, char drank, char dfile, Color capture, std::vector<move_t> &moves) const
@@ -542,7 +542,7 @@ void Board::single_move(BoardPos base, piece_t piece, char drank, char dfile, Co
 	if (is_legal_pos(pos) && (owner == EMPTY || (((owner & 0x8) != 0) == (capture == Black)))) {
 		// found what we want to capture
 		moves.push_back(make_move(base, piece, pos, owner, 0));
-	} 
+	}
 }
 
 void Board::pawn_move(BoardPos source, BoardPos dest, std::vector<move_t> &moves) const
@@ -672,6 +672,12 @@ void Board::calculate_moves(Color color, BoardPos bp, piece_t piece, std::vector
 	}
 }
 
+struct CaptureComparator {
+	bool operator()(move_t a, move_t b) {
+		return get_captured_piece(a, White) > get_captured_piece(b, White);
+	}
+} capture_compare;
+
 void Board::get_moves(Color color, std::vector<move_t> &moves, bool support_mode, piece_t piece) const
 {
 	piece_t colored_piece = make_piece(piece, color);
@@ -694,6 +700,7 @@ void Board::get_moves(Color color, std::vector<move_t> &moves, bool support_mode
 			}
 		}
 	}
+	std::sort(moves.begin(), moves.end(), capture_compare);
 }
 
 void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_to_limit) const
@@ -786,7 +793,7 @@ bool Board::discovers_check(move_t move, Color color) const
 	if (!simple_vector) {
 		return false;
 	}
-	
+
 	// check whether there is clear line of sight from source to king
 	BoardPos piece_to_king = get_capture(source, -unit_drank, -unit_dfile, get_color(get_piece(king)));
 	piece_t piece_to_check;
@@ -828,14 +835,14 @@ void Board::apply_move(move_t move)
 	piece_t sourcepiece = get_piece(sourcepos);
 	piece_t resultpiece = sourcepiece;
 	Color color = get_color(sourcepiece);
-	
+
 	set_piece(destpos, sourcepiece);
 	set_piece(sourcepos, EMPTY);
 
 	if (enpassant_target != -1) {
 		update_zobrist_hashing_enpassant(enpassant_target, false);
 	}
-	
+
 	enpassant_target = -1;
 
 	if ((sourcepiece & PIECE_MASK) == KING) {
@@ -897,13 +904,13 @@ void Board::apply_move(move_t move)
 	if (color == White) {
 		move_count++;
 	}
-	
+
 	// update zobrist hash
 	update_zobrist_hashing_piece(sourcepos, sourcepiece, false);
 	update_zobrist_hashing_piece(destpos, destpiece, false);
 	update_zobrist_hashing_piece(destpos, resultpiece, true);
 	update_zobrist_hashing_move();
-	
+
 }
 
 void Board::undo_move(move_t move)
@@ -913,11 +920,11 @@ void Board::undo_move(move_t move)
 	piece_t moved_piece = get_piece(destpos);
 	Color color = get_color(moved_piece);
 	piece_t captured_piece = get_captured_piece(move, get_opposite_color(color));
-	
+
 	// flags
 	side_to_play = color;
 	in_check = move & MOVE_FROM_CHECK;
-	
+
 	if ((move & INVALIDATES_CASTLE_K) != 0) {
 		castle |= 1 << get_castle_bit(color, true);
 		update_zobrist_hashing_castle(color, true, true);
@@ -926,7 +933,7 @@ void Board::undo_move(move_t move)
 		castle |= 1 << get_castle_bit(color, false);
 		update_zobrist_hashing_castle(color, false, true);
 	}
-	
+
 	update_zobrist_hashing_piece(destpos, moved_piece, false);
 
 	// promote
@@ -937,12 +944,12 @@ void Board::undo_move(move_t move)
 
 	set_piece(sourcepos, moved_piece);
 	set_piece(destpos, captured_piece);
-	
+
 	// update zobrist hash
 	update_zobrist_hashing_piece(sourcepos, moved_piece, true);
 	update_zobrist_hashing_piece(destpos, captured_piece, true);
 	update_zobrist_hashing_move();
-	
+
 	// castle: put the rook back
 	if ((moved_piece & PIECE_MASK) == KING && get_board_file(sourcepos) == 4) {
 		int rook = make_piece(ROOK, color);
@@ -962,7 +969,7 @@ void Board::undo_move(move_t move)
 		update_zobrist_hashing_piece(rooksrc, rook, true);
 		update_zobrist_hashing_piece(rookdest, rook, false);
 	}
-	
+
 	if (enpassant_target != -1) {
 		update_zobrist_hashing_enpassant(enpassant_target, false);
 	}
@@ -990,10 +997,10 @@ bool Board::removes_check(move_t move, Color color) const
 	BoardPos sourcepos = get_source_pos(move);
 	piece_t destpiece = get_piece(destpos);
 	piece_t sourcepiece = get_piece(sourcepos);
-	
+
 	BoardPos king = find_piece(make_piece(KING, color));
 	bool might_remove_check = false;
-	
+
 	// captures
 	if (destpiece != EMPTY || (move & ENPASSANT_FLAG)) {
 		if ((move & ENPASSANT_FLAG) != 0) {
@@ -1009,16 +1016,16 @@ bool Board::removes_check(move_t move, Color color) const
 			}
 		}
 	}
-	
+
 	// blocks
 	if (!might_remove_check && discovers_check(make_move(destpos, destpiece, sourcepos, sourcepiece, 0), color)) {
 		might_remove_check = true;
 	}
-	
+
 	if (!might_remove_check) {
 		return false;
 	}
-	
+
 	Board copy(*this);
 	copy.apply_move(move);
 	return !copy.king_in_check(color);
@@ -1132,7 +1139,7 @@ void Board::get_fen(std::ostream &os) const
 	}
 	if (can_castle(Black, true)) {
 		os << "k";
-	} 
+	}
 	if (can_castle(Black, false)) {
 		os << "q";
 	}
