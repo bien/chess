@@ -333,8 +333,6 @@ move_t Board::read_move(const std::string &s, Color color) const
 	int destrank = INVALID;
 	int promotion = 0;
 
-	std::vector<move_t> candidates;
-
 	if (s[pos] == 'O') {
 		castle = true;
 	}
@@ -407,9 +405,9 @@ move_t Board::read_move(const std::string &s, Color color) const
 			}
 		}
 	} else {
-		legal_moves(color, candidates, piece);
-		for (unsigned int i = 0; i < candidates.size(); i++) {
-			move_t move = candidates[i];
+		MoveIterator moves(this, color);
+		for (; !moves.at_end(); moves++) {
+			move_t move = *moves;
 			BoardPos cdestpos = get_dest_pos(move);
 			BoardPos csourcepos = get_source_pos(move);
 			piece_t csourcepiece = get_piece(csourcepos);
@@ -418,9 +416,10 @@ move_t Board::read_move(const std::string &s, Color color) const
 				return move;
 			}
 		}
-		std::cout << "couldn't find legal moves among: " << std::endl;
-		for (unsigned int i = 0; i < candidates.size(); i++) {
-			print_move(candidates[i], std::cout);
+		std::cerr << "couldn't find legal moves among: " << std::endl;
+		moves.reset();
+		for (; !moves.at_end(); moves++) {
+			print_move(*moves, std::cout);
 			std::cout << std::endl;
 		}
 	}
@@ -703,51 +702,100 @@ void Board::get_moves(Color color, std::vector<move_t> &moves, bool support_mode
 	std::sort(moves.begin(), moves.end(), capture_compare);
 }
 
-void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t piece_to_limit) const
+MoveIterator::MoveIterator(const Board *b, Color color, int piece_to_limit)
+	: b(b), color(color), covered_squares(0), piece_to_limit(piece_to_limit)
 {
-	get_moves(color, moves, false, piece_to_limit);
-	uint64_t covered_squares = 0;
-	for (unsigned int i = 0; i < moves.size(); i++)
-	{
-		bool is_illegal = false;
-		// special rules for king moves
-		if ((get_piece(get_source_pos(moves[i])) & PIECE_MASK) == KING) {
-			// lazily compute covered_squares once for all moves
-			if (covered_squares == 0) {
-				std::vector<move_t> opposite_color_moves;
-				Board king_free(*this);
-				king_free.set_piece(get_source_pos(moves[i]), EMPTY);
-				king_free.get_moves(get_opposite_color(color), opposite_color_moves, true);
-				for (unsigned int j = 0; j < opposite_color_moves.size(); j++) {
-					BoardPos bp = get_dest_pos(opposite_color_moves[j]);
-					bitboard_setbit(covered_squares, get_board_rank(bp) * 8 + get_board_file(bp), 1);
-				}
-			}
-			BoardPos dest = get_dest_pos(moves[i]);
-			BoardPos source = get_source_pos(moves[i]);
-			// don't move into check
-			if (bitboard_getbit(covered_squares, get_board_rank(dest) * 8 + get_board_file(dest))) {
+	BoardPos king = b->find_piece(make_piece(KING, color));
+	std::vector<move_t> opposite_color_moves;
+	Board king_free(*b);
+	king_free.set_piece(king, EMPTY);
+	king_free.get_moves(get_opposite_color(color), opposite_color_moves, true);
+	for (unsigned int j = 0; j < opposite_color_moves.size(); j++) {
+
+		BoardPos bp = get_dest_pos(opposite_color_moves[j]);
+		bitboard_setbit(covered_squares, get_board_rank(bp) * 8 + get_board_file(bp), 1);
+	}
+
+	reset();
+}
+
+void MoveIterator::reset()
+{
+	moves.clear();
+	moves.reserve(50);
+	b->get_moves(color, moves, false, piece_to_limit);
+	current = moves.begin();
+
+	while (current != moves.end() && !b->is_legal_move(color, *current, covered_squares)) {
+		++current;
+	}
+}
+
+void MoveIterator::advance()
+{
+	++current;
+	while (current != moves.end() && !b->is_legal_move(color, *current, covered_squares)) {
+		++current;
+	}
+}
+
+move_t MoveIterator::operator*() const
+{
+	return *current;
+}
+
+move_t MoveIterator::operator++()
+{
+	advance();
+	return *current;
+}
+
+move_t MoveIterator::operator++(int)
+{
+	move_t result = *current;
+	advance();
+	return result;
+}
+
+bool MoveIterator::at_end() const
+{
+	return current == moves.end();
+}
+
+void Board::legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece) const
+{
+	MoveIterator iter(this, color, limit_to_this_piece);
+	for (; !iter.at_end(); iter++) {
+		moves.push_back(*iter);
+	}
+}
+
+bool Board::is_legal_move(Color color, move_t move, uint64_t covered_squares) const
+{
+	bool is_illegal = false;
+
+	// special rules for king moves
+	if ((get_piece(get_source_pos(move)) & PIECE_MASK) == KING) {
+		BoardPos dest = get_dest_pos(move);
+		BoardPos source = get_source_pos(move);
+		// don't move into check
+		if (bitboard_getbit(covered_squares, get_board_rank(dest) * 8 + get_board_file(dest))) {
+			is_illegal = true;
+		}
+		else if (abs(get_board_file(source) - get_board_file(dest)) == 2) {
+			// it's a castle: don't move out of check or through check
+			if (in_check || bitboard_getbit(covered_squares, get_board_rank(dest) * 8 + get_board_file(source) + (get_board_file(dest) - get_board_file(source)) / 2)) {
 				is_illegal = true;
 			}
-			else if (abs(get_board_file(source) - get_board_file(dest)) == 2) {
-				// it's a castle: don't move out of check or through check
-				if (in_check || bitboard_getbit(covered_squares, get_board_rank(dest) * 8 + get_board_file(source) + (get_board_file(dest) - get_board_file(source)) / 2)) {
-					is_illegal = true;
-				}
-			}
-		}
-		else if (!in_check && discovers_check(moves[i], color)) {
-			is_illegal = true;
-		}
-		else if (in_check && !removes_check(moves[i], color)) {
-			is_illegal = true;
-		}
-
-		if (is_illegal) {
-			moves.erase(moves.begin() + i);
-			i--;
 		}
 	}
+	else if (!in_check && discovers_check(move, color)) {
+		is_illegal = true;
+	}
+	else if (in_check && !removes_check(move, color)) {
+		is_illegal = true;
+	}
+	return !is_illegal;
 }
 
 BoardPos Board::find_piece(piece_t piece) const

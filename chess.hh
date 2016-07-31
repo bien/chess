@@ -51,6 +51,31 @@ unsigned char get_board_rank(BoardPos bp);
 unsigned char get_board_file(BoardPos bp);
 Color get_color(piece_t piece);
 
+class Board;
+
+class MoveIterator {
+public:
+	MoveIterator(const Board *b, Color color, int limit_to_this_piece=0);
+
+	move_t operator*() const;
+	move_t operator++();
+	move_t operator++(int);
+
+	bool at_end() const;
+
+	void reset();
+
+private:
+	void advance();
+
+	const Board *b;
+	std::vector<move_t>::const_iterator current;
+	std::vector<move_t> moves;
+	Color color;
+	uint64_t covered_squares;
+	int piece_to_limit;
+};
+
 class Board
 {
 public:
@@ -58,7 +83,7 @@ public:
 	Board(const Board &);
 	void reset();
 
-	void legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece=0) const;
+  void legal_moves(Color color, std::vector<move_t> &moves, piece_t limit_to_this_piece=0) const;
 	piece_t get_piece(BoardPos) const;
 	void get_fen(std::ostream &os) const;
 	void set_fen(const std::string &fen);
@@ -67,23 +92,26 @@ public:
 	void apply_move(move_t);
 	void undo_move(move_t);
 	void print_move(move_t, std::ostream &os) const;
-	
+
 	move_t read_move(const std::string &s, Color color) const;
 	uint64_t get_hash() const { return hash; }
-	
+
 	Color get_side_to_play() const { return side_to_play; }
-	
+
 private:
+	friend class MoveIterator;
+	bool is_legal_move(Color color, move_t move, uint64_t covered_squares) const;
+
 	void standard_initial();
 	void update_zobrist_hashing_piece(BoardPos pos, piece_t piece, bool adding);
 	void update_zobrist_hashing_castle(Color, bool kingside, bool enabling);
 	void update_zobrist_hashing_move();
 	void update_zobrist_hashing_enpassant(int file, bool enabling);
-	
+
 	char fen_repr(piece_t p) const;
 	void fen_flush(std::ostream &os, int &empty) const;
 	void fen_handle_space(piece_t piece, std::ostream &os, int &empty) const;
-	
+
 	move_t invalid_move(const std::string &s) const;
 
 	void set_piece(BoardPos, piece_t);
@@ -114,7 +142,7 @@ private:
 	char enpassant_target;
 	short move_count;
 	uint64_t hash;
-	
+
 	static uint64_t zobrist_hashes[ZOBRIST_HASH_COUNT];
 };
 
