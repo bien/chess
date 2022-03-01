@@ -1,39 +1,28 @@
--include Makefile.deps
-CXXFLAGS = -Wall -g -Wno-c++11-extensions -O2
-SRCS = extractfeatures.cc chess.cc pgn.cc search.cc evaluate.cc test.cc puzzle.cc opening.cc
+CXXFLAGS = -Wall -g -std=c++14 -O2
+SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc
 
-all: Makefile.deps test
-	
-feature: extractfeatures.o chess.o pgn.o
-	$(CXX) $^ -o $@
+all: test
 
-chess: moves.o chess.o
+chess: bitboard.o fenboard.o test.o move.o
 	$(CXX) $^ -o $@
 
-bitboard: bitboard.o
-	$(CXX) $^ -o $@
-	
-testexe: chess.o test.o pgn.o search.o evaluate.o
+magicsquares: magicsquares.o bitboard.o
 	$(CXX) $^ -o $@
 
-puzzles: chess.o pgn.o search.o evaluate.o puzzle.o
+test: testexe puzzle
+	./testexe games/Fischer.pgn
+	./puzzle "polgar - fixed.pgn"
+
+testexe: bitboard.o fenboard.o test.o move.o search.o evaluate.o pgn.o logicalboard.o
 	$(CXX) $^ -o $@
 
-fensolve: chess.o pgn.o search.o evaluate.o fensolve.o
+puzzle: bitboard.o fenboard.o puzzle.o move.o search.o evaluate.o pgn.o logicalboard.o
 	$(CXX) $^ -o $@
-
-opening: opening.o search.o evaluate.o chess.o
-	$(CXX) $^ -o $@
-	
-test: testexe puzzles
-	./testexe
-	./puzzles "polgar - fixed.pgn"
 
 clean:
-	rm -f *.o chess test
+	rm -f *.o chess
 
-%.features: games/%.zip feature
-	unzip -p $< | ./feature > $@
-	
 Makefile.deps: Makefile $(SRCS)
-	$(CXX) $(CXXFLAGS) -MM $(SRCS) > $@
+	$(CXX) -MM $(SRCS) > $@
+
+include Makefile.deps

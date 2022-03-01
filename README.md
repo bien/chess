@@ -16,3 +16,6 @@ Latest test results
 
 11/2/14:
 Puzzles solved: 3362/3400 using 8752725 nodes at 160208 nodes/sec or 62.2328 puzzles/sec
+
+02/28/22: (bitboard)
+Puzzles solved: 3911/4000 using 49677511 nodes at 630034 nodes/sec or 50.7299 puzzles/sec
