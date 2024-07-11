@@ -154,9 +154,6 @@ int main(int argc, char **argv)
     read_pgn(fischer, game_metadata, movelist);
     for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
         move_t move = b.read_move(iter->first, White);
-        std::cout << b << " ";
-        b.print_move(move, std::cout);
-        std::cout << " " << b.get_hash() << std::endl;
         b.apply_move(move);
         moverecord.push_back(move);
         boardtext.str("");
@@ -164,9 +161,6 @@ int main(int argc, char **argv)
         boardrecord.push_back(boardtext.str());
 
         move = b.read_move(iter->second, Black);
-        std::cout << b << " ";
-        b.print_move(move, std::cout);
-        std::cout << " " << b.get_hash() << std::endl;
         b.apply_move(move);
         moverecord.push_back(move);
         boardtext.str("");
@@ -187,10 +181,6 @@ int main(int argc, char **argv)
         b.get_fen(boardtext);
         assert_equals(boardrecord[i], boardtext.str());
         b.undo_move(moverecord[i]);
-
-        std::cout << b << " ";
-        b.print_move(moverecord[i], std::cout);
-        std::cout << " " << b.get_hash() << std::endl;
     }
 
     boardtext.str("");
@@ -308,5 +298,19 @@ int main(int argc, char **argv)
     move = search.alphabeta(b, White);
     assert_equals(b.read_move("g8=N#", White), move);
     assert_equals(VERY_GOOD - 1, search.score);
+
+    b.set_fen("r1b1k2r/p3bppp/2p2n2/1p2p3/3n4/2Pp4/PP1P1PPP/RNB1K1NR w KQkq - 0 12");
+    search.reset();
+    search.use_transposition_table = true;
+    search.use_mtdf = true;
+    search.use_quiescent_search = true;
+    search.use_pruning = true;
+    search.max_depth = 6;
+    move = search.alphabeta(b, White);
+    b.print_move(move, std::cout);
+    std::cout << std::endl;
+    print_move_uci(move, std::cout) << std::endl;
+
+    assert_equals(b.read_move("cxd4", White), move);
     return 0;
 }

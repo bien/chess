@@ -185,6 +185,22 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
         if (s[pos+1] == '+') {
             check = true;
         }
+    } else if (piece == bb_pawn && s.length() >= 4 && s[1] >= '1' && s[1] <= '8' && s[2] >= 'a' && s[2] <= 'h') {
+        // uci style move: a7a8q
+        srcfile = s[0] - 'a';
+        srcrank = s[1] - '1';
+        destfile = s[2] - 'a';
+        destrank = s[3] - '1';
+        piece = this->get_piece(srcrank, srcfile) & PIECE_MASK;
+        if (s.length() >= 5 && s[4] >= 'a' && s[4] <= 'r') {
+            switch (s[4]) {
+                case 'q': case 'Q': promotion = bb_queen; break;
+                case 'r': case 'R': promotion = bb_rook; break;
+                case 'n': case 'N': promotion = bb_knight; break;
+                case 'b': case 'B': promotion = bb_bishop; break;
+                default: invalid_move(s); break;
+            }
+        }
     } else {
         while (s[pos] != 0) {
             if (s[pos] >= '1' && s[pos] <= '8') {
@@ -247,7 +263,7 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
                 return move;
             }
         }
-        std::cout << "couldn't find legal moves among: " << std::endl;
+        std::cout << (*this) << std::endl << "couldn't find legal moves among: " << std::endl;
         candidates = this->get_legal_moves(color);
         while (this->has_more_moves(candidates)) {
             move_t move = this->get_next_move(candidates);
@@ -311,6 +327,27 @@ void Fenboard::print_move(move_t move, std::ostream &os) const
     if (get_invalidates_queenside_castle(move)) {
         os << "xq";
     }
+}
+
+// uci move format (e7e8q)
+std::ostream &print_move_uci(move_t move, std::ostream &os)
+{
+    unsigned char destrank, destfile, srcrank, srcfile;
+    get_source(move, srcrank, srcfile);
+    get_dest(move, destrank, destfile);
+
+    os << static_cast<char>(srcfile + 'a') << static_cast<char>(srcrank + '1')
+       << static_cast<char>(destfile + 'a') << static_cast<char>(destrank + '1');
+    unsigned char promotion = get_promotion(move);
+    if (promotion > 0) {
+        switch (promotion) {
+            case bb_bishop: os << "b"; break;
+            case bb_knight: os << "n"; break;
+            case bb_rook: os << "r"; break;
+            case bb_queen: os << "q"; break;
+        }
+    }
+    return os;
 }
 
 char Fenboard::fen_repr(unsigned char p) const

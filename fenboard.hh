@@ -17,6 +17,8 @@ public:
     void set_fen(const std::string &fen);
     void print_move(move_t, std::ostream &os) const;
     move_t read_move(const std::string &s, Color color) const;
+    Color get_side_to_play() const { return side_to_play; }
+    short get_move_count() const { return move_count; }
 
 private:
     char fen_repr(unsigned char piece) const;
@@ -27,6 +29,7 @@ private:
     move_t invalid_move(const std::string &s) const;
 };
 
+std::ostream &print_move_uci(move_t, std::ostream &os);
 std::ostream &operator<<(std::ostream &os, const Fenboard &b);
 
 #endif

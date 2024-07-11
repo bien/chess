@@ -41,7 +41,7 @@ move_t Search::minimax(Fenboard &b, Color color)
     return result.first;
 }
 
-move_t Search::alphabeta(Fenboard &b, Color color)
+move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 {
     nodecount = 0;
     move_t result;
@@ -52,7 +52,8 @@ move_t Search::alphabeta(Fenboard &b, Color color)
         } else {
             int subscore = 0;
             max_depth -= 2;
-            mtdf(b, color, subscore, guess);
+            result = mtdf(b, color, subscore, guess);
+            s(result, max_depth, nodecount, subscore);
             max_depth += 2;
             guess = subscore;
         }
@@ -97,7 +98,9 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess)
             beta = score;
         }
         std::pair<move_t, int> result = alphabeta_with_memory(b, 0, color, beta - 1, beta);
-        move = result.first;
+        if (result.first != -1) {
+            move = result.first;
+        }
         score = result.second;
         if (score < beta) {
             upperbound = result.second;

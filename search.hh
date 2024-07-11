@@ -87,10 +87,16 @@ struct TranspositionEntry {
     }
 };
 
+struct SearchUpdate {
+    virtual void operator()(move_t best_move, int depth, int nodecount, int score) const {}
+};
+
+const SearchUpdate NullSearchUpdate;
+
 struct Search {
     Search(const Evaluation *eval, int transposition_table_size=1000 * 500 + 1);
     move_t minimax(Fenboard &b, Color color);
-    move_t alphabeta(Fenboard &b, Color color);
+    move_t alphabeta(Fenboard &b, Color color, const SearchUpdate &s = NullSearchUpdate);
 
     void reset();
 
