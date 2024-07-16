@@ -53,7 +53,7 @@ int main(int argc, char **argv)
     search.use_mtdf = true;
     search.use_quiescent_search = true;
     search.use_pruning = true;
-    search.max_depth = 8;
+    search.max_depth = 7;
     search.quiescent_depth = 4;
 
     while (true) {
@@ -69,7 +69,32 @@ int main(int argc, char **argv)
         else if (line.rfind("uci", 0) == 0) {
             std::cout << "id name lobsterbot" << std::endl;
             std::cout << "option name Hash type spin default 1 min 1 max 1024" << std::endl;
+            std::cout << "option name depth default 7 min 1 max 1024" << std::endl;
+            std::cout << "option name quiescentlimit default 4 min 0 max 1024" << std::endl;
+            std::cout << "option name mtdf type check default on" << std::endl;
+            std::cout << "option name debug type check default off" << std::endl;
             std::cout << "uciok" << std::endl;
+        }
+        else if (line.rfind("setoption", 0) == 0) {
+            // setoption name depth value 5
+            std::vector<std::string> tokens;
+            tokenize(line, ' ', tokens);
+            if (tokens[2] == "depth" && tokens.size() > 4) {
+                search.max_depth = stoi(tokens[4]);
+                std::cout << "set depth = " << search.max_depth << std::endl;
+            }
+            else if (tokens[2] == "quiescentlimit" && tokens.size() > 4) {
+                search.quiescent_depth = stoi(tokens[4]);
+                std::cout << "set quiescentlimit = " << search.quiescent_depth << std::endl;
+            }
+            else if (tokens[2] == "mtdf" && tokens.size() > 4) {
+                search.use_mtdf = (tokens[4] == "on" || tokens[4] == "true");
+                std::cout << "set mtdf = " << search.use_mtdf << std::endl;
+            }
+            else if (tokens[2] == "debug" && tokens.size() > 4) {
+                search_debug = (tokens[4] == "on" || tokens[4] == "true");
+                std::cout << "set debug = " << search_debug << std::endl;
+            }
         }
         else if (line.rfind("position", 0) == 0) {
             std::vector<std::string> tokens;
