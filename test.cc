@@ -10,11 +10,30 @@
 #include "bitboard.hh"
 #include "fenboard.hh"
 
+void assert_true(bool value)
+{
+    if (!value) {
+        std::cout << "Test failed" << std::endl;
+        abort();
+    }
+}
+
 template <class T>
 void assert_equals(T expected, T actual)
 {
     if (expected != actual) {
         std::cout << "Test failed: expected " << expected << " but got " << actual << std::endl;
+        abort();
+    }
+}
+
+template <>
+void assert_equals<move_t>(move_t expected, move_t actual)
+{
+    if (expected != actual) {
+        std::cout << "Test failed: expected ";
+        print_move_uci(expected, std::cout) << " but got ";
+        print_move_uci(actual, std::cout) << std::endl;
         abort();
     }
 }
@@ -56,12 +75,8 @@ void legal_moves(Bitboard *b, Color color, std::vector<move_t> &moves) {
 
 }
 
-int main(int argc, char **argv)
+void test_legal_moves(std::string fischer_pgn_file)
 {
-    if (argc != 2) {
-        std::cout << "Expected arg: sample-game.pgn" << std::endl;
-        return 1;
-    }
     Fenboard b;
     for (unsigned char r = 0; r < 8; r++) {
         for (unsigned char f = 0; f < 8; f++) {
@@ -93,19 +108,26 @@ int main(int argc, char **argv)
             os << char('a' + i) << j;
             if (j >= 5) {
                 expected_black.push_back(b.read_move(os.str(), Black));
+                assert_true(b.is_legal_move(expected_black.back(), Black));
+                assert_true(!b.is_legal_move(expected_black.back(), White));
             } else {
                 expected_white.push_back(b.read_move(os.str(), White));
+                assert_true(b.is_legal_move(expected_white.back(), White));
+                assert_true(!b.is_legal_move(expected_white.back(), Black));
             }
         }
         if (i == 0 || i == 2 || i == 5 || i == 7) {
             std::ostringstream os;
             os << 'N' << char('a' + i) << 3;
             expected_white.push_back(b.read_move(os.str(), White));
+            assert_true(b.is_legal_move(expected_white.back(), White));
             os.str("");
             os << 'N' << char('a' + i) << 6;
             expected_black.push_back(b.read_move(os.str(), Black));
+            assert_true(b.is_legal_move(expected_black.back(), Black));
         }
     }
+
     assert_equals_unordered(expected_white, legal_white);
     assert_equals_unordered(expected_black, legal_black);
 
@@ -145,7 +167,7 @@ int main(int argc, char **argv)
     std::vector<std::pair<std::string, std::string> > movelist;
     std::vector<move_t> moverecord;
     std::vector<std::string> boardrecord;
-    std::ifstream fischer(argv[1]);
+    std::ifstream fischer(fischer_pgn_file);
     if (!fischer) {
         std::cout << "Cannot load Fischer.pgn" << std::endl;
         assert_equals(0, 1);
@@ -237,36 +259,47 @@ int main(int argc, char **argv)
     assert_equals(0, static_cast<int>(legal_black.size()));
     assert_equals(true, b.king_in_check(Black));
 
-    // white has mate in 1
+}
+
+void test_move_finding()
+{
+    Fenboard b;
     SimpleEvaluation simple;
     Search search(&simple);
+    move_t move;
 
-    b.set_fen("3B1n2/NP2P3/b7/2kp2N1/8/2Kp4/8/8 w - - 0 1");
+    // white has mate in 1
+    b.set_fen("rnbqkbnr/ppppp2p/5p2/6p1/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 1");
     search.max_depth = 2;
     move = search.minimax(b, White);
-    movetext.str("");
-    b.print_move(move, movetext);
     assert_equals(VERY_GOOD - 1, search.score);
     search.reset();
     move = search.alphabeta(b, White);
     assert_equals(VERY_GOOD - 1, search.score);
+    assert_equals(b.read_move("Qh5#", White), move);
 
     // white has mate in 2
     b.set_fen("r4kr1/1b2R1n1/pq4p1/4Q3/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
-
     search.reset();
+    search.use_killer_move = true;
     search.max_depth = 4;
+    search.use_mtdf = false;
+    search.use_pruning = true;
+    search.use_quiescent_search = false;
     move = search.minimax(b, White);
-    assert_equals(VERY_GOOD - 3, search.score);
     assert_equals(b.read_move("Rf7+", White), move);
+    assert_equals(VERY_GOOD - 3, search.score);
 
     search.reset();
     move = search.alphabeta(b, White);
-    assert_equals(VERY_GOOD - 3, search.score);
     assert_equals(b.read_move("Rf7+", White), move);
+    assert_equals(VERY_GOOD - 3, search.score);
 
     b.set_fen("1Q6/8/8/8/8/k2K4/8/8 w - b6 0 1");
     search.reset();
+    search.use_killer_move = true;
+    search.max_depth = 4;
+    search.use_mtdf = false;
     move = search.alphabeta(b, White);
     assert_equals(b.read_move("Kc3", White), move);
     assert_equals(VERY_GOOD - 3, search.score);
@@ -307,10 +340,18 @@ int main(int argc, char **argv)
     search.use_pruning = true;
     search.max_depth = 6;
     move = search.alphabeta(b, White);
-    b.print_move(move, std::cout);
-    std::cout << std::endl;
-    print_move_uci(move, std::cout) << std::endl;
 
     assert_equals(b.read_move("cxd4", White), move);
+}
+
+int main(int argc, char **argv)
+{
+    if (argc != 2) {
+        std::cout << "Expected arg: sample-game.pgn" << std::endl;
+        return 1;
+    }
+
+    test_legal_moves(argv[1]);
+    test_move_finding();
     return 0;
 }

@@ -11,7 +11,7 @@ const int VERY_BAD = -VERY_GOOD;
 const int SCORE_MAX = VERY_GOOD + 1000;
 const int SCORE_MIN = VERY_BAD - 1000;
 
-extern const int search_debug;
+extern int search_debug;
 const int TranspositionTableSize = 1000001;
 
 class Evaluation {
@@ -73,13 +73,14 @@ struct TranspositionEntry {
     int lower;
     int upper;
     move_t move;
+    move_t response;
 
     TranspositionEntry()
-        : depth(0), lower(SCORE_MIN), upper(SCORE_MAX), move(0)
+        : depth(0), lower(SCORE_MIN), upper(SCORE_MAX), move(0), response(0)
     {}
 
     TranspositionEntry(const TranspositionEntry &entry)
-        : depth(entry.depth), lower(entry.lower), upper(entry.upper), move(entry.move)
+        : depth(entry.depth), lower(entry.lower), upper(entry.upper), move(entry.move), response(entry.response)
     {}
 
     bool operator==(const TranspositionEntry o) const {
@@ -113,12 +114,13 @@ struct Search {
     bool use_iterative_deepening;
     bool use_quiescent_search;
     int quiescent_depth;
+    bool use_killer_move;
 
     int max_depth;
 
 private:
     SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
-    std::pair<move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta);
+    std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
     move_t mtdf(Fenboard &b, Color color, int &score, int guess);
 };
 

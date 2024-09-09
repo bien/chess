@@ -56,6 +56,7 @@ public:
     virtual ~BitboardMoveIterator() {}
     move_t get_move(const Bitboard *board) const;
     void advance(const Bitboard *board);
+    void push_move_front(move_t move);
 
     bool in_captures() const {
         return captures_promote_type & 0x8;
@@ -77,6 +78,8 @@ public:
     uint64_t dest_squares;
     uint64_t covered_squares;
     uint64_t king_slide_blockers;
+
+    move_t inserted_move = -1;
 } ;
 
 const int FL_ALL = 4;
@@ -92,6 +95,7 @@ public:
 
     piece_t get_piece(unsigned char rank, unsigned char file) const;
     void set_piece(unsigned char rank, unsigned char file, piece_t);
+    bool is_legal_move(move_t move, Color color) const;
 
     BitboardMoveIterator get_legal_moves(Color color) const {
         BitboardMoveIterator iter(color);
@@ -156,7 +160,7 @@ private:
     void next_pnk_move(Color color, piece_t, int &start_pos, uint64_t &dest_squares, int fl_flags) const;
     void next_piece_slide(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, uint64_t exclude_pieces=0, uint64_t include_pieces=0) const;
 
-    bool is_legal_move(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const;
+    bool is_not_illegal_due_to_check(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const;
     bool discovers_check(int start_pos, int dest_pos, Color color, uint64_t covered_squares, bool inverted) const;
     uint64_t get_captures(Color color, piece_t piece_type, int start_pos) const;
     bool removes_check(piece_t piece_type, int start_pos, int dest_pos, Color color, uint64_t covered_squares) const;
@@ -195,7 +199,6 @@ constexpr int get_low_bit(uint64_t bitset, unsigned int start) {
 #ifdef HAS_FFSLL
     return start + ffsll(bitset) - 1;
 #else
-
     return start + Mod67BitPos[(bitset & -bitset) % 67];
 #endif
 }

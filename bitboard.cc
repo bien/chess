@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <iostream>
 #include "bitboard.hh"
+#include "move.hh"
 #include <cassert>
 #include <type_traits>
 
@@ -371,8 +372,7 @@ uint64_t Bitboard::get_king_slide_blockers(int king_pos, Color king_color) const
     return potential_blockers;
 }
 
-
-bool Bitboard::is_legal_move(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const
+bool Bitboard::is_not_illegal_due_to_check(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const
 {
     bool is_illegal = false;
 
@@ -573,9 +573,67 @@ uint64_t Bitboard::computed_covered_squares(Color color, uint64_t exclude_pieces
     return covered_squares;
 }
 
+bool Bitboard::is_legal_move(move_t move, Color color) const
+{
+    unsigned char dest_rank, dest_file, src_rank, src_file;
+    uint64_t dest_squares = 0;
+
+    get_source(move, src_rank, src_file);
+    get_dest(move, dest_rank, dest_file);
+
+    int actor = src_rank * 8 + src_file;
+    int dest_pos = dest_rank * 8 + dest_file;
+
+    // is there a piece there
+    piece_t piece = get_piece(src_rank, src_file);
+    if ((piece > bb_king ? Black : White) != color) {
+        // piece is wrong color
+        return false;
+    }
+    else if (piece == 0) {
+        // square is empty
+        return false;
+    }
+
+    piece_t dest_piece = get_piece(dest_rank, dest_file);
+    if (dest_piece != 0 && (dest_piece > bb_king ? White : Black) != color) {
+        // can't capture our own piece
+        return false;
+    }
+
+    switch(piece & PIECE_MASK) {
+        case bb_pawn:
+            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, dest_piece == 0 ? FL_EMPTY : FL_CAPTURES);
+            break;
+        case bb_king: case bb_knight:
+            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL);
+            break;
+        case bb_bishop: case bb_rook: case bb_queen:
+            next_piece_slide(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL);
+            break;
+    }
+
+    if (!(dest_squares & (1ULL << dest_pos))) { 
+        // not a move
+        return false;
+    }
+
+    uint64_t covered_squares = computed_covered_squares(color == Black ? White : Black, 0, 0, 0);
+    return is_not_illegal_due_to_check(color, piece & PIECE_MASK, actor, dest_pos, covered_squares);
+}
+
+void BitboardMoveIterator::push_move_front(move_t move)
+{
+    inserted_move = move;
+}
+
 void BitboardMoveIterator::advance(const Bitboard *board)
 {
     bool done = false;
+    if (inserted_move != -1) {
+        inserted_move = -1;
+        return;
+    }
     while (!done) {
         Color color = colored_piece_type > bb_king ? Black : White;
         // iterate through all the promotion types
@@ -616,6 +674,7 @@ void BitboardMoveIterator::advance(const Bitboard *board)
                 }
             }
             if (start_pos < 0 || dest_squares == 0) {
+                // FIXME should probably start with queen
                 colored_piece_type++;
                 start_pos = -1;
                 if (!in_captures() && (colored_piece_type & PIECE_MASK) > bb_king) {
@@ -647,7 +706,7 @@ void BitboardMoveIterator::advance(const Bitboard *board)
                 if (covered_squares == 0) {
                     covered_squares = board->computed_covered_squares(colored_piece_type > bb_king ? White : Black, 0, 0, 0);
                 }
-                if (board->is_legal_move(color, colored_piece_type & PIECE_MASK, start_pos, dest_pos, covered_squares)) {
+                if (board->is_not_illegal_due_to_check(color, colored_piece_type & PIECE_MASK, start_pos, dest_pos, covered_squares)) {
                     break;
                 }
             }
@@ -657,6 +716,9 @@ void BitboardMoveIterator::advance(const Bitboard *board)
 
 move_t BitboardMoveIterator::get_move(const Bitboard *board) const
 {
+    if (inserted_move != -1) {
+        return inserted_move;
+    }
     return board->make_move(start_pos / 8, start_pos % 8, colored_piece_type & PIECE_MASK, dest_pos / 8, dest_pos % 8, board->get_piece(dest_pos / 8, dest_pos % 8), get_promote_type());
 }
 
