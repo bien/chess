@@ -27,9 +27,9 @@ struct UciSearchUpdate : SearchUpdate {
     {
         std::cout << "info currmove ";
         print_move_uci(best_move, std::cout) << std::endl;
-        std::cout << "info depth " << depth 
-            << " score cp " << score 
-            << " nodes " << nodecount 
+        std::cout << "info depth " << depth
+            << " score cp " << score
+            << " nodes " << nodecount
             << std::endl;
     }
 
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
                 b.set_starting_position();
                 pos += 1;
             }
-            if (tokens.size() > 2 + pos && tokens[pos] == "moves") {
+            if (tokens.size() >= 2 + pos && tokens[pos] == "moves") {
                 for (int i = pos + 1; i < tokens.size(); i++) {
                     b.apply_move(b.read_move(tokens[i], b.get_side_to_play()));
                 }
@@ -145,10 +145,10 @@ int main(int argc, char **argv)
                 auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
             	std::cout << "info currmove ";
                 print_move_uci(move, std::cout) << " currmovenumber " << b.get_move_count() << std::endl;
-    	        std::cout << "info depth " << search.max_depth 
-                    << " score cp " << search.score 
+                std::cout << "info depth " << search.max_depth
+                    << " score cp " << search.score
                     << " time " << elapsed_usecs / 1000
-                    << " nodes " << search.nodecount 
+                    << " nodes " << search.nodecount
                     << " nps " << static_cast<uint64_t>(search.nodecount) * 1000 * 1000 / elapsed_usecs << std::endl;
                 std::cout << "bestmove ";
                 print_move_uci(move, std::cout) << std::endl;
