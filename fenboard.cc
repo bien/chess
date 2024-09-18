@@ -229,6 +229,8 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
                     default: invalid_move(s); break;
                 }
                 pos += 1;
+            } else if (s[pos] == '!' || s[pos] == '?') {
+                // ignore annotation
             } else if (s[pos] != 'x') {
                 invalid_move(s);
             }

@@ -164,7 +164,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     }
 
     std::map<std::string, std::string> game_metadata;
-    std::vector<std::pair<std::string, std::string> > movelist;
+    std::vector<std::pair<move_annot, move_annot> > movelist;
     std::vector<move_t> moverecord;
     std::vector<std::string> boardrecord;
     std::ifstream fischer(fischer_pgn_file);
@@ -174,15 +174,15 @@ void test_legal_moves(std::string fischer_pgn_file)
     }
     // play one game
     read_pgn(fischer, game_metadata, movelist);
-    for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
-        move_t move = b.read_move(iter->first, White);
+    for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
+        move_t move = b.read_move(iter->first.move, White);
         b.apply_move(move);
         moverecord.push_back(move);
         boardtext.str("");
         boardtext << b;
         boardrecord.push_back(boardtext.str());
 
-        move = b.read_move(iter->second, Black);
+        move = b.read_move(iter->second.move, Black);
         b.apply_move(move);
         moverecord.push_back(move);
         boardtext.str("");
@@ -232,11 +232,11 @@ void test_legal_moves(std::string fischer_pgn_file)
         game_metadata.clear();
         read_pgn(fischer, game_metadata, movelist);
         b.set_starting_position();
-        for (std::vector<std::pair<std::string, std::string> >::iterator iter = movelist.begin(); iter != movelist.end(); iter++) {
-            move_t move = b.read_move(iter->first, White);
+        for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
+            move_t move = b.read_move(iter->first.move, White);
             b.apply_move(move);
-            if (iter->second.length() > 1) {
-                move = b.read_move(iter->second, Black);
+            if (iter->second.move.length() > 1) {
+                move = b.read_move(iter->second.move, Black);
                 b.apply_move(move);
             }
         }
