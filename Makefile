@@ -1,4 +1,4 @@
-CXXFLAGS = -Wall -g -std=c++14 -O2
+CXXFLAGS = -Wall -g -std=c++14
 SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc endgames.cc uciinterface.cc
 
 all: uciinterface test
@@ -14,9 +14,12 @@ magicsquares: magicsquares.o bitboard.o
 
 test: testexe puzzle
 	./testexe games/Fischer.pgn
-#	./puzzle "polgar - fixed.pgn"
+	./puzzle "polgar - fixed.pgn"
 
 testexe: bitboard.o fenboard.o test.o move.o search.o evaluate.o pgn.o logicalboard.o
+	$(CXX) $^ -o $@
+
+pgn2training: bitboard.o fenboard.o pgn2training.o move.o pgn.o logicalboard.o
 	$(CXX) $^ -o $@
 
 endgames: bitboard.o fenboard.o endgames.o move.o logicalboard.o
