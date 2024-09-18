@@ -65,8 +65,8 @@ int main(int argc, char **argv)
     SimpleBitboardEvaluation simple;
     Search search(&simple);
     search.use_transposition_table = true;
-    search.use_mtdf = false;
-    search.use_quiescent_search = false;
+    search.use_mtdf = true;
+    search.use_quiescent_search = true;
     search.use_pruning = true;
 
     while (!puzzles.eof()) {

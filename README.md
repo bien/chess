@@ -7,6 +7,13 @@ To download training data, run "data.sh".
 The tests expect a file called "polgar - fixed.pgn" which is an unzipped version of "polgar_5334_fixed.7z", which can be found here: http://www.chess.am/pgn/
 
 
+UCI
+====
+
+To use UCI interface on lichess, download https://github.com/lichess-bot-devs/lichess-bot
+
+Use ./uciinterface as the executable in the lichess-bot config.yml
+
 Latest test results
 ====
  ...

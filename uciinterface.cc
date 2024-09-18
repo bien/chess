@@ -40,6 +40,7 @@ int main(int argc, char **argv)
     Fenboard b;
     b.set_starting_position();
     UciSearchUpdate searchUpdate;
+    bool is_debug = false;
     std::string line;
     std::ofstream logging("server.log", std::ofstream::out | std::ofstream::ate);
     std::istream *input = &std::cin;
@@ -50,10 +51,10 @@ int main(int argc, char **argv)
     SimpleBitboardEvaluation simple;
     Search search(&simple);
     search.use_transposition_table = true;
-    search.use_mtdf = true;
+    search.use_mtdf = false;
     search.use_quiescent_search = true;
     search.use_pruning = true;
-    search.max_depth = 7;
+    search.max_depth = 6;
     search.quiescent_depth = 4;
 
     while (true) {
@@ -71,7 +72,7 @@ int main(int argc, char **argv)
             std::cout << "option name Hash type spin default 1 min 1 max 1024" << std::endl;
             std::cout << "option name depth type spin default 7 min 1 max 1024" << std::endl;
             std::cout << "option name quiescentlimit type spin default 4 min 0 max 1024" << std::endl;
-            std::cout << "option name mtdf type check default on" << std::endl;
+            std::cout << "option name mtdf type check default off" << std::endl;
             std::cout << "option name debug type check default off" << std::endl;
             std::cout << "uciok" << std::endl;
         }
@@ -92,7 +93,8 @@ int main(int argc, char **argv)
                 std::cout << "set mtdf = " << search.use_mtdf << std::endl;
             }
             else if (tokens[2] == "debug" && tokens.size() > 4) {
-                search_debug = (tokens[4] == "on" || tokens[4] == "true");
+                // search_debug = (tokens[4] == "on" || tokens[4] == "true");
+                is_debug = true;
                 std::cout << "set debug = " << search_debug << std::endl;
             }
         }
