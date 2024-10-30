@@ -209,6 +209,10 @@ void Logicalboard::apply_move(move_t move)
     update_zobrist_hashing_move();
     this->in_check = this->king_in_check(this->side_to_play);
     update();
+	
+	assert(piece_bitmasks[(bb_king + 1) + bb_king] > 0);
+	assert(piece_bitmasks[bb_king] > 0);
+
 }
 
 void Logicalboard::undo_move(move_t move)

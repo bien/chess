@@ -314,7 +314,7 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
             do {
                 switch(i) {
                     case bb_king: case bb_knight:
-                        b.next_pnk_move(static_cast<Color>(color), i, start_pos, dest_squares, FL_CAPTURES | FL_EMPTY);
+                        b.next_pnk_move(static_cast<Color>(color), i, start_pos, dest_squares, FL_CAPTURES | FL_EMPTY, false, false);
                         break;
                     case bb_queen: case bb_bishop: case bb_rook:
                         b.next_piece_slide(static_cast<Color>(color), i, start_pos, dest_squares, FL_CAPTURES | FL_EMPTY);

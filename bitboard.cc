@@ -9,6 +9,9 @@
 #include <cassert>
 #include <type_traits>
 
+// for debugging
+static void print_mask(uint64_t mask);
+
 constexpr int sign(int value) {
     if (value > 0) {
         return 1;
@@ -292,24 +295,36 @@ void Bitboard::set_piece(unsigned char rank, unsigned char file, piece_t piece)
     }
 }
 
-void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags) const
+void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, bool checks_only, bool exclude_checks) const
 {
+	/**
+	FL_CAPTURES: consider attacks against enemy pieces
+	FL_EMPTY: consider moves to empty squares
+	FL_ALL: consider attacks against own side's pieces (defending own piece)
+	*/
     uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type];
+    uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)];
 
     while ((start_pos = get_low_bit(actors, start_pos)) > -1) {
         dest_squares = 0;
+
         if (fl_flags & (FL_CAPTURES | FL_ALL)) {
             dest_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][start_pos];
             if (!(fl_flags & FL_ALL)) {
+                // only capture opponent's pieces
                 dest_squares &= piece_bitmasks[(1 - color) * (bb_king + 1) + bb_all];
             }
+            // pawns can't capture on empty squares
+            else if ((piece_type & PIECE_MASK) == bb_pawn) {
+                dest_squares &= all_pieces;
+            }
+            // except enpassant where "capture" isn't in the destination square
             int ep_rank = color == White ? 4 : 3;
             if (enpassant_file >= 0 && (piece_type & PIECE_MASK) == bb_pawn && ep_rank == start_pos / 8 && ((enpassant_file + 1) == start_pos % 8 || (enpassant_file - 1) == start_pos % 8)) {
                 dest_squares |= 1ULL << ((ep_rank + (color == White ? 1 : -1)) * 8 + enpassant_file);
             }
         }
         if (fl_flags & (FL_EMPTY | FL_ALL)) {
-            uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)];
             uint64_t dest_squares_empty = BitboardCaptures::PregeneratedMoves[color][piece_type][start_pos] & ~all_pieces;
             int starting_king_pos = (color == White ? 4 : 60);
             if (dest_squares_empty != 0 && (piece_type & PIECE_MASK) == bb_pawn) {
@@ -343,6 +358,25 @@ void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, ui
             }
             dest_squares |= dest_squares_empty;
         }
+        // check prioritization logic
+
+        if (checks_only || exclude_checks) {
+            uint64_t check_squares = 0;
+            uint64_t opponent_king_pos = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_king];
+            int opponent_king_square = get_low_bit(opponent_king_pos, 0);
+            if ((piece_type & PIECE_MASK) == bb_knight) {
+                check_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][opponent_king_square];
+            } else if ((piece_type & PIECE_MASK) == bb_pawn) {
+                check_squares = BitboardCaptures::PregeneratedCaptures[1 - color][piece_type][opponent_king_square];
+            }
+
+            if (checks_only) {
+                dest_squares &= check_squares;
+            } else if (exclude_checks) {
+                dest_squares &= ~check_squares;
+            }
+        }
+
         if (dest_squares) {
             break;
         } else {
@@ -353,7 +387,7 @@ void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, ui
 
 
 BitboardMoveIterator::BitboardMoveIterator(Color color)
-    : start_pos(-1), colored_piece_type(color * 8 + 1), captures_promote_type(0x8), dest_squares(0), covered_squares(0), king_slide_blockers(0xffffffffffffffff)
+    : start_pos(-1), colored_piece_type(color * 8 + 1), captures_promote_type(0x8), processed_checks(false), dest_squares(0), covered_squares(0), king_slide_blockers(0xffffffffffffffff)
 
 {
 }
@@ -485,7 +519,7 @@ uint64_t Bitboard::get_captures(Color color, piece_t piece_type, int start_pos) 
         next_piece_slide(color, piece_type, start_pos, piece_covers, FL_CAPTURES | FL_EMPTY);
         break;
     case bb_knight: case bb_king:
-        next_pnk_move(color, piece_type, start_pos, piece_covers, FL_CAPTURES | FL_EMPTY);
+        next_pnk_move(color, piece_type, start_pos, piece_covers, FL_CAPTURES | FL_EMPTY, false, false);
         break;
     case bb_pawn:
         piece_covers = BitboardCaptures::PregeneratedCaptures[color][bb_pawn][start_pos];
@@ -558,19 +592,37 @@ uint64_t Bitboard::computed_covered_squares(Color color, uint64_t exclude_pieces
 
             switch (piece_type) {
                 case bb_queen: case bb_bishop: case bb_rook:
-                    next_piece_slide(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, exclude_block_pieces, include_pieces);
+                    next_piece_slide(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, exclude_block_pieces, exclude_pieces, include_pieces, false, false);
                     break;
                 case bb_knight: case bb_king:
-                    next_pnk_move(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES);
+                    next_pnk_move(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, false, false);
                     break;
                 case bb_pawn:
                     piece_covers = BitboardCaptures::PregeneratedCaptures[color][bb_pawn][start_pos];
                     break;
             }
             covered_squares |= piece_covers;
+
+            if (start_pos < 0) {
+                break;
+            }
         }
     }
     return covered_squares;
+}
+
+static void print_mask(uint64_t mask) {
+	for (int i = 0; i < 64; i++) {
+		int sq = (i % 8) + 8 * (7 - (i / 8));
+		if (mask & (1ULL << sq)) {
+			std::cout << "X";
+		} else {
+			std::cout << ".";
+		}
+		if (i % 8 == 7) {
+			std::cout << std::endl;
+		}
+	}
 }
 
 bool Bitboard::is_legal_move(move_t move, Color color) const
@@ -603,17 +655,17 @@ bool Bitboard::is_legal_move(move_t move, Color color) const
 
     switch(piece & PIECE_MASK) {
         case bb_pawn:
-            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, dest_piece == 0 ? FL_EMPTY : FL_CAPTURES);
+            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, dest_piece == 0 ? FL_EMPTY : FL_CAPTURES, false, false);
             break;
         case bb_king: case bb_knight:
-            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL);
+            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL, false, false);
             break;
         case bb_bishop: case bb_rook: case bb_queen:
             next_piece_slide(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL);
             break;
     }
 
-    if (!(dest_squares & (1ULL << dest_pos))) { 
+    if (!(dest_squares & (1ULL << dest_pos))) {
         // not a move
         return false;
     }
@@ -634,8 +686,11 @@ void BitboardMoveIterator::advance(const Bitboard *board)
         inserted_move = -1;
         return;
     }
+
     while (!done) {
         Color color = colored_piece_type > bb_king ? Black : White;
+        uint64_t opponent_king_pos = board->piece_bitmasks[(1 - color) * (bb_king + 1) + bb_king];
+        assert(opponent_king_pos > 0);
         // iterate through all the promotion types
         if (get_promote_type() > 0 && get_promote_type() < bb_queen) {
             set_promote_type(get_promote_type() + 1);
@@ -660,12 +715,16 @@ void BitboardMoveIterator::advance(const Bitboard *board)
             start_pos = get_low_bit(board->piece_bitmasks[index], start_pos+1);
             if (start_pos >= 0) {
                 int actor = start_pos;
+                int flags = in_captures() ? FL_CAPTURES : FL_EMPTY;
+                if (!processed_checks) {
+                    flags = FL_CAPTURES | FL_EMPTY;
+                }
                 switch(colored_piece_type & PIECE_MASK) {
                     case bb_king: case bb_pawn: case bb_knight:
-                        board->next_pnk_move(color, colored_piece_type & PIECE_MASK, actor, dest_squares, in_captures() ? FL_CAPTURES : FL_EMPTY);
+                        board->next_pnk_move(color, colored_piece_type & PIECE_MASK, actor, dest_squares, flags, !processed_checks, processed_checks);
                         break;
                     case bb_bishop: case bb_rook: case bb_queen:
-                        board->next_piece_slide(color, colored_piece_type & PIECE_MASK, actor, dest_squares, in_captures() ? FL_CAPTURES : FL_EMPTY);
+                        board->next_piece_slide(color, colored_piece_type & PIECE_MASK, actor, dest_squares, flags, 0, 0, 0, !processed_checks, processed_checks);
                         break;
                 }
                 start_pos = actor;
@@ -674,10 +733,13 @@ void BitboardMoveIterator::advance(const Bitboard *board)
                 }
             }
             if (start_pos < 0 || dest_squares == 0) {
-                // FIXME should probably start with queen
                 colored_piece_type++;
                 start_pos = -1;
-                if (!in_captures() && (colored_piece_type & PIECE_MASK) > bb_king) {
+                if (!processed_checks && (colored_piece_type & PIECE_MASK) > bb_king) {
+                    processed_checks = true;
+                    colored_piece_type = bb_pawn | (colored_piece_type & 0x8);
+                }
+                else if (!in_captures() && (colored_piece_type & PIECE_MASK) > bb_king) {
                     start_pos = 64;
                     break;
                 } else if ((colored_piece_type & PIECE_MASK) > bb_king) {
@@ -706,6 +768,7 @@ void BitboardMoveIterator::advance(const Bitboard *board)
                 if (covered_squares == 0) {
                     covered_squares = board->computed_covered_squares(colored_piece_type > bb_king ? White : Black, 0, 0, 0);
                 }
+
                 if (board->is_not_illegal_due_to_check(color, colored_piece_type & PIECE_MASK, start_pos, dest_pos, covered_squares)) {
                     break;
                 }
@@ -719,13 +782,13 @@ move_t BitboardMoveIterator::get_move(const Bitboard *board) const
     if (inserted_move != -1) {
         return inserted_move;
     }
-    return board->make_move(start_pos / 8, start_pos % 8, colored_piece_type & PIECE_MASK, dest_pos / 8, dest_pos % 8, board->get_piece(dest_pos / 8, dest_pos % 8), get_promote_type());
+    return board->make_move(start_pos / 8, start_pos % 8, colored_piece_type, dest_pos / 8, dest_pos % 8, board->get_piece(dest_pos / 8, dest_pos % 8), get_promote_type());
 }
 
-void Bitboard::next_piece_slide(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, uint64_t exclude_pieces, uint64_t include_pieces) const
+void Bitboard::next_piece_slide(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, uint64_t exclude_block_pieces, uint64_t exclude_source_pieces, uint64_t include_pieces, bool checks_only, bool exclude_checks) const
 {
-    uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type];
-    uint64_t all_pieces = ((piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)]) & ~exclude_pieces) | include_pieces;
+    uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type] & ~exclude_source_pieces;
+    uint64_t all_pieces = ((piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)]) & ~exclude_block_pieces) | include_pieces;
 
     while ((start_pos = get_low_bit(actors, start_pos)) > -1) {
         uint64_t block_board = 0;
@@ -756,6 +819,31 @@ void Bitboard::next_piece_slide(Color color, piece_t piece_type, int &start_pos,
                 dest_squares |= (all_dest_squares & piece_bitmasks[(1 - color) * (bb_king + 1) + bb_all]);
             }
         }
+        if (checks_only || exclude_checks) {
+            uint64_t check_squares = 0;
+            uint64_t opponent_king_pos = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_king];
+            int opponent_king_square = get_low_bit(opponent_king_pos, 0);
+
+            if (piece_type == bb_rook || piece_type == bb_queen) {
+                block_board = BitArrays::rook_blockboard::data[opponent_king_square];
+                uint64_t mask = block_board & all_pieces;
+                uint64_t magic_index = (lateral_slide_magic_factor[opponent_king_square] * mask);
+                check_squares |= rook_magic[opponent_king_square][magic_index >> (64 - BitArrays::rook_bitboard_bitcount::data[opponent_king_square])];
+            }
+            if (piece_type == bb_bishop || piece_type == bb_queen) {
+                block_board = BitArrays::bishop_blockboard::data[opponent_king_square];
+                uint64_t mask = block_board & all_pieces;
+                uint64_t magic_index = (diag_slide_magic_factor[opponent_king_square] * mask);
+                check_squares |= bishop_magic[opponent_king_square][magic_index >> (64 - BitArrays::bishop_bitboard_bitcount::data[opponent_king_square])];
+            }
+
+            if (checks_only) {
+                dest_squares &= check_squares;
+            } else if (exclude_checks) {
+                dest_squares &= ~check_squares;
+            }
+        }
+
 
         if (dest_squares) {
             break;
