@@ -136,7 +136,7 @@ int main(int argc, char **argv)
             }
             // find a move
             if (movemillisecs == 0) {
-                // use (increment + remaining time / 25) * 90%
+                // use (increment + remaining time / 15) * 90%
                 int increment_millis;
                 int time_millis;
                 if (b.get_side_to_play() == White) {
@@ -146,11 +146,12 @@ int main(int argc, char **argv)
                     increment_millis = std::stoi(options["binc"]);
                     time_millis = std::stoi(options["btime"]);
                 }
-                movemillisecs = (increment_millis + time_millis / 25) * .9;
+                movemillisecs = (increment_millis + time_millis / 15) * .9;
             }
             auto starttime = std::chrono::system_clock::now();
 
             search.time_available = movemillisecs / 1000;
+            std::cout << "time allocation " << search.time_available << std::endl;
             move_t move = search.alphabeta(b, b.get_side_to_play(), searchUpdate);
             auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
             std::cout << "info currmove ";
