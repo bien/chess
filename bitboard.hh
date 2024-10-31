@@ -128,8 +128,6 @@ public:
             castle &= ~(1 << bit);
         }
     }
-	
-	bool operator==(const Bitboard &cmp) const = default;
 
 protected:
     move_t make_move(unsigned char srcrank, unsigned char srcfile,
