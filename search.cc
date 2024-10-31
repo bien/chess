@@ -55,7 +55,7 @@ move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchU
         move_t new_result = mtdf(b, color, new_score, guess, deadline);
         std::cout << "depth " << depth << " ";
         b.print_move(new_result, std::cout);
-        std::cout << " eval=" << score << std::endl;
+        std::cout << " eval=" << new_score << std::endl;
         if (new_result != 0) {
             result = new_result;
             score = new_score;
