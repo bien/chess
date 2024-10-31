@@ -136,7 +136,7 @@ int main(int argc, char **argv)
             }
             // find a move
             if (movemillisecs == 0) {
-                // use (increment + remaining time / 40) * 90%
+                // use (increment + remaining time / 25) * 90%
                 int increment_millis;
                 int time_millis;
                 if (b.get_side_to_play() == White) {
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
                     increment_millis = std::stoi(options["binc"]);
                     time_millis = std::stoi(options["btime"]);
                 }
-                movemillisecs = (increment_millis + time_millis / 40) * .9;
+                movemillisecs = (increment_millis + time_millis / 25) * .9;
             }
             auto starttime = std::chrono::system_clock::now();
 
