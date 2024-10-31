@@ -51,10 +51,11 @@ int main(int argc, char **argv)
     SimpleBitboardEvaluation simple;
     Search search(&simple);
     search.use_transposition_table = true;
-    search.use_mtdf = false;
+    search.use_mtdf = true;
     search.use_quiescent_search = true;
+    search.use_iterative_deepening = true;
     search.use_pruning = true;
-    search.max_depth = 6;
+    search.max_depth = 8;
     search.quiescent_depth = 4;
 
     while (true) {
@@ -72,7 +73,6 @@ int main(int argc, char **argv)
             std::cout << "option name Hash type spin default 1 min 1 max 1024" << std::endl;
             std::cout << "option name depth type spin default 7 min 1 max 1024" << std::endl;
             std::cout << "option name quiescentlimit type spin default 4 min 0 max 1024" << std::endl;
-            std::cout << "option name mtdf type check default off" << std::endl;
             std::cout << "option name debug type check default off" << std::endl;
             std::cout << "uciok" << std::endl;
         }
@@ -87,10 +87,6 @@ int main(int argc, char **argv)
             else if (tokens[2] == "quiescentlimit" && tokens.size() > 4) {
                 search.quiescent_depth = stoi(tokens[4]);
                 std::cout << "set quiescentlimit = " << search.quiescent_depth << std::endl;
-            }
-            else if (tokens[2] == "mtdf" && tokens.size() > 4) {
-                search.use_mtdf = (tokens[4] == "on" || tokens[4] == "true");
-                std::cout << "set mtdf = " << search.use_mtdf << std::endl;
             }
             else if (tokens[2] == "debug" && tokens.size() > 4) {
                 // search_debug = (tokens[4] == "on" || tokens[4] == "true");
@@ -119,7 +115,7 @@ int main(int argc, char **argv)
         else if (line.rfind("go", 0) == 0) {
             std::map<std::string, std::string> options;
             std::string key, value;
-            int movemillisecs = 10000;
+            int movemillisecs = 0;
             int pos = line.find(' ', 1);
             while (pos != std::string::npos) {
                 int endpos = line.find(' ', pos + 1);
@@ -132,30 +128,40 @@ int main(int argc, char **argv)
                     pos = line.length();
                 }
                 value = line.substr(endpos + 1, pos - endpos + 1);
-                logging << "**set option" << key << " = " << value << "***" << std::endl;
+                logging << "**set option " << key << " = " << value << "***" << std::endl;
                 options[key] = value;
                 if (key == "movetime") {
                     movemillisecs = std::stoi(value);
                 }
             }
             // find a move
-
+            if (movemillisecs == 0) {
+                // use (increment + remaining time / 40) * 90%
+                int increment_millis;
+                int time_millis;
+                if (b.get_side_to_play() == White) {
+                    increment_millis = std::stoi(options["winc"]);
+                    time_millis = std::stoi(options["wtime"]);
+                } else {
+                    increment_millis = std::stoi(options["binc"]);
+                    time_millis = std::stoi(options["btime"]);
+                }
+                movemillisecs = (increment_millis + time_millis / 40) * .9;
+            }
             auto starttime = std::chrono::system_clock::now();
-            auto deadline = starttime + std::chrono::milliseconds(movemillisecs);
-            while (std::chrono::system_clock::now() < deadline) {
-                move_t move = search.alphabeta(b, b.get_side_to_play(), searchUpdate);
-                auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
-            	std::cout << "info currmove ";
-                print_move_uci(move, std::cout) << " currmovenumber " << b.get_move_count() << std::endl;
-                std::cout << "info depth " << search.max_depth
+
+            search.time_available = movemillisecs / 1000;
+            move_t move = search.alphabeta(b, b.get_side_to_play(), searchUpdate);
+            auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
+            std::cout << "info currmove ";
+            print_move_uci(move, std::cout) << " currmovenumber " << b.get_move_count() << std::endl;
+            std::cout << "info depth " << search.max_depth
                     << " score cp " << search.score
                     << " time " << elapsed_usecs / 1000
                     << " nodes " << search.nodecount
                     << " nps " << static_cast<uint64_t>(search.nodecount) * 1000 * 1000 / elapsed_usecs << std::endl;
-                std::cout << "bestmove ";
-                print_move_uci(move, std::cout) << std::endl;
-                break;
-            }
+            std::cout << "bestmove ";
+            print_move_uci(move, std::cout) << std::endl;
         }
         else if (line.rfind("quit", 0) == 0) {
             break;

@@ -41,10 +41,40 @@ move_t Search::minimax(Fenboard &b, Color color)
     return std::get<0>(result);
 }
 
+move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s)
+{
+    time_t deadline = time(NULL) + time_available;
+    move_t result;
+    score = 0;
+    int guess = eval->evaluate(b);
+    int old_max_depth = max_depth;
+    int depth = 2;
+    while (time(NULL) < deadline) {
+        max_depth = depth;
+        int new_score = 0;
+        move_t new_result = mtdf(b, color, new_score, guess, deadline);
+        std::cout << "depth " << depth << " ";
+        b.print_move(new_result, std::cout);
+        std::cout << " eval=" << score << std::endl;
+        if (new_result != 0) {
+            result = new_result;
+            score = new_score;
+            s(result, max_depth, nodecount, score);
+            guess = score;
+        }
+        depth += 1;
+    }
+    max_depth = old_max_depth;
+    return result;
+}
+
 move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 {
     nodecount = 0;
     move_t result;
+    if (use_mtdf && use_iterative_deepening && time_available > 0) {
+        return timed_iterative_deepening(b, color, s);
+    }
     if (use_mtdf) {
         int guess = 0;
         if (!use_iterative_deepening || max_depth < 2) {
@@ -67,7 +97,7 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 }
 
 Search::Search(const Evaluation *eval, int transposition_table_size)
-    : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true), use_quiescent_search(false), quiescent_depth(2), use_killer_move(true)
+    : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true), use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0)
 
 {
     srandom(clock());
@@ -80,7 +110,7 @@ void Search::reset()
     transposition_table.clear();
 }
 
-move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess)
+move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline)
 {
     score = guess;
     int upperbound = SCORE_MAX;
@@ -92,6 +122,9 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess)
 
     do {
         int beta;
+        if (deadline > 0 && time(NULL) > deadline) {
+            return 0;
+        }
         if (score == lowerbound) {
             beta = score + 1;
         } else {

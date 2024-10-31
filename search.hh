@@ -116,12 +116,14 @@ struct Search {
     int quiescent_depth;
     bool use_killer_move;
 
+    int time_available;
     int max_depth;
 
 private:
     SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
-    move_t mtdf(Fenboard &b, Color color, int &score, int guess);
+    move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0);
+    move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
 };
 
 #endif
