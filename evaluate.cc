@@ -383,9 +383,9 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
     features[12] = rhopenfile;
     features[13] = rfopenfile;
     features[14] = piece_scores[bb_queen];
-    features[15] = count_bits(b.piece_bitmasks[bb_all]) + count_bits(b.piece_bitmasks[bb_all + bb_king + 1]);
-    features[16] = count_bits(b.computed_covered_squares(White, 0, 0, 0)) - count_bits(b.computed_covered_squares(Black, 0, 0, 0));
-    features[17] = count_bits(b.computed_covered_squares(White, 0, 0, 0) & 0x00003c3c3c3c0000) - count_bits(b.computed_covered_squares(Black, 0, 0, 0) & 0x00003c3c3c3c0000);
+    features[15] = 0;
+    features[16] = 0;
+    features[17] = 0;
 }
 
 
