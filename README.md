@@ -26,3 +26,6 @@ Puzzles solved: 3362/3400 using 8752725 nodes at 160208 nodes/sec or 62.2328 puz
 
 02/28/22: (bitboard)
 Puzzles solved: 3911/4000 using 49677511 nodes at 630034 nodes/sec or 50.7299 puzzles/sec
+
+10/31/24:
+Puzzles solved: 3913/4000 using 20400276 nodes at 693416 nodes/sec or 135.962 puzzles/sec
