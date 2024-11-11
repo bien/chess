@@ -1,6 +1,7 @@
 #include "evaluate.hh"
 #include "move.hh"
 #include <algorithm>
+#include <iostream>
 
 unsigned distance_from_center(int rank, int file);
 unsigned diagonal_moves(int rank, int file);
@@ -284,6 +285,7 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
     int rhopenfile = 0;
     int rfopenfile = 0;
     int start_pos = 0;
+
     while ((start_pos = get_low_bit(b.piece_bitmasks[bb_pawn], start_pos)) > -1) {
         if (white_pawns[start_pos % 8] > 0) {
             dblpawn++;
@@ -388,6 +390,23 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
     features[17] = 0;
 }
 
+bool SimpleEvaluation::endgame(const Fenboard &b, int &eval) const {
+    int pieces = count_bits(b.piece_bitmasks[bb_all] | b.piece_bitmasks[bb_all + bb_king + 1]);
+
+    if (pieces < 4) {
+        // K/K is draw
+        if (pieces == 2) {
+            eval = 0;
+            return true;
+        }
+        // KB/K and KN/K are draws
+        else if (count_bits(b.piece_bitmasks[bb_knight] | b.piece_bitmasks[bb_knight + bb_king + 1] | b.piece_bitmasks[bb_bishop] | b.piece_bitmasks[bb_bishop + bb_king + 1]) >= 1) {
+            eval = 0;
+            return true;
+        }
+    }
+    return false;
+}
 
 static int weights[] = {QCT_SCORE, RCT_SCORE, BCT_SCORE, NCT_SCORE, PCT_SCORE,
     RPCT_SCORE, PPAWN_SCORE, ISOPAWN_SCORE, DBLPAWN_SCORE, NSCORE_SCORE,
@@ -402,5 +421,6 @@ int SimpleBitboardEvaluation::evaluate(const Fenboard &b) const {
     for (int i = 0; i < NUM_FEATURES; i++) {
         result += features[i] * weights[i];
     }
+
     return result;
 }

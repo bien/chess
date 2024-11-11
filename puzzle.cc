@@ -64,7 +64,6 @@ int main(int argc, char **argv)
 
     SimpleBitboardEvaluation simple;
     Search search(&simple);
-    search.use_transposition_table = true;
     search.use_mtdf = true;
     search.use_quiescent_search = true;
     search.use_pruning = true;
@@ -79,7 +78,7 @@ int main(int argc, char **argv)
             bool result = false;
             int puzzle_nodecount = 0;
             clock_t start = clock();
-            int depth = 6;
+            int depth = 8;
             if (game_metadata["White"] == "Mate in one") {
                 depth = 2;
             } else if (game_metadata["White"] == "Mate in two") {

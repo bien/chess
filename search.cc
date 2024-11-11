@@ -52,10 +52,16 @@ move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchU
     while (time(NULL) < deadline && depth < old_max_depth) {
         max_depth = depth;
         int new_score = 0;
-        move_t new_result = mtdf(b, color, new_score, guess, deadline);
+        int mtdf_deadline = deadline;
+        if (soft_deadline) {
+            mtdf_deadline = 0;
+        }
+        move_t new_result = mtdf(b, color, new_score, guess, mtdf_deadline);
+        /*
         std::cout << "depth " << depth << " ";
         b.print_move(new_result, std::cout);
-        std::cout << " eval=" << new_score << std::endl;
+        std::cout << " eval=" << new_score << " timeused=" << (time_available - deadline + time(NULL)) << std::endl;
+        */
         if (new_result != 0) {
             result = new_result;
             score = new_score;
@@ -97,7 +103,7 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 }
 
 Search::Search(const Evaluation *eval, int transposition_table_size)
-    : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true), use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0)
+    : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true), use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
 
 {
     srandom(clock());
@@ -169,7 +175,12 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
     else if (beta < VERY_BAD + depth) {
         return std::tuple<move_t, move_t, int>(-1, -1, VERY_BAD + depth);
     }
-
+    
+    // check for endgames
+    int endgame_eval;
+    if (eval->endgame(b, endgame_eval)) {
+        return std::tuple<move_t, move_t, int>(-1, -1, endgame_eval);
+    }
 
     // check transposition table
     if (use_transposition_table) {

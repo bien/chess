@@ -5,6 +5,7 @@
 void pgn_move_choices(std::istream &input, std::map<std::string, std::string> &metadata, std::map<std::pair<int, bool>, std::vector<std::string> > &move_choices)
 {
     std::string line;
+    int moveno = 0;
     while (!input.eof()) {
         char buf[256];
         input.getline(buf, sizeof(buf), '\n');
@@ -42,7 +43,14 @@ void pgn_move_choices(std::istream &input, std::map<std::string, std::string> &m
                     endmove = line.length();
                     done = true;
                 }
-                int moveno = atoi(line.substr(pos, dot - pos).c_str());
+                if (line.substr(pos, dot - pos).find_first_not_of("0123456789") == std::string::npos) {
+                    int new_moveno = atoi(line.substr(pos, dot - pos).c_str());
+                    if (new_moveno != moveno + 1) {
+                        // confused
+                        break;
+                    }
+                    moveno = new_moveno;
+                }
                 if (line[dot+1] == '.') {
                     // black
                     while (line[++dot] == '.')

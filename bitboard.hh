@@ -91,6 +91,7 @@ class Bitboard
 {
     friend class BitboardMoveIterator;
     friend class SimpleBitboardEvaluation;
+    friend class SimpleEvaluation;
 public:
     Bitboard();
 

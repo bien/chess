@@ -8,6 +8,7 @@ class SimpleEvaluation : public Evaluation {
 public:
     virtual int evaluate(const Fenboard &b) const;
     virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score) const;
+    bool endgame(const Fenboard &b, int &eval) const;
 
 protected:
     int compute_scores(int qct, int bct, int rct, int nct, int pct, int rpct, int ppawn,

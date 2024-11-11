@@ -135,6 +135,7 @@ int main(int argc, char **argv)
                 }
             }
             // find a move
+            int time_millis = 30000;
             if (movemillisecs == 0) {
                 // use (increment + remaining time / 15) * 90%
                 int increment_millis;
@@ -151,6 +152,7 @@ int main(int argc, char **argv)
             auto starttime = std::chrono::system_clock::now();
 
             search.time_available = movemillisecs / 1000;
+            search.soft_deadline = time_millis > 30000;
             std::cout << "time allocation " << search.time_available << std::endl;
             move_t move = search.alphabeta(b, b.get_side_to_play(), searchUpdate);
             auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
