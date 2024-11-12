@@ -18,6 +18,7 @@ class Evaluation {
 public:
     virtual int evaluate(const Fenboard &) const = 0;
     virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score) const;
+    virtual bool endgame(const Fenboard &b, int &eval) const = 0;
 };
 
 template <typename Key, typename Value, template <int Size> class Hasher, int Size>
@@ -118,6 +119,7 @@ struct Search {
 
     int time_available;
     int max_depth;
+    bool soft_deadline;
 
 private:
     SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
