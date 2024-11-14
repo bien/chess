@@ -57,11 +57,11 @@ move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchU
             mtdf_deadline = 0;
         }
         move_t new_result = mtdf(b, color, new_score, guess, mtdf_deadline);
-        /*
+
         std::cout << "depth " << depth << " ";
         b.print_move(new_result, std::cout);
         std::cout << " eval=" << new_score << " timeused=" << (time_available - deadline + time(NULL)) << std::endl;
-        */
+
         if (new_result != 0) {
             result = new_result;
             score = new_score;
@@ -136,7 +136,7 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t dead
         } else {
             beta = score;
         }
-        std::tuple<move_t, move_t, int> result = alphabeta_with_memory(b, 0, color, beta - 1, beta);
+        std::tuple<move_t, move_t, int> result = alphabeta_with_memory(b, 0, color, beta - 1, beta, move);
         if (std::get<0>(result) != -1) {
             move = std::get<0>(result);
         }
@@ -163,19 +163,14 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
     TranspositionEntry bounds;
     bounds.depth = max_depth - depth;
+    int best_score = 31415;
+    move_t best_response = -1;
+    move_t best_move = -1;
+    int original_alpha = alpha;
+    int original_beta = beta;
 
     int is_white = color == White ? 1 : -1;
 
-
-    // cutoff early if alpha or beta is impossibly high (ie if there is a checkmate higher in the tree)
-
-    if (alpha > VERY_GOOD - depth) {
-        return std::tuple<move_t, move_t, int>(-1, -1, VERY_GOOD - depth);
-    }
-    else if (beta < VERY_BAD + depth) {
-        return std::tuple<move_t, move_t, int>(-1, -1, VERY_BAD + depth);
-    }
-    
     // check for endgames
     int endgame_eval;
     if (eval->endgame(b, endgame_eval)) {
@@ -201,107 +196,63 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
     }
 
     if ((!use_quiescent_search && depth == max_depth) || (use_quiescent_search && depth == max_depth + quiescent_depth)) {
-        return std::tuple<move_t, move_t, int>(0, 0, eval->evaluate(b));
-    }
+        best_score = eval->evaluate(b);
+    } else {
 
-    int original_alpha = alpha;
-    int original_beta = beta;
-    BitboardMoveIterator iter = b.get_legal_moves(color);
+        BitboardMoveIterator iter = b.get_legal_moves(color);
 
-    if (!b.has_more_moves(iter)) {
-
-        if (search_debug) {
-            for (int i = 0; i < depth * 2; i++) {
-                std::cout << " ";
-            }
-            std::cout << (depth / 2 + 1) << ".";
-            if (depth % 2 == 1) {
-                std::cout << "..";
-            }
-
-            for (int i = 0; i < 10 - depth * 2; i++) {
-                std::cout << " ";
-            }
-            std::cout << " end ";
+        if (!b.has_more_moves(iter)) {
             if (b.king_in_check(color)) {
-                std::cout << is_white * (VERY_BAD + depth) << std::endl;
+                return std::tuple<move_t, move_t, int>(0, 0, is_white * (VERY_BAD + depth));
             } else {
-                std::cout << 0 << std::endl;
+                return std::tuple<move_t, move_t, int>(0, 0, 0);
             }
         }
 
-        if (b.king_in_check(color)) {
-            return std::tuple<move_t, move_t, int>(0, 0, is_white * (VERY_BAD + depth));
-        } else {
-            return std::tuple<move_t, move_t, int>(0, 0, 0);
-        }
-    }
 
-    move_t best_move = 0;
-    move_t best_response = 0;
-    int best_score = 0;
-
-    bool first = true;
+        bool first = true;
 
 
-    int currentnodescore;
-    bool evaluated_nodescore = false;
-    int tie_count = 1;
+        int currentnodescore;
+        bool evaluated_nodescore = false;
+        int tie_count = 1;
 
-    while (b.has_more_moves(iter)) {
-        int subtree_score;
-        move_t subresponse = 0;
-        move_t submove = 0;
-        move_t move = b.get_next_move(iter);
-        bool cutoff;
+        while (b.has_more_moves(iter)) {
+            int subtree_score;
+            move_t subresponse = 0;
+            move_t submove = 0;
+            move_t move = b.get_next_move(iter);
+            bool cutoff;
 
-        if (use_quiescent_search && get_captured_piece(move, White) != EMPTY) {
-            cutoff = (depth >= max_depth + quiescent_depth - 1);
-        } else {
-            cutoff = (depth >= max_depth - 1);
-        }
-
-        if (search_debug) {
-            for (int i = 0; i < depth * 2; i++) {
-                std::cout << " ";
-            }
-            std::cout << (depth / 2 + 1) << ".";
-            if (depth % 2 == 1) {
-                std::cout << "..";
-            }
-            b.print_move(move, std::cout);
-            std::cout << " " << alpha << " " << beta;
-        }
-
-
-        if (cutoff) {
-            if (!evaluated_nodescore) {
-                currentnodescore = eval->evaluate(b);
-                evaluated_nodescore = true;
+            if (use_quiescent_search && get_captured_piece(move, White) != EMPTY) {
+                cutoff = (depth >= max_depth + quiescent_depth - 1);
+            } else {
+                cutoff = (depth >= max_depth - 1);
             }
 
-            subtree_score = eval->delta_evaluate(b, move, currentnodescore);
-            if (search_debug) {
-                std::cout << " d= " << subtree_score;
-            }
+            if (cutoff) {
+                if (!evaluated_nodescore) {
+                    currentnodescore = eval->evaluate(b);
+                    evaluated_nodescore = true;
+                }
 
-        } else {
-            if (search_debug) {
-                std::cout << std::endl;
+                subtree_score = eval->delta_evaluate(b, move, currentnodescore);
+
+            } else {
+                b.apply_move(move);
+                move_t killer_move = 0;
+
+                if (use_killer_move && best_response != 0 && b.is_legal_move(best_response, b.get_side_to_play())) {
+                    killer_move = best_response;
+                }
+
+                std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
+                subtree_score = std::get<2>(child);
+                submove = std::get<0>(child);
+                subresponse = std::get<1>(child);
+                b.undo_move(move);
             }
-            b.apply_move(move);
-            move_t killer_move = 0;
-            
-            if (use_killer_move && best_response != 0 && b.is_legal_move(best_response, b.get_side_to_play())) {
-                killer_move = best_response;
-            }
-            
-            std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
-            subtree_score = std::get<2>(child);
-            submove = std::get<0>(child);
-            subresponse = std::get<1>(child);
-            b.undo_move(move);
-            if (search_debug) {
+            if (search_debug >= depth + 1) {
                 for (int i = 0; i < depth * 2; i++) {
                     std::cout << " ";
                 }
@@ -309,91 +260,83 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 if (depth % 2 == 1) {
                     std::cout << "..";
                 }
-                b.print_move(move, std::cout);
+                print_move_uci(move, std::cout) << " -> ";
+                print_move_uci(submove, std::cout) << " = " << subtree_score;
+                if (!first) {
+                    std::cout << " best was ";
+                    print_move_uci(best_move, std::cout) << " = " << best_score;
+                }
             }
-        }
 
-        if (search_debug) {
-            std::cout << " = " << subtree_score;
-        }
-
-        if (first || (color == White && subtree_score > best_score) || (color == Black && subtree_score < best_score)) {
-            // ignore pruned branches
-            best_score = subtree_score;
-            if (submove != -1) {
+            if (first || (color == White && subtree_score > best_score) || (color == Black && subtree_score < best_score)) {
+                best_score = subtree_score;
                 best_move = move;
                 best_response = submove;
-            }
-            tie_count = 1;
+                tie_count = 1;
 
-            if (search_debug) {
-                std::cout << "*";
-            }
-        // make things slightly less predictable
-        } else if (submove != -1 && subtree_score == best_score) {
-            tie_count++;
-            if ((random() % 101) <= (101 / tie_count)) {
-                best_move = move;
-            }
-        }
-        first = false;
-
-        if (use_pruning) {
-            if (color == White) {
-                alpha = std::max(alpha, best_score);
-            }
-            else {
-                beta = std::min(beta, best_score);
-            }
-            if (alpha > beta) {
-                // prune this branch
-                if (search_debug) {
-                    std::cout << "~" << std::endl;
+                if (use_pruning) {
+                    if (color == White) {
+                        alpha = std::max(alpha, best_score);
+                    }
+                    else {
+                        beta = std::min(beta, best_score);
+                    }
+                    if (alpha > beta) {
+                        // prune this branch
+                        if (search_debug >= depth + 1) {
+                            std::cout << "!" << std::endl;
+                        }
+                        break;
+                    }
                 }
 
-                best_move = -1;
-                break;
-            }
-        }
-        if (search_debug) {
-            std::cout << " -> ";
-            b.print_move(best_move, std::cout);
-            std::cout << " -> ";
-            b.print_move(best_response, std::cout);
-            std::cout << std::endl;
-        }
+                if (search_debug >= depth + 1) {
+                    std::cout << "*";
+                }
 
+            // make things slightly less predictable
+            } else if (subtree_score == best_score) {
+                tie_count++;
+                if ((random() % 101) <= (101 / tie_count)) {
+                    best_score = subtree_score;
+                    best_move = move;
+                    best_response = submove;
+                }
+                if (search_debug >= depth + 1) {
+                    std::cout << "*";
+                }
+            }
+            first = false;
+            if (search_debug >= depth + 1) {
+                std::cout << std::endl;
+            }
+
+        }
+    }
+
+    if (search_debug >= depth + 1) {
+        std::cout << "depth=" << depth << " move=";
+        print_move_uci(best_move, std::cout) << " score=" << best_score << std::endl;
     }
 
     // write to transposition table
     if (use_transposition_table) {
-        if (use_transposition_table && bounds.depth == max_depth - depth) {
-            bool is_dirty = true;
-            if (best_score <= original_alpha) {
-                bounds.upper = best_score;
-            } else if (best_score > original_alpha && best_score < original_beta) {
-                bounds.lower = best_score;
-                bounds.upper = best_score;
-                bounds.move = best_move;
-                bounds.response = best_response;
-            } else if (best_score >= original_beta) {
-                bounds.lower = best_score;
-            } else {
-                is_dirty = false;
-            }
-            if (is_dirty) {
-                transposition_table[b.get_hash()] = bounds;
-            }
-        }
-    }
-/*
-    if (best_move == 0) {
-        if (evaluated_nodescore) {
-            best_score = currentnodescore;
+        bool is_dirty = true;
+        if (best_score <= original_alpha) {
+            bounds.upper = best_score;
+        } else if (best_score > original_alpha && best_score < original_beta) {
+            bounds.lower = best_score;
+            bounds.upper = best_score;
+            bounds.move = best_move;
+            bounds.response = best_response;
+        } else if (best_score >= original_beta) {
+            bounds.lower = best_score;
         } else {
-            best_score = eval->evaluate(b);
+            is_dirty = false;
+        }
+        if (is_dirty) {
+            transposition_table[b.get_hash()] = bounds;
         }
     }
-*/
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);
 }
