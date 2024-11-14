@@ -2,68 +2,157 @@
 #include <iostream>
 #include <stdlib.h>
 
-void pgn_move_choices(std::istream &input, std::map<std::string, std::string> &metadata, std::map<std::pair<int, bool>, std::vector<std::string> > &move_choices)
+void read_annotation(const std::string &buf, int start_pos, int end_pos, std::string &eval, std::string &clock);
+bool is_result(const std::string &candidate_move);
+
+void skip_whitespace(const std::string &line, int &pos) {
+    while (pos < line.length() && (line[pos] == ' ' || line[pos] == '\n' || line[pos] == '\r')) {
+        pos++;
+    }
+}
+
+bool read_move_annot(const std::string &line, int &start_pos, move_annot &move)
+{
+    int start_move, end_move;
+
+    int pos = line.find('.', start_pos);
+
+    if (pos < 0 || line.substr(start_pos, pos - start_pos).find_first_of("0123456789") != 0) {
+        pos = start_pos;
+        move.moveno = 0;
+    } else {
+        move.moveno = atoi(line.substr(start_pos, pos - start_pos).c_str());
+        move.is_white = (line[++pos] != '.');
+    }
+
+    // skip any spaces or extra periods
+    while (pos < line.length() && (line[pos] == ' ' || line[pos] == '.'))
+        pos++;
+    start_move = pos;
+    end_move = line.find(' ', pos);
+    if (start_move == -1 || end_move == -1) {
+        return false;
+    }
+    if (line[end_move-1] == ')') {
+        end_move--;
+        pos--;
+    }
+    pos = end_move;
+    move.move = line.substr(start_move, end_move - start_move);
+    // results like 1/2-1/2 or random punctuation aren't moves
+    if (is_result(move.move) || (move.move.find_first_of("0123456789Oabcdefgh") == std::string::npos)) {
+        return false;
+    }
+    skip_whitespace(line, pos);
+
+    // lichess move annotations: eg. 1. e4 { [%eval 0.2] [%clk 0:05:00] } 1... e5 { [%eval 0.17] [%clk 0:05:00] }
+    if (line[pos] == '{') {
+        int end_annotation = line.find('}', pos);
+        if (end_annotation > pos) {
+            read_annotation(line, pos, end_annotation, move.eval, move.clock);
+            pos = end_annotation + 1;
+        } else {
+            std::cerr << "Unterminated move metadata around " << line.substr(pos - 5, 10) << std::endl;
+            abort();
+        }
+    }
+    start_pos = pos;
+    return true;
+}
+
+void clean_line(std::vector<move_annot> &moveline) {
+    // removes doubled moves
+    move_annot *min_move;
+    bool is_first = true;
+
+    for (auto iter = moveline.rbegin(); iter != moveline.rend(); iter++) {
+        if (is_first) {
+            min_move = &moveline.back();
+            is_first = false;
+        } else {
+            // case one: moving backwards
+            if (iter->moveno < min_move->moveno || (iter->moveno == min_move->moveno && iter->is_white && !min_move->is_white)) {
+                min_move = &*iter;
+            }
+            // case two: same or forwards -> omit
+            else {
+                // stupid c++ hack because moveline.erase(iter) doesn't work for reverse iter
+                moveline.erase((iter+1).base());
+            }
+        }
+    }
+}
+
+void read_pgn_options(std::istream &input, std::map<std::string, std::string> &metadata, movelist_tree &movelist)
 {
     std::string line;
-    int moveno = 0;
-    while (!input.eof()) {
-        char buf[256];
-        input.getline(buf, sizeof(buf), '\n');
-        line = buf;
-        if (line.size() > 0 && line[line.length() - 1] == '\r') {
+    int pos = 0;
+    while (!input.eof() && !input.fail()) {
+        std::string buf;
+        std::getline(input, buf, '\n');
+        line.append(buf);
+        if (line[line.length() - 1] == '\r') {
             line = line.substr(0, line.length() - 1);
         }
-        if (line.size() > 0 && line[0] == '[') {
-            if (!move_choices.empty()) {
+        if (line[0] == '[') {
+            if (!movelist.empty()) {
                 break;
             }
             int spacepos = line.find(' ');
             int lastquote = line.rfind('"');
             metadata[line.substr(1, spacepos-1)] = line.substr(spacepos+2, lastquote-spacepos-2);
+            // don't need this content anymore
+            line.clear();
         }
-        else if (line == "" && !move_choices.empty()) {
+        else if (buf.size() <= 1 && line.size() > 2) {
+            // newline ends the game
             break;
         }
-        else if (line != "") {
-            int pos = -1;
-            int space, endmove, dot;
-            bool done = false;
-            while (!done && line.find('.', pos+1) != std::string::npos) {
-                dot = line.find('.', pos+1);
-                while (pos < 0 || line[pos] < '0' || line[pos] > '9') {
-                    pos++;
-                }
-                space = line.find(' ', dot+1);
-                if (space == std::string::npos) {
-                    break;
-                }
-                endmove = line.find(' ', space+1);
-
-                if (endmove == std::string::npos || endmove > line.length()) {
-                    endmove = line.length();
-                    done = true;
-                }
-                if (line.substr(pos, dot - pos).find_first_not_of("0123456789") == std::string::npos) {
-                    int new_moveno = atoi(line.substr(pos, dot - pos).c_str());
-                    if (new_moveno != moveno + 1) {
-                        // confused
-                        break;
-                    }
-                    moveno = new_moveno;
-                }
-                if (line[dot+1] == '.') {
-                    // black
-                    while (line[++dot] == '.')
-                        ;
-                    move_choices[std::pair<int, bool>(moveno, false)].push_back(line.substr(dot+1, space - dot - 1));
-                } else {
-                    // white+black
-                    move_choices[std::pair<int, bool>(moveno, true)].push_back(line.substr(dot+1, space - dot - 1));
-                    move_choices[std::pair<int, bool>(moveno, false)].push_back(line.substr(space+1, endmove-space-1));
-                }
-                pos = endmove + 1;
-            }
+        else if (line.size() > 0) {
+            // process actual moves
+            line.append(" ");
         }
+    }
+    if (metadata.empty() && line.size() > 2) {
+        std::cerr << "Error: no pgn header, are you sure this is pgn? " << std::endl;
+        abort();
+    }
+
+    movelist_tree linestack;
+    linestack.push_back(std::vector<move_annot>());
+
+    while (pos < line.size() && pos >= 0) {
+        // 1. e4 g6 2. Ne2 Bg7 3.
+        move_annot move;
+
+        skip_whitespace(line, pos);
+
+        if (line[pos] == '(') {
+            linestack.push_back(linestack.back());
+            pos++;
+        }
+        else if (line[pos] == ')') {
+            clean_line(linestack.back());
+            movelist.push_back(linestack.back());
+            linestack.pop_back();
+            pos++;
+        }
+        else {
+            if (!read_move_annot(line, pos, move)) {
+                break;
+            }
+            if (move.moveno == 0 && linestack.back().back().is_white) {
+                // guess moveno matches previous move since often omitted
+                move.moveno = linestack.back().back().moveno;
+                move.is_white = false;
+            }
+            linestack.back().push_back(move);
+        }
+
+    }
+
+    for (auto iter = linestack.begin(); iter != linestack.end(); iter++) {
+        movelist.push_back(*iter);
     }
 }
 

@@ -1,4 +1,4 @@
-CXXFLAGS = -Wall -g -std=c++14 -march=native -O3
+CXXFLAGS = -Wall -g -std=c++14 -O3 -march=native
 SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc endgames.cc uciinterface.cc
 
 all: uciinterface test
@@ -26,6 +26,9 @@ testexe: bitboard.o fenboard.o test.o move.o search.o evaluate.o pgn.o logicalbo
 	$(CXX) $^ -o $@
 
 pgn2training: bitboard.o fenboard.o pgn2training.o move.o pgn.o logicalboard.o
+	$(CXX) $^ -o $@
+	
+pgnreader: pgnreader.o pgn.o bitboard.o fenboard.o move.o logicalboard.o
 	$(CXX) $^ -o $@
 
 endgames: bitboard.o fenboard.o endgames.o move.o logicalboard.o

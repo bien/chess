@@ -8,7 +8,11 @@ struct move_annot {
     std::string move;
     std::string clock;
     std::string eval;
+    int moveno;
+    bool is_white;
 };
 
-void pgn_move_choices(std::istream &input, std::map<std::string, std::string> &metadata, std::map<std::pair<int, bool>, std::vector<std::string> > &move_choices);
+typedef std::vector<std::vector<move_annot> > movelist_tree;
+
+void read_pgn_options(std::istream &input, std::map<std::string, std::string> &metadata, movelist_tree &movelist);
 void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata, std::vector<std::pair<move_annot, move_annot> > &movelist);

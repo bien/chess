@@ -30,13 +30,12 @@ bool expect_move(Search &search, Fenboard &b, int depth, const std::vector<std::
     return false;
 }
 
-void get_first_move_choices(const std::map<std::pair<int, bool>, std::vector<std::string> > &move_choices, std::vector<std::string> &first_moves)
+void get_first_move_choices(const movelist_tree &move_choices, std::vector<std::string> &first_moves)
 {
-    int best_move = 1000;
+    int target_moveno = move_choices.front().front().moveno;
     for (auto iter = move_choices.begin(); iter != move_choices.end(); iter++) {
-        if (iter->first.second == true && iter->first.first < best_move) {
-            first_moves = iter->second;
-            best_move = iter->first.first;
+        if (iter->front().is_white && iter->front().moveno == target_moveno) {
+            first_moves.push_back(iter->front().move);
         }
     }
 }
@@ -49,7 +48,7 @@ int main(int argc, char **argv)
     }
     std::ifstream puzzles(argv[1]);
     std::map<std::string, std::string> game_metadata;
-    std::map<std::pair<int, bool>, std::vector<std::string> > move_choices;
+    movelist_tree move_choices;
     std::vector<std::string> first_move;
     Fenboard b;
     int passed = 0;
@@ -71,8 +70,9 @@ int main(int argc, char **argv)
     while (!puzzles.eof()) {
         move_choices.clear();
         game_metadata.clear();
+        first_move.clear();
         search.reset();
-        pgn_move_choices(puzzles, game_metadata, move_choices);
+        read_pgn_options(puzzles, game_metadata, move_choices);
         if (game_metadata["FEN"] != "" && game_metadata["Black"] == "White to move") {
             b.set_fen(game_metadata["FEN"]);
             bool result = false;
@@ -85,6 +85,8 @@ int main(int argc, char **argv)
                 depth = 4;
             } else if (game_metadata["White"] == "Mate in three") {
                 depth = 6;
+            } else if (game_metadata["White"] == "Simple endgames") {
+                depth = 10;
             }
             get_first_move_choices(move_choices, first_move);
             result = expect_move(search, b, depth, first_move, puzzle_nodecount);
