@@ -318,6 +318,7 @@ void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, ui
             else if ((piece_type & PIECE_MASK) == bb_pawn) {
                 dest_squares &= all_pieces;
             }
+
             // except enpassant where "capture" isn't in the destination square
             int ep_rank = color == White ? 4 : 3;
             if (enpassant_file >= 0 && (piece_type & PIECE_MASK) == bb_pawn && ep_rank == start_pos / 8 && ((enpassant_file + 1) == start_pos % 8 || (enpassant_file - 1) == start_pos % 8)) {
@@ -652,6 +653,8 @@ bool Bitboard::is_legal_move(move_t move, Color color) const
         // can't capture our own piece
         return false;
     }
+    // save this value because next_pnk_move might advance to next piece
+    int original_actor = actor;
 
     switch(piece & PIECE_MASK) {
         case bb_pawn:
@@ -665,7 +668,7 @@ bool Bitboard::is_legal_move(move_t move, Color color) const
             break;
     }
 
-    if (!(dest_squares & (1ULL << dest_pos))) {
+    if (original_actor != actor || !(dest_squares & (1ULL << dest_pos))) {
         // not a move
         return false;
     }
