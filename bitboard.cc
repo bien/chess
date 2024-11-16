@@ -9,8 +9,6 @@
 #include <cassert>
 #include <type_traits>
 
-// for debugging
-static void print_mask(uint64_t mask);
 
 constexpr int sign(int value) {
     if (value > 0) {
@@ -610,20 +608,6 @@ uint64_t Bitboard::computed_covered_squares(Color color, uint64_t exclude_pieces
         }
     }
     return covered_squares;
-}
-
-static void print_mask(uint64_t mask) {
-	for (int i = 0; i < 64; i++) {
-		int sq = (i % 8) + 8 * (7 - (i / 8));
-		if (mask & (1ULL << sq)) {
-			std::cout << "X";
-		} else {
-			std::cout << ".";
-		}
-		if (i % 8 == 7) {
-			std::cout << std::endl;
-		}
-	}
 }
 
 bool Bitboard::is_legal_move(move_t move, Color color) const
