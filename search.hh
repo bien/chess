@@ -121,10 +121,15 @@ struct Search {
     int max_depth;
     bool soft_deadline;
 
+    int transposition_checks;
+    int transposition_partial_hits;
+    int transposition_full_hits;
+    int transposition_insufficient_depth;
+
 private:
     SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
-    move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0);
+    move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
 };
 

@@ -98,6 +98,7 @@ public:
     piece_t get_piece(unsigned char rank, unsigned char file) const;
     void set_piece(unsigned char rank, unsigned char file, piece_t);
     bool is_legal_move(move_t move, Color color) const;
+    bool operator==(const Bitboard&) const = default;
 
     BitboardMoveIterator get_legal_moves(Color color) const {
         BitboardMoveIterator iter(color);

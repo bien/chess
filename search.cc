@@ -56,11 +56,12 @@ move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchU
         if (soft_deadline) {
             mtdf_deadline = 0;
         }
-        move_t new_result = mtdf(b, color, new_score, guess, mtdf_deadline);
-
-        std::cout << "depth " << depth << " ";
-        b.print_move(new_result, std::cout);
-        std::cout << " eval=" << new_score << " timeused=" << (time_available - deadline + time(NULL)) << std::endl;
+        move_t new_result = mtdf(b, color, new_score, guess, mtdf_deadline, result);
+        if (search_debug) {
+            std::cout << "depth " << depth << " ";
+            b.print_move(new_result, std::cout);
+            std::cout << " eval=" << new_score << " timeused=" << (time_available - deadline + time(NULL)) << std::endl;
+        }
 
         if (new_result != 0) {
             result = new_result;
@@ -107,6 +108,9 @@ Search::Search(const Evaluation *eval, int transposition_table_size)
 
 {
     srandom(clock());
+    transposition_checks = 0;
+    transposition_partial_hits = 0;
+    transposition_full_hits = 0;
 }
 
 void Search::reset()
@@ -116,27 +120,24 @@ void Search::reset()
     transposition_table.clear();
 }
 
-move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline)
+move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline, move_t move)
 {
     score = guess;
     int upperbound = SCORE_MAX;
     int lowerbound = SCORE_MIN;
-    move_t move = 0;
     if (search_debug) {
         std::cout << "mtdf guess=" << guess << " depth=" << max_depth << std::endl;
     }
+    const int window_size = 10;
 
     do {
         int beta;
         if (deadline > 0 && time(NULL) > deadline) {
             return 0;
         }
-        if (score == lowerbound) {
-            beta = score + 1;
-        } else {
-            beta = score;
-        }
-        std::tuple<move_t, move_t, int> result = alphabeta_with_memory(b, 0, color, beta - 1, beta, move);
+        int alpha = std::max(score - window_size, lowerbound);
+        beta = std::min(upperbound, alpha + window_size);
+        std::tuple<move_t, move_t, int> result = alphabeta_with_memory(b, 0, color, alpha, beta, move);
         if (std::get<0>(result) != -1) {
             move = std::get<0>(result);
         }
@@ -147,7 +148,7 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t dead
             lowerbound = score;
         }
         if (search_debug) {
-            std::cout << "  mtdf a=" << beta - 1 << " b=" << beta << " score=" << score << " upper=" << upperbound << " lower=" << lowerbound << " move=";
+            std::cout << "  mtdf a=" << beta - 1 << " b=" << beta << " score=" << score << " lower=" << lowerbound << " upper=" << upperbound << " move=";
             b.print_move(move, std::cout);
             std::cout << std::endl;
         }
@@ -179,18 +180,25 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
     // check transposition table
     if (use_transposition_table) {
+        transposition_checks += 1;
         auto transpose = transposition_table.find(b.get_hash());
         if (transpose != transposition_table.end()) {
             TranspositionEntry &entry = transpose.second;
             if (entry.depth >= max_depth - depth) {
                 // found something at appropriate depth
-                if (entry.lower >= beta) {
-                    return std::tuple<move_t, move_t, int>(entry.move, entry.response, entry.lower);
-                } else if (entry.upper <= alpha) {
-                    return std::tuple<move_t, move_t, int>(entry.move, entry.response, entry.upper);
+                bounds = entry;
+                if (bounds.lower >= beta) {
+                    transposition_full_hits++;
+                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.lower);
+                } else if (bounds.upper <= alpha) {
+                    transposition_full_hits++;
+                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.upper);
                 }
-                alpha = std::max(alpha, entry.lower);
-                beta = std::min(beta, entry.upper);
+                transposition_partial_hits++;
+                alpha = std::max(alpha, bounds.lower);
+                beta = std::min(beta, bounds.upper);
+            } else {
+                transposition_insufficient_depth++;
             }
         }
     }
@@ -217,6 +225,14 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         bool evaluated_nodescore = false;
         int tie_count = 1;
 
+        if (hint) {
+            // need to remake move to get captured piece and other details consistents
+            move_t reint_hint = b.reinterpret_move(hint);
+            if (b.is_legal_move(reint_hint, b.get_side_to_play())) {
+                iter.push_move_front(b.reinterpret_move(reint_hint));
+            }
+        }
+
         while (b.has_more_moves(iter)) {
             int subtree_score;
             move_t subresponse = 0;
@@ -241,11 +257,11 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             } else {
                 b.apply_move(move);
                 move_t killer_move = 0;
-
-                if (use_killer_move && best_response != 0 && b.is_legal_move(best_response, b.get_side_to_play())) {
+                /*
+                if (use_killer_move && best_response != 0) {
                     killer_move = best_response;
                 }
-
+*/
                 std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
                 subtree_score = std::get<2>(child);
                 submove = std::get<0>(child);
@@ -293,7 +309,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 if (search_debug >= depth + 1) {
                     std::cout << "*";
                 }
-
+                /*
             // make things slightly less predictable
             } else if (subtree_score == best_score) {
                 tie_count++;
@@ -304,7 +320,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 }
                 if (search_debug >= depth + 1) {
                     std::cout << "*";
-                }
+                }*/
             }
             first = false;
             if (search_debug >= depth + 1) {

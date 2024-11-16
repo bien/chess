@@ -149,6 +149,15 @@ unsigned char Fenboard::read_piece(unsigned char c) const
     return 0;
 }
 
+move_t Fenboard::reinterpret_move(move_t move) const
+{
+    unsigned char destrank, destfile, srcrank, srcfile;
+    get_source(move, srcrank, srcfile);
+    get_dest(move, destrank, destfile);
+
+    return make_move(srcrank, srcfile, get_piece(srcrank, srcfile), destrank, destfile, get_piece(destrank, destfile), get_promotion(move));
+}
+
 move_t Fenboard::read_move(const std::string &s, Color color) const
 {
     int pos = 0;

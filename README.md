@@ -29,3 +29,15 @@ Puzzles solved: 3911/4000 using 49677511 nodes at 630034 nodes/sec or 50.7299 pu
 
 10/31/24:
 Puzzles solved: 3913/4000 using 20400276 nodes at 693416 nodes/sec or 135.962 puzzles/sec
+
+11/14/24:
+Puzzles solved: 3935/4000 using 56417986 nodes at 614958 nodes/sec or 43.6001 puzzles/sec
+Puzzles solved: 3983/4062 using 117487926 nodes at 785532 nodes/sec or 27.1588 puzzles/sec
+
+Puzzles solved: 3988/4062 using 117487926 nodes at 813800 nodes/sec or 28.1361 puzzles/sec
+Puzzles solved: 3988/4062 using 102774786 nodes at 705556 nodes/sec or 27.8859 puzzles/sec (window size=10)
+
+
+
+11/16/24
+Puzzles solved: 4024/4054 using 103792409 nodes at 971221 nodes/sec or 37.9347 puzzles/sec
