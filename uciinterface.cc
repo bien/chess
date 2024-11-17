@@ -55,8 +55,9 @@ int main(int argc, char **argv)
     search.use_quiescent_search = true;
     search.use_iterative_deepening = true;
     search.use_pruning = true;
-    search.max_depth = 8;
-    search.quiescent_depth = 4;
+    search.quiesent_depth = 4;
+    search.max_depth = 10;
+    search_debug = 1;
 
     while (true) {
         std::getline(*input, line);
@@ -147,7 +148,7 @@ int main(int argc, char **argv)
                     increment_millis = std::stoi(options["binc"]);
                     time_millis = std::stoi(options["btime"]);
                 }
-                movemillisecs = (increment_millis + time_millis / 15) * .9;
+                movemillisecs = (increment_millis + time_millis / 25) * .9;
             }
             auto starttime = std::chrono::system_clock::now();
 
