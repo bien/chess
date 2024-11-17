@@ -55,18 +55,18 @@ int main(int argc, char **argv)
     search.use_quiescent_search = true;
     search.use_iterative_deepening = true;
     search.use_pruning = true;
-    search.quiesent_depth = 4;
+    search.quiescent_depth = 4;
     search.max_depth = 10;
     search_debug = 1;
 
     while (true) {
         std::getline(*input, line);
         logging << line << std::endl;
+        search.reset();
         if (line.rfind("isready", 0) == 0) {
             std::cout << "readyok" << std::endl;
         }
         else if (line.rfind("ucinewgame", 0) == 0) {
-            search.reset();
             b.set_starting_position();
         }
         else if (line.rfind("uci", 0) == 0) {
@@ -148,12 +148,12 @@ int main(int argc, char **argv)
                     increment_millis = std::stoi(options["binc"]);
                     time_millis = std::stoi(options["btime"]);
                 }
-                movemillisecs = (increment_millis + time_millis / 25) * .9;
+                movemillisecs = (increment_millis + time_millis / 30) * .9;
             }
             auto starttime = std::chrono::system_clock::now();
 
             search.time_available = movemillisecs / 1000;
-            search.soft_deadline = time_millis > 30000;
+            search.soft_deadline = time_millis > 60000;
             std::cout << "time allocation " << search.time_available << std::endl;
             move_t move = search.alphabeta(b, b.get_side_to_play(), searchUpdate);
             auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
