@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 
             target_index = distrib(gen);
         }
-        if (target_index < 0 || target_index > movelist.size()) {
+        if (target_index <= 0 || target_index > movelist.size()) {
             // move doesn't exist; skip
             continue;
         }
@@ -78,8 +78,13 @@ int main(int argc, char **argv)
                 last_clock = iter->second.clock;
                 last_eval = iter->second.eval;
                 last_move = iter->second.move;
-                next_move = (++iter)->first.move;
-                next_move_parsed = b.read_move(next_move, White);
+                iter++;
+                if (iter != movelist.end()) {
+                    next_move = iter->first.move;
+                    if (next_move.length() > 1) {
+                        next_move_parsed = b.read_move(next_move, White);
+                    }
+                }
                 break;
             }
             moveno++;

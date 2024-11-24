@@ -190,6 +190,10 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
         std::string buf;
         std::getline(input, buf, '\n');
         line.append(buf);
+        while (line[0] == '\xef' || line[0] == '\xbb' || line[0] == '\xbf') {
+            // skip unicode bom
+            line = line.substr(1);
+        }
         if (line[line.length() - 1] == '\r') {
             line = line.substr(0, line.length() - 1);
         }
