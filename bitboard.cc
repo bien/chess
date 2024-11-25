@@ -172,7 +172,7 @@ struct BitboardCaptures {
 
     const static uint64_t *PregeneratedMovesWhite[7];
     const static uint64_t *PregeneratedMovesBlack[7];
-    const static uint64_t **PregeneratedMoves[2];
+    const static uint64_t *PregeneratedMoves[15];
 
 };
 
@@ -195,9 +195,9 @@ const uint64_t *BitboardCaptures::PregeneratedMovesBlack[7] = {
      NULL, BitArrays::pawn_moves_black::data, BitArrays::knight_moves::data, NULL, NULL, NULL, BitArrays::king_moves::data
 };
 
-const uint64_t **BitboardCaptures::PregeneratedMoves[2] = {
-   BitboardCaptures::PregeneratedMovesWhite,
-   BitboardCaptures::PregeneratedMovesBlack
+const uint64_t *BitboardCaptures::PregeneratedMoves[15] = {
+    NULL, BitArrays::pawn_moves_white::data, BitArrays::knight_moves::data, NULL, NULL, NULL, BitArrays::king_moves::data, NULL,
+    NULL, BitArrays::pawn_moves_black::data, BitArrays::knight_moves::data, NULL, NULL, NULL, BitArrays::king_moves::data
 };
 
 static uint64_t **initialize_rook_magic()
@@ -324,7 +324,7 @@ void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, ui
             }
         }
         if (fl_flags & (FL_EMPTY | FL_ALL)) {
-            uint64_t dest_squares_empty = BitboardCaptures::PregeneratedMoves[color][piece_type][start_pos] & ~all_pieces;
+            uint64_t dest_squares_empty = BitboardCaptures::PregeneratedMoves[color * 8 + piece_type][start_pos] & ~all_pieces;
             int starting_king_pos = (color == White ? 4 : 60);
             if (dest_squares_empty != 0 && (piece_type & PIECE_MASK) == bb_pawn) {
                 uint64_t two_square_dest = 0;
