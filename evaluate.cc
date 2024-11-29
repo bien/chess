@@ -308,11 +308,12 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
     for (int i = bb_knight; i <= bb_king; i++) {
         piece_counts[i] = count_bits(b.piece_bitmasks[i]) - count_bits(b.piece_bitmasks[i + bb_king + 1]);
         // remove expensive features with minor impact
-        /*
+
         for (int color = 0; color <= 1; color++) {
             int multiplier = color == White ? 1 : -1;
             int start_pos = 0;
             piece_scores[i] = 0;
+            /*
             uint64_t dest_squares = 0;
             do {
                 switch(i) {
@@ -329,8 +330,9 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
                 piece_scores[i] += multiplier * count_bits(dest_squares);
                 start_pos++;
             } while (start_pos >= 0);
+            */
         }
-        */
+
     }
 
     while ((start_pos = get_low_bit(b.piece_bitmasks[bb_rook], start_pos)) > -1) {
