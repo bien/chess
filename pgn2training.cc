@@ -37,7 +37,6 @@ int main(int argc, char **argv)
         std::map<std::string, std::string> game_metadata;
         std::vector<std::pair<move_annot, move_annot> > movelist;
         int target_index = move_index;
-        int i = 0;
 
         movelist.clear();
         game_metadata.clear();
@@ -45,7 +44,7 @@ int main(int argc, char **argv)
         if (movelist.empty()) {
             continue;
         }
-        if (move_index < 0) {
+        if (move_index <= 0) {
             target_index = movelist.size() + move_index;
         } else if (move_index == RANDOM) {
             std::random_device rd;  // a seed source for the random number engine
@@ -70,22 +69,35 @@ int main(int argc, char **argv)
         for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
             move_t move = b.read_move(iter->first.move, White);
             b.apply_move(move);
-            if (iter->second.move.length() > 1) {
-                move = b.read_move(iter->second.move, Black);
-                b.apply_move(move);
-            }
-            if (i++ == target_index) {
-                last_clock = iter->second.clock;
-                last_eval = iter->second.eval;
-                last_move = iter->second.move;
-                iter++;
-                if (iter != movelist.end()) {
-                    next_move = iter->first.move;
+            if (moveno == target_index) {
+                // have black's move: apply black's move
+                if (iter->second.move.length() > 1) {
+                    last_clock = iter->second.clock;
+                    last_eval = iter->second.eval;
+                    last_move = iter->second.move;
+                    move = b.read_move(iter->second.move, Black);
+                    b.apply_move(move);
+                    iter++;
+                    if (iter != movelist.end()) {
+                        next_move = iter->first.move;
+                        if (next_move.length() > 1) {
+                            next_move_parsed = b.read_move(next_move, White);
+                        }
+                    }
+                } else {
+                    // white made last move: don't apply black's move
+                    last_clock = iter->first.clock;
+                    last_eval = iter->first.eval;
+                    last_move = iter->first.move;
+                    next_move = iter->second.move;
                     if (next_move.length() > 1) {
-                        next_move_parsed = b.read_move(next_move, White);
+                        next_move_parsed = b.read_move(next_move, Black);
                     }
                 }
                 break;
+            } else {
+                move = b.read_move(iter->second.move, Black);
+                b.apply_move(move);
             }
             moveno++;
         }
@@ -108,7 +120,7 @@ int main(int argc, char **argv)
         }
         print_move_uci(next_move_parsed, std::cout) << "\t";
         std::cout << moveno << "\t" << url << "\t" << game_metadata["TimeControl"] << "\t" << game_metadata["WhiteElo"] << "\t" << game_metadata["BlackElo"] << "\t"
-            << result << "\t" << last_clock << "\t" << last_eval << "\t" << last_move << "\t" << next_move << "\t";
+            << result << "\t" << last_clock << "\t" << last_eval << "\t" << last_move << "\t" << next_move << "\t" << game_metadata["Termination"] << "\t";
         b.get_fen(std::cout);
         std::cout << std::endl;
     }

@@ -6,6 +6,11 @@ To download training data, run "data.sh".
 
 The tests expect a file called "polgar - fixed.pgn" which is an unzipped version of "polgar_5334_fixed.7z", which can be found here: http://www.chess.am/pgn/
 
+Training data for NNUE
+===
+wget https://database.nikonoel.fr/lichess_elite_2023-01.zip
+unzip lichess_elite_2023-01.zip
+./pgn2training 5 lichess_elite_2023-01.pgn  > lichess_elite_2023-01.results.5.move
 
 UCI
 ====
