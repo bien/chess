@@ -1,6 +1,7 @@
 #ifndef SEARCH_HH_
 #define SEARCH_HH_
 
+#include <cstring>
 #include "fenboard.hh"
 #include <tuple>
 #include <utility>

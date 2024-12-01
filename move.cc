@@ -1,4 +1,5 @@
 #include "move.hh"
+#include <cassert>
 
 piece_t get_captured_piece(move_t move, Color color)
 {

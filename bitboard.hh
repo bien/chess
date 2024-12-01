@@ -4,6 +4,8 @@
 #define HAS_FFSLL
 
 #include <vector>
+#include <cstdint>
+#include <strings.h>
 
 typedef unsigned char piece_t;
 const piece_t bb_all = 0;

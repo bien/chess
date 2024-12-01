@@ -1,3 +1,4 @@
+#include <cassert>
 #include "fenboard.hh"
 #include "move.hh"
 

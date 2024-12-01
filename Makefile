@@ -1,5 +1,5 @@
-CXXFLAGS = -Wall -g -std=c++14 -O3 -march=native -Wno-c++20-extensions
-SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc endgames.cc uciinterface.cc
+CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native 
+SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc uciinterface.cc
 
 all: uciinterface test
 
