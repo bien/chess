@@ -57,7 +57,6 @@ int main(int argc, char **argv)
     search.use_pruning = true;
     search.quiescent_depth = 4;
     search.max_depth = 10;
-    search_debug = 1;
 
     while (true) {
         std::getline(*input, line);

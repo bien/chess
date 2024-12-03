@@ -1,5 +1,6 @@
-CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native 
+CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native
 SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc uciinterface.cc
+
 
 all: uciinterface test
 
