@@ -17,8 +17,8 @@ const int TranspositionTableSize = 1000001;
 
 class Evaluation {
 public:
-    virtual int evaluate(const Fenboard &) const = 0;
-    virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score) const;
+    virtual int evaluate(const Fenboard &) = 0;
+    virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score) = 0;
     virtual bool endgame(const Fenboard &b, int &eval) const = 0;
 };
 
@@ -97,7 +97,7 @@ struct SearchUpdate {
 const SearchUpdate NullSearchUpdate;
 
 struct Search {
-    Search(const Evaluation *eval, int transposition_table_size=1000 * 500 + 1);
+    Search(Evaluation *eval, int transposition_table_size=1000 * 500 + 1);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, Color color, const SearchUpdate &s = NullSearchUpdate);
 
@@ -110,7 +110,7 @@ struct Search {
     bool use_transposition_table;
 
     bool use_pruning;
-    const Evaluation *eval;
+    Evaluation *eval;
     int min_score_prune_sorting;
     bool use_mtdf;
     bool use_iterative_deepening;

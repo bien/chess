@@ -176,7 +176,7 @@ int SimpleEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_scor
         - delta_evaluate_piece(b, captured_piece, dest_rank, dest_file);
 }
 
-int SimpleEvaluation::evaluate(const Fenboard &b) const {
+int SimpleEvaluation::evaluate(const Fenboard &b) {
     // piece count scores
     int qct = 0, bct = 0, rct = 0, nct = 0, pct = 0, rpct = 0;
     // pawn structure scores
@@ -417,7 +417,7 @@ static int weights[] = {QCT_SCORE, RCT_SCORE, BCT_SCORE, NCT_SCORE, PCT_SCORE,
     BSCORE_SCORE, KSCORE_SCORE, RHOPENFILE_SCORE, RFOPENFILE_SCORE, QSCORE_SCORE,
     ABS_NUM_PIECES, CTRL_SQUARES_CT, CENTRAL_SQUARES_CTL_CT};
 
-int SimpleBitboardEvaluation::evaluate(const Fenboard &b) const {
+int SimpleBitboardEvaluation::evaluate(const Fenboard &b) {
     int features[NUM_FEATURES];
 
     get_features(b, features);

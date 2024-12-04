@@ -12,15 +12,6 @@
 #include "move.hh"
 int search_debug = 0;
 
-int Evaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score) const
-{
-    int score;
-    b.apply_move(move);
-    score = evaluate(b);
-    b.undo_move(move);
-    return score;
-}
-
 move_t Search::minimax(Fenboard &b, Color color)
 {
     nodecount = 0;
@@ -103,7 +94,7 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
     return result;
 }
 
-Search::Search(const Evaluation *eval, int transposition_table_size)
+Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true), use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
 
 {

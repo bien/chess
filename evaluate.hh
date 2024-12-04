@@ -6,8 +6,8 @@
 
 class SimpleEvaluation : public Evaluation {
 public:
-    virtual int evaluate(const Fenboard &b) const;
-    virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score) const;
+    virtual int evaluate(const Fenboard &b);
+    virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score);
     bool endgame(const Fenboard &b, int &eval) const;
 
 protected:
@@ -21,7 +21,7 @@ const int NUM_FEATURES = 18;
 
 class SimpleBitboardEvaluation : public SimpleEvaluation {
 public:
-    int evaluate(const Fenboard &b) const;
+    int evaluate(const Fenboard &b);
     void get_features(const Fenboard &b, int *features) const;
 };
 

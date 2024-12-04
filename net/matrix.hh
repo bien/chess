@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <string.h>
-#include <iostream>
 
 template<int m, int n, typename ntype>
 struct matrix {
@@ -109,9 +108,7 @@ void matrix_softmax_64ths(matrix<m, n, atype> &a) {
             sum_exp += exp_x[k];
         }
         for (k = 0; k < n; k++) {
-            int old_data = a.data[i][k];
             a.data[i][k] = exp_x[k] * 64 / sum_exp;
-            std::cout << old_data << " -> " << exp_x[k] << " / " << sum_exp << " = " << a.data[i][k] << std::endl;
         }
     }
 }
