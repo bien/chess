@@ -67,13 +67,13 @@ void matrix_softmax_64ths(matrix<m, n, atype> &a) {
 
 
 template<int m, int n, typename atype, typename otype>
-void matrix_relu(const matrix<m, n, atype> &a, matrix<m, n, otype> &out, int min, int max) {
+void matrix_relu(const matrix<m, n, atype> &a, matrix<m, n, otype> &out, int max) {
     int i, k;
 
     for (i = 0; i < m; i++) {
         for (k = 0; k < n; k++) {
-            if (a.data[i][k] < min) {
-                out.data[i][k] = min;
+            if (a.data[i][k] < 0) {
+                out.data[i][k] = 0;
             } else if (a.data[i][k] > max) {
                 out.data[i][k] = max;
             } else {
@@ -104,22 +104,22 @@ void matrix_multiply_add_div(const matrix<m, n, atype> &a, const matrix<p, n, bt
 
 
 template<int m, typename atype, int n, int p, typename ctype, typename otype>
-void matrix_multiply_add_div_relu(const matrix<m, n, atype> &a, const matrix<p, n, atype> &bT, const mvector<p, ctype> &c, int divisor, int min, int max, matrix<m, p, otype> &out) {
+void matrix_multiply_add_div_relu(const matrix<m, n, atype> &a, const matrix<p, n, atype> &bT, const mvector<p, ctype> &c, int divisor, int max, matrix<m, p, otype> &out) {
     int i, j, k;
 
     for (i = 0; i < m; i++) {
         for (j = 0; j < p; j++) {
-            int64_t sum = 0;
+            int16_t sum = 0;
             for (k = 0; k < n; k++) {
                 sum += a.data[i][k] * bT.data[j][k];
             }
             sum /= divisor;
             sum += c.data[j];
-            if (sum > max) {
-                sum = max;
+            if (sum < 0) {
+                sum = 0;
             }
-            else if (sum < min) {
-                sum = min;
+            else if (sum > max) {
+                sum = max;
             }
             out.data[i][j] = sum;
         }
