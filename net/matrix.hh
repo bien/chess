@@ -76,7 +76,7 @@ const int exp_table_positive_64ths[] = {
     368, 374, 379, 385, 392, 398, 404, 410, 417, 423, 430, 437, 444, 451, 458, 465
 };
 
-constexpr uint16_t exp_64ths(int16_t x) {
+static uint16_t exp_64ths(int16_t x) {
     // compute 64*exp(x/64)
     if (x >= 0) {
         if (x >= 128) {
