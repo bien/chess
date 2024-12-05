@@ -39,15 +39,33 @@ struct WeightsFlip {
     atype data[m][n];
 };
 
+template <int m, int n, typename atype>
+struct MatrixTranspose {
+    MatrixTranspose(const atype matrix[n][m]) {
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                data[i][j] = matrix[j][i];
+            }
+        }
+    }
+    atype data[m][n];
+};
+
+
 
 const mvector<32, int16_t> m_dense_1_bias(dense_1_bias);
-const matrix<512, 32, int8_t> m_dense_1_weights_forward(dense_1_weights);
-const WeightsFlip<512, 32, int8_t> dense_1_weights_flip(dense_1_weights);
-const matrix<512, 32, int8_t> m_dense_1_weights_flipped(dense_1_weights_flip.data);
 const mvector<32, int16_t> m_dense_2_bias(dense_2_bias);
-const matrix<32, 32, int8_t> m_dense_2_weights(dense_2_weights);
 const mvector<3, int16_t> m_dense_3_bias(dense_3_bias);
-const matrix<32, 3, int8_t> m_dense_3_weights(dense_3_weights);
+
+const MatrixTranspose<32, 512, int8_t> dense_1_weightsT(dense_1_weights);
+const matrix<32, 512, int8_t> m_dense_1_weights_forward(dense_1_weightsT.data);
+const WeightsFlip<32, 512, int8_t> dense_1_weights_flip(dense_1_weightsT.data);
+const matrix<32, 512, int8_t> m_dense_1_weights_flipped(dense_1_weights_flip.data);
+
+const MatrixTranspose<32, 32, int8_t> dense_2_weightsT(dense_2_weights);
+const matrix<32, 32, int8_t> m_dense_2_weights(dense_2_weightsT.data);
+const MatrixTranspose<3, 32, int8_t> dense_3_weightsT(dense_3_weights);
+const matrix<3, 32, int8_t> m_dense_3_weights(dense_3_weightsT.data);
 
 
 static int mirror_square(int sq) {
