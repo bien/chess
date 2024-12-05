@@ -188,7 +188,7 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t> &input_layer, C
     matrix_softmax_64ths(output_layer);
 
     // nnue calculated in .0001% of a win
-    int score = output_layer.data[0][2] - output_layer.data[0][0];
+    int score = (output_layer.data[0][2] - output_layer.data[0][0]) / 10;
     // nnue calculated with respect to side-to-play but engine wants respect to white
     if (side_to_play == Black) {
         score = -score;
