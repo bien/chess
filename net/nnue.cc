@@ -176,13 +176,13 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t> &input_layer, C
     matrix<1, 32, int8_t> dense_2_layer;
     matrix<1, 32, int8_t> dense_3_layer;
     matrix<1, 3, int16_t> output_layer;
-    matrix_relu(input_layer, dense_layer, 0, 64);
+    matrix_relu(input_layer, dense_layer, 64);
     if (side_to_play == White) {
-        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_forward, m_dense_1_bias, 64, 0, 64, dense_2_layer);
+        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_forward, m_dense_1_bias, 64, 64, dense_2_layer);
     } else {
-        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_flipped, m_dense_1_bias, 64, 0, 64, dense_2_layer);
+        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_flipped, m_dense_1_bias, 64, 64, dense_2_layer);
     }
-    matrix_multiply_add_div_relu(dense_2_layer, m_dense_2_weights, m_dense_2_bias, 64, 0, 64, dense_3_layer);
+    matrix_multiply_add_div_relu(dense_2_layer, m_dense_2_weights, m_dense_2_bias, 64, 64, dense_3_layer);
 
     matrix_multiply_add_div(dense_3_layer, m_dense_3_weights, m_dense_3_bias, 64, output_layer);
     matrix_softmax_64ths(output_layer);
