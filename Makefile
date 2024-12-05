@@ -1,4 +1,4 @@
-#CXX=g++-13
+CXX=g++-13
 INCLUDES = -Inet -I.
 CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native $(INCLUDES)
 ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc logicalboard.cc net/nnue.cc

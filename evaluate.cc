@@ -163,7 +163,7 @@ int SimpleEvaluation::delta_evaluate_piece(Fenboard &b, piece_t piece, int rank,
     return net_score;
 }
 
-int SimpleEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score) const
+int SimpleEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
 {
     char dest_rank = get_board_rank(get_dest_pos(move));
     char dest_file = get_board_file(get_dest_pos(move));

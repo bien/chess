@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <string.h>
+#include <iostream>
+#include <math.h>
 
 template<int m, int n, typename ntype>
 struct matrix {
@@ -92,8 +94,8 @@ constexpr uint16_t exp_64ths(int16_t x) {
 template<int m, int n, typename atype>
 void matrix_softmax_64ths(matrix<m, n, atype> &a) {
     // compute softmax assuming matrix is integers representing 1/64ths
+    // return value in units of .0001% probability
     int i, k;
-    int exp_x[n];
 
     for (i = 0; i < m; i++) {
         int rowmax = a.data[i][0];
@@ -102,13 +104,15 @@ void matrix_softmax_64ths(matrix<m, n, atype> &a) {
                 rowmax = a.data[i][k];
             }
         }
-        int sum_exp = 0;
+        double exp_x[n];
+        double sum_exp = 0;
         for (k = 0; k < n; k++) {
-            exp_x[k] = exp_64ths(static_cast<int>(a.data[i][k]) - rowmax);
+            exp_x[k] = exp((static_cast<int>(a.data[i][k]) - rowmax)*1.0/64);
             sum_exp += exp_x[k];
         }
         for (k = 0; k < n; k++) {
-            a.data[i][k] = exp_x[k] * 64 / sum_exp;
+            atype old_value = a.data[i][k];
+            a.data[i][k] = 1000000 * exp_x[k] / sum_exp;
         }
     }
 }
@@ -151,8 +155,8 @@ void matrix_multiply_add_div(const matrix<m, n, atype> &a, const matrix<n, p, bt
 }
 
 
-template<int m, typename atype, int n, typename btype, int p, typename ctype, typename otype>
-void matrix_multiply_add_div_relu(const matrix<m, n, atype> &a, const matrix<n, p, btype> &b, const mvector<p, ctype> &c, int divisor, int min, int max, matrix<m, p, otype> &out) {
+template<int m, typename atype, int n, int p, typename ctype, typename otype>
+void matrix_multiply_add_div_relu(const matrix<m, n, atype> &a, const matrix<n, p, atype> &b, const mvector<p, ctype> &c, int divisor, int min, int max, matrix<m, p, otype> &out) {
     int i, j, k;
 
     for (i = 0; i < m; i++) {

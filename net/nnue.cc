@@ -4,8 +4,8 @@
 #include "move.hh"
 #include "matrix.hh"
 #include <cstdint>
+#include <stdio.h>
 #include <string.h>
-#include <iostream>
 
 extern "C" {
 extern const int8_t dense_bias[256];
@@ -102,7 +102,7 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
         add_remove_piece(b, moved_piece, false, src_rank * 8 + src_file, dense_1_layer);
     } else {
         // need to redo the whole board so just start over
-        matrix<1, 512, int16_t> layer;
+        matrix<1, 512, int8_t> layer;
         b.apply_move(move);
         recalculate_dense1_layer(b, layer);
         score = calculate_score(layer, b.get_side_to_play());
@@ -112,7 +112,7 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
     return score;
 }
 
-void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type, bool remove, int piece_pos, matrix<1, 512, int16_t> &layer)
+void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type, bool remove, int piece_pos, matrix<1, 512, int8_t> &layer)
 {
     piece_t piece_type = colored_piece_type & PIECE_MASK;
     Color piece_color = (colored_piece_type > bb_king ? Black : White);
@@ -152,7 +152,7 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 }
 
 
-int NNUEEvaluation::calculate_score(const matrix<1, 512, int16_t> &input_layer, Color side_to_play) const
+int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t> &input_layer, Color side_to_play) const
 {
     matrix<1, 512, int8_t> dense_layer;
     matrix<1, 32, int8_t> dense_2_layer;
@@ -169,8 +169,8 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int16_t> &input_layer, 
     matrix_multiply_add_div(dense_3_layer, m_dense_3_weights, m_dense_3_bias, 64, output_layer);
     matrix_softmax_64ths(output_layer);
 
-    // nnue calculated in 64ths of a win, but we want centipawns
-    int score = 12 * (output_layer.data[0][2] - output_layer.data[0][0]);
+    // nnue calculated in .0001% of a win
+    int score = output_layer.data[0][2] - output_layer.data[0][0];
     // nnue calculated with respect to side-to-play but engine wants respect to white
     if (side_to_play == Black) {
         score = -score;
@@ -178,7 +178,7 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int16_t> &input_layer, 
     return score;
 }
 
-void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, int16_t> &layer)
+void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, int8_t> &layer)
 {
     int i;
     for (i = 0; i < 256; i++) {

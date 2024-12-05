@@ -1,3 +1,4 @@
+CXX=g++-13
 CFLAGS = -Wall -g -march=native -I..
 CXXFLAGS = $(CFLAGS) -std=c++20
 SRCS = test.cc nnue.cc
