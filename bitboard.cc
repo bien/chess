@@ -210,7 +210,7 @@ static uint64_t **initialize_rook_magic()
         memset(rook_magic[start_pos], 0, sizeof(uint64_t) * (1ULL << array_size_nbits));
         uint64_t block_board = BitArrays::rook_blockboard::data[start_pos];
         uint64_t magic_factor = lateral_slide_magic_factor[start_pos];
-        for (int i = 0; i < (1ULL << (array_size_nbits - 1)); i++) {
+        for (unsigned int i = 0; i < (1ULL << (array_size_nbits - 1)); i++) {
             uint64_t projection = project_bitset(i, block_board);
             uint64_t hash_index = (projection * magic_factor)  >> (64 - array_size_nbits);
             uint64_t resolved = rook_slide_moves(start_pos, projection);
@@ -233,7 +233,7 @@ static uint64_t **initialize_bishop_magic()
         memset(bishop_magic[start_pos], 0, sizeof(uint64_t) * (1ULL << array_size_nbits));
         uint64_t block_board = BitArrays::bishop_blockboard::data[start_pos];
         uint64_t magic_factor = diag_slide_magic_factor[start_pos];
-        for (int i = 0; i < (1ULL << (array_size_nbits - 1)); i++) {
+        for (unsigned int i = 0; i < (1ULL << (array_size_nbits - 1)); i++) {
             uint64_t projection = project_bitset(i, block_board);
             uint64_t hash_index = (projection * magic_factor)  >> (64 - array_size_nbits);
             uint64_t resolved = bishop_slide_moves(start_pos, projection);
@@ -468,8 +468,8 @@ bool Bitboard::discovers_check(int start_pos, int dest_pos, Color color, uint64_
                 }
                 int adr = (start_pos / 8) - (attacker / 8);
                 int adf = (start_pos % 8) - (attacker % 8);
-                if ((adr == 0 && dr == 0 && (sign(df) == sign(adf)) && !(dest_dr == 0 && (df > 0 == dest_df > 0) && abs(adf+df) > abs(dest_df))) ||
-                    (adf == 0 && df == 0 && (sign(dr) == sign(adr)) && !(dest_df == 0 && (dr > 0 == dest_dr > 0) && abs(adr+dr) > abs(dest_dr)))) {
+                if ((adr == 0 && dr == 0 && (sign(df) == sign(adf)) && !(dest_dr == 0 && ((df > 0) == (dest_df > 0)) && abs(adf+df) > abs(dest_df))) ||
+                    (adf == 0 && df == 0 && (sign(dr) == sign(adr)) && !(dest_df == 0 && ((dr > 0) == (dest_dr > 0)) && abs(adr+dr) > abs(dest_dr)))) {
                     return true;
                 }
             }

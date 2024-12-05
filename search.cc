@@ -35,7 +35,7 @@ move_t Search::minimax(Fenboard &b, Color color)
 move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s)
 {
     time_t deadline = time(NULL) + time_available;
-    move_t result;
+    move_t result = 0;
     score = 0;
     int guess = eval->evaluate(b);
     int old_max_depth = max_depth;

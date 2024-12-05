@@ -118,7 +118,7 @@ public:
     }
     bool king_in_check(Color) const;
     uint64_t get_bitmask(Color color, piece_t piece_type) const {
-        return piece_bitmasks[color * (bb_king + 1) * piece_type];
+        return piece_bitmasks[color * (bb_king + 1) + (PIECE_MASK & piece_type)];
     }
 
     bool can_castle(Color color, bool kingside) const {

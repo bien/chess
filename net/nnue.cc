@@ -50,7 +50,7 @@ const mvector<3, int16_t> m_dense_3_bias(dense_3_bias);
 const matrix<32, 3, int8_t> m_dense_3_weights(dense_3_weights);
 
 
-constexpr int mirror_square(int sq) {
+static int mirror_square(int sq) {
     return (sq % 8) + 8 * (7 - (sq / 8));
 }
 
