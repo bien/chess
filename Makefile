@@ -1,6 +1,9 @@
-CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native
-SRCS = bitboard.cc fenboard.cc test.cc move.cc magicsquares.cc search.cc evaluate.cc pgn.cc logicalboard.cc puzzle.cc uciinterface.cc
-
+#CXX=g++-13
+INCLUDES = -Inet -I.
+CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native $(INCLUDES)
+ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc logicalboard.cc net/nnue.cc
+ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o) net/nnue-elite-5-stockfish-9.o
+OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 
 all: uciinterface test
 
@@ -16,7 +19,7 @@ moves: moves.o bitboard.o fenboard.o move.o search.o evaluate.o pgn.o logicalboa
 magicsquares: magicsquares.o bitboard.o
 	$(CXX) $^ -o $@
 
-start: start.o bitboard.o fenboard.o move.o search.o evaluate.o pgn.o logicalboard.o
+start: start.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 
 test: testexe puzzle
@@ -39,9 +42,9 @@ puzzle: bitboard.o fenboard.o puzzle.o move.o search.o evaluate.o pgn.o logicalb
 	$(CXX) $^ -o $@
 
 clean:
-	rm -f *.o chess
+	rm -f *.o $(ENGINE_OBJS) chess
 
-Makefile.deps: Makefile $(SRCS)
-	$(CXX) -MM $(SRCS) > $@
+Makefile.deps: Makefile $(ENGINE_SRCS) $(OTHER_SRCS)
+	$(CXX) -MM $(ENGINE_SRCS) $(INCLUDES) $(OTHER_SRCS) > $@
 
 include Makefile.deps
