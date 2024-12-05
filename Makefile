@@ -1,4 +1,3 @@
-CXX=g++-13
 INCLUDES = -Inet -I.
 CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native $(INCLUDES)
 ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc logicalboard.cc net/nnue.cc
@@ -38,7 +37,7 @@ pgnreader: pgnreader.o pgn.o bitboard.o fenboard.o move.o logicalboard.o
 endgames: bitboard.o fenboard.o endgames.o move.o logicalboard.o
 	$(CXX) $^ -o $@
 
-puzzle: bitboard.o fenboard.o puzzle.o move.o search.o evaluate.o pgn.o logicalboard.o
+puzzle: puzzle.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 
 clean:
