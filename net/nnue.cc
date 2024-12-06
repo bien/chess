@@ -58,22 +58,22 @@ const mvector<32, int16_t> m_dense_2_bias(dense_2_bias);
 const mvector<3, int16_t> m_dense_3_bias(dense_3_bias);
 
 const MatrixTranspose<32, 512, int8_t> dense_1_weightsT(dense_1_weights);
-const matrix<32, 512, int8_t> m_dense_1_weights_forward(dense_1_weightsT.data);
+const matrix<32, 512, int8_t, UNITY> m_dense_1_weights_forward(dense_1_weightsT.data);
 const WeightsFlip<32, 512, int8_t> dense_1_weights_flip(dense_1_weightsT.data);
-const matrix<32, 512, int8_t> m_dense_1_weights_flipped(dense_1_weights_flip.data);
+const matrix<32, 512, int8_t, UNITY> m_dense_1_weights_flipped(dense_1_weights_flip.data);
 
 const MatrixTranspose<32, 32, int8_t> dense_2_weightsT(dense_2_weights);
-const matrix<32, 32, int8_t> m_dense_2_weights(dense_2_weightsT.data);
+const matrix<32, 32, int8_t, UNITY> m_dense_2_weights(dense_2_weightsT.data);
 const MatrixTranspose<3, 32, int8_t> dense_3_weightsT(dense_3_weights);
-const matrix<3, 32, int8_t> m_dense_3_weights(dense_3_weightsT.data);
+const matrix<3, 32, int8_t, UNITY> m_dense_3_weights(dense_3_weightsT.data);
 
 
 static int mirror_square(int sq) {
     return (sq % 8) + 8 * (7 - (sq / 8));
 }
 
-template<int m, int n, typename atype>
-void dump_matrix(const matrix<m, n, atype> &x)
+template<int m, int n, typename atype, int unity>
+void dump_matrix(const matrix<m, n, atype, unity> &x)
 {
     for (int i = 0; i < m; i++) {
         for (int k = 0; k < n; k++) {
@@ -120,7 +120,7 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
         add_remove_piece(b, moved_piece, false, src_rank * 8 + src_file, dense_1_layer);
     } else {
         // need to redo the whole board so just start over
-        matrix<1, 512, int8_t> layer;
+        matrix<1, 512, int8_t, UNITY> layer;
         b.apply_move(move);
         recalculate_dense1_layer(b, layer);
         score = calculate_score(layer, b.get_side_to_play());
@@ -130,7 +130,7 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
     return score;
 }
 
-void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type, bool remove, int piece_pos, matrix<1, 512, int8_t> &layer)
+void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type, bool remove, int piece_pos, matrix<1, 512, int8_t, UNITY> &layer)
 {
     piece_t piece_type = colored_piece_type & PIECE_MASK;
     Color piece_color = (colored_piece_type > bb_king ? Black : White);
@@ -170,37 +170,37 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 }
 
 
-int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t> &input_layer, Color side_to_play) const
+int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t, UNITY> &input_layer, Color side_to_play) const
 {
-    matrix<1, 512, uint8_t> dense_layer;
-    matrix<1, 32, uint8_t> dense_2_layer;
-    matrix<1, 32, uint8_t> dense_3_layer;
-    matrix<1, 3, int16_t> output_layer;
+    matrix<1, 512, uint8_t, UNITY> dense_layer;
+    matrix<1, 32, uint8_t, UNITY> dense_2_layer;
+    matrix<1, 32, uint8_t, UNITY> dense_3_layer;
+    matrix<1, 3, int16_t, UNITY> output_layer;
 #ifdef DEBUG
     std::cout << "concat layer" << std::endl;
     dump_matrix(input_layer);
 #endif
-    matrix_relu(input_layer, dense_layer, 64);
+    input_layer.matrix_relu(dense_layer);
 #ifdef DEBUG
     std::cout << "relu concat layer" << std::endl;
     dump_matrix(dense_layer);
 #endif
     if (side_to_play == White) {
-        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_forward, m_dense_1_bias, 64, dense_2_layer);
+        dense_layer.matrix_multiply_add_div_relu(m_dense_1_weights_forward, m_dense_1_bias, dense_2_layer);
     } else {
-        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_flipped, m_dense_1_bias, 64, dense_2_layer);
+        dense_layer.matrix_multiply_add_div_relu(m_dense_1_weights_flipped, m_dense_1_bias, dense_2_layer);
     }
 #ifdef DEBUG
     std::cout << "layer 1-2 relu" << std::endl;
     dump_matrix(dense_2_layer);
 #endif
-    matrix_multiply_add_div_relu(dense_2_layer, m_dense_2_weights, m_dense_2_bias, 64, dense_3_layer);
+    dense_2_layer.matrix_multiply_add_div_relu(m_dense_2_weights, m_dense_2_bias, dense_3_layer);
 #ifdef DEBUG
     std::cout << "layer 2-3 relu" << std::endl;
     dump_matrix(dense_3_layer);
 #endif
-    matrix_multiply_add_div(dense_3_layer, m_dense_3_weights, m_dense_3_bias, 64, output_layer);
-    matrix_softmax_64ths(output_layer);
+    dense_3_layer.matrix_multiply_add_div(m_dense_3_weights, m_dense_3_bias, output_layer);
+    output_layer.matrix_softmax();
 
     // nnue calculated in .0001% of a win
     int score = (output_layer.data[0][2] - output_layer.data[0][0]) / 10;
@@ -211,7 +211,7 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t> &input_layer, C
     return score;
 }
 
-void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, int8_t> &layer)
+void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, int8_t, UNITY> &layer)
 {
     int i;
     for (i = 0; i < 256; i++) {
@@ -252,50 +252,6 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
     }
 }
 
-#ifdef __SSSE3__
-int16_t dotProduct_32(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
-    // reads 32 bytes
-   __m256i r0;
-   __m256i* a = (__m256i*) features;
-   __m256i* b = (__m256i*) weights;
-   r0 = _mm256_maddubs_epi16 (a[0], b[0]);
-
-   r0 = _mm256_hadds_epi16   (r0, r0); // 8 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 4 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 2 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 1 final short
-   return _mm_extract_epi16(_mm256_castsi256_si128(r0), 0);
-}
-
-int16_t dotProduct_256(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
-    // reads 256 bytes
-   __m256i r0, r1, r2, r3, r4, r5, r6, r7;
-   __m256i* a = (__m256i*) features;
-   __m256i* b = (__m256i*) weights;
-   r0 = _mm256_maddubs_epi16 (a[0], b[0]);
-   r1 = _mm256_maddubs_epi16 (a[1], b[1]);
-   r2 = _mm256_maddubs_epi16 (a[2], b[2]);
-   r3 = _mm256_maddubs_epi16 (a[3], b[3]);
-   r4 = _mm256_maddubs_epi16 (a[4], b[4]);
-   r5 = _mm256_maddubs_epi16 (a[5], b[5]);
-   r6 = _mm256_maddubs_epi16 (a[6], b[6]);
-   r7 = _mm256_maddubs_epi16 (a[7], b[7]);
-   r0 = _mm256_adds_epi16    (r0, r1);
-   r2 = _mm256_adds_epi16    (r2, r3);
-   r4 = _mm256_adds_epi16    (r4, r5);
-   r6 = _mm256_adds_epi16    (r6, r7);
-
-   r0 = _mm256_adds_epi16    (r0, r2);
-   r4 = _mm256_adds_epi16    (r4, r6);
-
-   r0 = _mm256_adds_epi16    (r0, r4); // 16 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 8 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 4 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 2 shorts
-   r0 = _mm256_hadds_epi16   (r0, r0); // 1 final short
-   return _mm_extract_epi16(_mm256_castsi256_si128(r0), 0);
-}
-#endif
 
 int NNUEEvaluation::evaluate(const Fenboard &b)
 {
