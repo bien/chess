@@ -253,6 +253,20 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
 }
 
 #ifdef __SSSE3__
+int16_t dotProduct_32(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
+    // reads 32 bytes
+   __m256i r0;
+   __m256i* a = (__m256i*) features;
+   __m256i* b = (__m256i*) weights;
+   r0 = _mm256_maddubs_epi16 (a[0], b[0]);
+
+   r0 = _mm256_hadds_epi16   (r0, r0); // 8 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 4 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 2 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 1 final short
+   return _mm_extract_epi16(_mm256_castsi256_si128(r0), 0);
+}
+
 int16_t dotProduct_256(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
     // reads 256 bytes
    __m256i r0, r1, r2, r3, r4, r5, r6, r7;

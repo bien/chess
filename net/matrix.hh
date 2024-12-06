@@ -7,6 +7,7 @@
 #include <math.h>
 #ifdef __SSSE3__
 #include <x86intrin.h>
+int16_t dotProduct_32(const unsigned char features[], const int8_t * weights /* YMM_ALIGN */);
 int16_t dotProduct_256(const unsigned char features[], const int8_t * weights /* YMM_ALIGN */);
 #endif
 
@@ -105,6 +106,9 @@ void matrix_multiply_add_div(const matrix<m, n, atype> &a, const matrix<p, n, bt
             for (; k + 256 <= n; k += 256) {
                 sum += dotProduct_256(&a.data[i][k], &bT.data[j][k]);
             }
+            for (; k + 32 <= n; k += 32) {
+                sum += dotProduct_32(&a.data[i][k], &bT.data[j][k]);
+            }
 #endif
             for (; k < n; k++) {
                 sum += a.data[i][k] * bT.data[j][k];
@@ -128,6 +132,9 @@ void matrix_multiply_add_div_relu(const matrix<m, n, uint8_t> &a, const matrix<p
 #ifdef __SSSE3__
             for (; k + 256 <= n; k += 256) {
                 sum += dotProduct_256(&a.data[i][k], &bT.data[j][k]);
+            }
+            for (; k + 32 <= n; k += 32) {
+                sum += dotProduct_32(&a.data[i][k], &bT.data[j][k]);
             }
 #endif
             for (; k < n; k++) {
