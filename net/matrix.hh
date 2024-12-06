@@ -109,7 +109,7 @@ void matrix_multiply_add_div(const matrix<m, n, atype> &a, const matrix<p, n, bt
             for (; k < n; k++) {
                 sum += a.data[i][k] * bT.data[j][k];
             }
-            sum /= divisor;
+            sum /= MAX_RELU;
             sum += c.data[j];
             out.data[i][j] = sum;
         }
