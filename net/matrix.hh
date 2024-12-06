@@ -5,6 +5,12 @@
 #include <string.h>
 #include <iostream>
 #include <math.h>
+#ifdef __SSSE3__
+#include <x86intrin.h>
+int16_t dotProduct_256(const unsigned char features[], const int8_t * weights /* YMM_ALIGN */);
+#endif
+
+#define MAX_RELU 64
 
 template<int m, int n, typename ntype>
 struct matrix {
@@ -13,7 +19,8 @@ struct matrix {
     matrix(const ntype data[m][n]) {
         memcpy(this->data, data, m * n * sizeof(ntype));
     }
-    ntype data[m][n];
+    // for YMM align
+    alignas(32) ntype data[m][n];
 };
 
 template<int n, typename ntype>
@@ -21,7 +28,8 @@ struct mvector {
     mvector(const ntype *data) {
         memcpy(this->data, data, n * sizeof(ntype));
     }
-    ntype data[n];
+    // for YMM align
+    alignas(32) ntype data[n];
 };
 
 
@@ -87,12 +95,18 @@ void matrix_relu(const matrix<m, n, atype> &a, matrix<m, n, otype> &out, int max
 template<int m, typename atype, int n, typename btype, int p, typename ctype, typename otype>
 void matrix_multiply_add_div(const matrix<m, n, atype> &a, const matrix<p, n, btype> &bT, const mvector<p, ctype> &c, int divisor, matrix<m, p, otype> &out) {
     // out = a * b + c
-    int i, j, k;
+    int i, j;
 
     for (i = 0; i < m; i++) {
         for (j = 0; j < p; j++) {
             int64_t sum = 0;
-            for (k = 0; k < n; k++) {
+            int k = 0;
+#ifdef __SSSE3__
+            for (; k + 256 <= n; k += 256) {
+                sum += dotProduct_256(&a.data[i][k], &bT.data[j][k]);
+            }
+#endif
+            for (; k < n; k++) {
                 sum += a.data[i][k] * bT.data[j][k];
             }
             sum /= divisor;
@@ -103,17 +117,23 @@ void matrix_multiply_add_div(const matrix<m, n, atype> &a, const matrix<p, n, bt
 }
 
 
-template<int m, typename atype, int n, int p, typename ctype, typename otype>
-void matrix_multiply_add_div_relu(const matrix<m, n, atype> &a, const matrix<p, n, atype> &bT, const mvector<p, ctype> &c, int divisor, int max, matrix<m, p, otype> &out) {
-    int i, j, k;
+template<int m, int n, int p, typename ctype, typename otype>
+void matrix_multiply_add_div_relu(const matrix<m, n, uint8_t> &a, const matrix<p, n, int8_t> &bT, const mvector<p, ctype> &c, int max, matrix<m, p, otype> &out) {
+    int i, j;
 
     for (i = 0; i < m; i++) {
         for (j = 0; j < p; j++) {
             int16_t sum = 0;
-            for (k = 0; k < n; k++) {
+            int k = 0;
+#ifdef __SSSE3__
+            for (; k + 256 <= n; k += 256) {
+                sum += dotProduct_256(&a.data[i][k], &bT.data[j][k]);
+            }
+#endif
+            for (; k < n; k++) {
                 sum += a.data[i][k] * bT.data[j][k];
             }
-            sum /= divisor;
+            sum /= MAX_RELU;
             sum += c.data[j];
             if (sum < 0) {
                 sum = 0;

@@ -172,18 +172,33 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 
 int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t> &input_layer, Color side_to_play) const
 {
-    matrix<1, 512, int8_t> dense_layer;
-    matrix<1, 32, int8_t> dense_2_layer;
-    matrix<1, 32, int8_t> dense_3_layer;
+    matrix<1, 512, uint8_t> dense_layer;
+    matrix<1, 32, uint8_t> dense_2_layer;
+    matrix<1, 32, uint8_t> dense_3_layer;
     matrix<1, 3, int16_t> output_layer;
+#ifdef DEBUG
+    std::cout << "concat layer" << std::endl;
+    dump_matrix(input_layer);
+#endif
     matrix_relu(input_layer, dense_layer, 64);
+#ifdef DEBUG
+    std::cout << "relu concat layer" << std::endl;
+    dump_matrix(dense_layer);
+#endif
     if (side_to_play == White) {
-        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_forward, m_dense_1_bias, 64, 64, dense_2_layer);
+        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_forward, m_dense_1_bias, 64, dense_2_layer);
     } else {
-        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_flipped, m_dense_1_bias, 64, 64, dense_2_layer);
+        matrix_multiply_add_div_relu(dense_layer, m_dense_1_weights_flipped, m_dense_1_bias, 64, dense_2_layer);
     }
-    matrix_multiply_add_div_relu(dense_2_layer, m_dense_2_weights, m_dense_2_bias, 64, 64, dense_3_layer);
-
+#ifdef DEBUG
+    std::cout << "layer 1-2 relu" << std::endl;
+    dump_matrix(dense_2_layer);
+#endif
+    matrix_multiply_add_div_relu(dense_2_layer, m_dense_2_weights, m_dense_2_bias, 64, dense_3_layer);
+#ifdef DEBUG
+    std::cout << "layer 2-3 relu" << std::endl;
+    dump_matrix(dense_3_layer);
+#endif
     matrix_multiply_add_div(dense_3_layer, m_dense_3_weights, m_dense_3_bias, 64, output_layer);
     matrix_softmax_64ths(output_layer);
 
@@ -236,6 +251,37 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
          }
     }
 }
+
+#ifdef __SSSE3__
+int16_t dotProduct_256(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
+    // reads 256 bytes
+   __m256i r0, r1, r2, r3, r4, r5, r6, r7;
+   __m256i* a = (__m256i*) features;
+   __m256i* b = (__m256i*) weights;
+   r0 = _mm256_maddubs_epi16 (a[0], b[0]);
+   r1 = _mm256_maddubs_epi16 (a[1], b[1]);
+   r2 = _mm256_maddubs_epi16 (a[2], b[2]);
+   r3 = _mm256_maddubs_epi16 (a[3], b[3]);
+   r4 = _mm256_maddubs_epi16 (a[4], b[4]);
+   r5 = _mm256_maddubs_epi16 (a[5], b[5]);
+   r6 = _mm256_maddubs_epi16 (a[6], b[6]);
+   r7 = _mm256_maddubs_epi16 (a[7], b[7]);
+   r0 = _mm256_adds_epi16    (r0, r1);
+   r2 = _mm256_adds_epi16    (r2, r3);
+   r4 = _mm256_adds_epi16    (r4, r5);
+   r6 = _mm256_adds_epi16    (r6, r7);
+
+   r0 = _mm256_adds_epi16    (r0, r2);
+   r4 = _mm256_adds_epi16    (r4, r6);
+
+   r0 = _mm256_adds_epi16    (r0, r4); // 16 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 8 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 4 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 2 shorts
+   r0 = _mm256_hadds_epi16   (r0, r0); // 1 final short
+   return _mm_extract_epi16(_mm256_castsi256_si128(r0), 0);
+}
+#endif
 
 int NNUEEvaluation::evaluate(const Fenboard &b)
 {
