@@ -169,6 +169,11 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         return std::tuple<move_t, move_t, int>(-1, -1, endgame_eval);
     }
 
+    // check for repetition
+    if (b.times_seen() >= 3) {
+        return std::tuple<move_t, move_t, int>(-1, -1, 0);
+    }
+
     // check transposition table
     if (use_transposition_table) {
         transposition_checks += 1;

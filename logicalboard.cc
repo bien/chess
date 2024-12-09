@@ -210,10 +210,10 @@ void Logicalboard::apply_move(move_t move)
     update_zobrist_hashing_move();
     this->in_check = this->king_in_check(this->side_to_play);
     update();
-	
+
 	assert(piece_bitmasks[(bb_king + 1) + bb_king] > 0);
 	assert(piece_bitmasks[bb_king] > 0);
-
+    seen_positions.push_back(hash);
 }
 
 void Logicalboard::undo_move(move_t move)
@@ -295,6 +295,7 @@ void Logicalboard::undo_move(move_t move)
     if (color == Black) {
         move_count--;
     }
+    seen_positions.pop_back();
 }
 
 void Logicalboard::update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding)

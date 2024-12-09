@@ -13,6 +13,8 @@ int main(int argc, char **argv)
     Fenboard b;
     int move_index;
     std::istream *input_stream = &std::cin;
+    std::random_device rd;  // a seed source for the random number engine
+    std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
 
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " move-index [file.pgn]" << std::endl;
@@ -36,7 +38,8 @@ int main(int argc, char **argv)
     while (!input_stream->eof()) {
         std::map<std::string, std::string> game_metadata;
         std::vector<std::pair<move_annot, move_annot> > movelist;
-        int target_index = move_index;
+        unsigned int target_index = move_index;
+        bool target_side_white = false;
 
         movelist.clear();
         game_metadata.clear();
@@ -44,14 +47,14 @@ int main(int argc, char **argv)
         if (movelist.empty()) {
             continue;
         }
-        if (move_index <= 0) {
+        if (move_index < 0) {
             target_index = movelist.size() + move_index;
         } else if (move_index == RANDOM) {
-            std::random_device rd;  // a seed source for the random number engine
-            std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
             std::uniform_int_distribution<> distrib(1, movelist.size() - 2);
+            std::uniform_int_distribution<> side_to_play(0, 1);
 
             target_index = distrib(gen);
+            target_side_white = side_to_play(gen) == 1;
         }
         if (target_index <= 0 || target_index > movelist.size()) {
             // move doesn't exist; skip
@@ -63,7 +66,7 @@ int main(int argc, char **argv)
         std::string last_eval;
         std::string last_move;
         std::string next_move;
-        move_t next_move_parsed;
+        move_t next_move_parsed = 0;
         int moveno = 1;
 
         for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
@@ -71,7 +74,7 @@ int main(int argc, char **argv)
             b.apply_move(move);
             if (moveno == target_index) {
                 // have black's move: apply black's move
-                if (iter->second.move.length() > 1) {
+                if (iter->second.move.length() > 1 && !target_side_white) {
                     last_clock = iter->second.clock;
                     last_eval = iter->second.eval;
                     last_move = iter->second.move;
