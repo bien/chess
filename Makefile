@@ -1,7 +1,7 @@
 INCLUDES = -Inet -I.
 CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native $(INCLUDES)
 ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc logicalboard.cc net/nnue.cc
-ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o) net/nnue-elite-5-stockfish-9.o
+ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o) net/nnue-staged-dual-1epochb-42.o
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 
 all: uciinterface test
