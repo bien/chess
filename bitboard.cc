@@ -387,7 +387,7 @@ void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, ui
 
 
 BitboardMoveIterator::BitboardMoveIterator(Color color)
-    : start_pos(-1), colored_piece_type(color * 8 + 1), captures_promote_type(0x8), processed_checks(false), dest_squares(0), covered_squares(0), king_slide_blockers(0xffffffffffffffff)
+    : start_pos(-1), colored_piece_type(color * 8 + 1), dest_pos(0), captures_promote_type(0x8), processed_checks(false), dest_squares(0), covered_squares(0), king_slide_blockers(0xffffffffffffffff)
 
 {
 }
