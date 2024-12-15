@@ -200,10 +200,19 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t, UNITY> &input_l
     dump_matrix(dense_3_layer);
 #endif
     dense_3_layer.matrix_multiply_add_div(m_dense_3_weights, m_dense_3_bias, output_layer);
+
+#ifdef DEBUG
+    std::cout << "output layer" << std::endl;
+    dump_matrix(output_layer);
+#endif
     output_layer.matrix_softmax();
+#ifdef DEBUG
+    std::cout << "softmax" << std::endl;
+    dump_matrix(output_layer);
+#endif
 
     // nnue calculated in .0001% of a win
-    int score = (output_layer.data[0][2] - output_layer.data[0][0]) / 10;
+    int score = (output_layer.data[0][2] - output_layer.data[0][0]);
     // nnue calculated with respect to side-to-play but engine wants respect to white
     if (side_to_play == Black) {
         score = -score;
@@ -219,11 +228,11 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
         layer.data[0][i + 256] = dense_bias[i];
     }
 
-    // always put white on the first half of the nnue, black on second half
+    // always put side-to-play on the first half of the nnue, other side on second half
     for (int king_color = 0; king_color<= 1; king_color++) {
         int king_square, half_adj;
 
-        if (king_color == Black) {
+        if (king_color != b.get_side_to_play()) {
             half_adj = 256;
         } else {
             half_adj = 0;
