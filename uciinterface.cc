@@ -5,6 +5,7 @@
 #include <time.h>
 #include "search.hh"
 #include "evaluate.hh"
+#include "nnue.hh"
 #include "pgn.hh"
 #include "bitboard.hh"
 
@@ -40,7 +41,7 @@ int main(int argc, char **argv)
     Fenboard b;
     b.set_starting_position();
     UciSearchUpdate searchUpdate;
-    bool is_debug = false;
+    search_debug = 1;
     std::string line;
     std::ofstream logging("server.log", std::ofstream::out | std::ofstream::ate);
     std::istream *input = &std::cin;
@@ -48,7 +49,7 @@ int main(int argc, char **argv)
         input = new std::ifstream(argv[1]);
     }
 
-    SimpleBitboardEvaluation simple;
+    NNUEEvaluation simple;
     Search search(&simple);
     search.use_transposition_table = true;
     search.use_mtdf = true;
@@ -73,7 +74,7 @@ int main(int argc, char **argv)
             std::cout << "option name Hash type spin default 1 min 1 max 1024" << std::endl;
             std::cout << "option name depth type spin default 7 min 1 max 1024" << std::endl;
             std::cout << "option name quiescentlimit type spin default 4 min 0 max 1024" << std::endl;
-            std::cout << "option name debug type check default off" << std::endl;
+            std::cout << "option name debug type spin default 0 min 0 max 8" << std::endl;
             std::cout << "uciok" << std::endl;
         }
         else if (line.rfind("setoption", 0) == 0) {
@@ -89,8 +90,7 @@ int main(int argc, char **argv)
                 std::cout << "set quiescentlimit = " << search.quiescent_depth << std::endl;
             }
             else if (tokens[2] == "debug" && tokens.size() > 4) {
-                // search_debug = (tokens[4] == "on" || tokens[4] == "true");
-                is_debug = true;
+                search_debug = stoi(tokens[4]);
                 std::cout << "set debug = " << search_debug << std::endl;
             }
         }
