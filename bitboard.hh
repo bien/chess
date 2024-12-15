@@ -85,7 +85,7 @@ public:
     uint64_t covered_squares;
     uint64_t king_slide_blockers;
 
-    move_t inserted_move = -1;
+    move_t inserted_move = 0;
 } ;
 
 

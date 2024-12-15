@@ -78,6 +78,9 @@ void legal_moves(Bitboard *b, Color color, std::vector<move_t> &moves) {
 void test_legal_moves(std::string fischer_pgn_file)
 {
     Fenboard b;
+    std::ostringstream movetext;
+    std::vector<move_t> legal_white, legal_black;
+
     for (unsigned char r = 0; r < 8; r++) {
         for (unsigned char f = 0; f < 8; f++) {
             BoardPos bp = make_board_pos(r, f);
@@ -97,7 +100,6 @@ void test_legal_moves(std::string fischer_pgn_file)
         }
     }
 
-    std::vector<move_t> legal_white, legal_black;
     legal_moves(&b, White, legal_white);
     legal_moves(&b, Black, legal_black);
     std::vector<move_t> expected_white, expected_black;
@@ -243,14 +245,13 @@ void test_legal_moves(std::string fischer_pgn_file)
     }
 
     // bug in check computation
-    std::ostringstream movetext;
     b.set_fen("r4kr1/1b2R1n1/pq4p1/7Q/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
     legal_black.clear();
     legal_moves(&b, Black, legal_black);
     for (std::vector<move_t>::iterator iter = legal_black.begin(); iter != legal_black.end(); iter++) {
         movetext.str("");
         b.print_move(*iter, movetext);
-        assert_not_equals(std::string("f8-e7"), movetext.str());
+        assert_not_equals(std::string("Kxe7"), movetext.str());
     }
 
     b.set_fen("6r1/7k/2p1pPp1/3p4/8/7R/5PPP/5K2 b - - 1 1");
@@ -258,6 +259,18 @@ void test_legal_moves(std::string fischer_pgn_file)
     legal_moves(&b, Black, legal_black);
     assert_equals(0, static_cast<int>(legal_black.size()));
     assert_equals(true, b.king_in_check(Black));
+
+    // can't enpassant into check
+    movetext.clear();
+    b.set_fen("8/6r1/4B3/n1p1p1rb/2p1kPpR/1pR1P1b1/6P1/1K6 b - f3 0 2");
+    legal_black.clear();
+    legal_moves(&b, Black, legal_black);
+    for (std::vector<move_t>::iterator iter = legal_black.begin(); iter != legal_black.end(); iter++) {
+        movetext.str("");
+        b.print_move(*iter, movetext);
+        assert_not_equals(std::string("gxf3"), movetext.str());
+        assert_not_equals(std::string("f3"), movetext.str());
+    }
 
 }
 
