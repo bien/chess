@@ -9,7 +9,7 @@ all: uciinterface test
 chess: bitboard.o fenboard.o test.o move.o
 	$(CXX) $^ -o $@
 
-uciinterface: bitboard.o fenboard.o move.o search.o evaluate.o pgn.o logicalboard.o uciinterface.o
+uciinterface: $(ENGINE_OBJS) uciinterface.o
 	$(CXX) $^ -o $@
 
 moves: moves.o bitboard.o fenboard.o move.o search.o evaluate.o pgn.o logicalboard.o
