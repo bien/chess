@@ -11,7 +11,7 @@
 
 void tokenize(const std::string &s, unsigned char delimiter, std::vector<std::string> &tokens)
 {
-    int pos = 0;
+    std::string::size_type pos = 0;
     while (pos != std::string::npos) {
         int nextdelim = s.find(delimiter, pos);
         if (nextdelim == std::string::npos) {
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
                 pos += 1;
             }
             if (tokens.size() >= 2 + pos && tokens[pos] == "moves") {
-                for (int i = pos + 1; i < tokens.size(); i++) {
+                for (unsigned int i = pos + 1; i < tokens.size(); i++) {
                     b.apply_move(b.read_move(tokens[i], b.get_side_to_play()));
                 }
             }
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
             std::map<std::string, std::string> options;
             std::string key, value;
             int movemillisecs = 0;
-            int pos = line.find(' ', 1);
+            unsigned int pos = line.find(' ', 1);
             while (pos != std::string::npos) {
                 int endpos = line.find(' ', pos + 1);
                 if (endpos == std::string::npos) {

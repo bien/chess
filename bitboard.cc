@@ -251,6 +251,7 @@ const uint64_t **Bitboard::bishop_magic = const_cast<const uint64_t **>(initiali
 Bitboard::Bitboard()
 {
     memset(piece_bitmasks, 0, sizeof(piece_bitmasks));
+    enpassant_file = -1;
     for (int i = 0; i < 64; i++) {
         attack_squares[i] = 0;
         attack_squares[i] |= BitboardCaptures::PregeneratedCaptures[White][bb_pawn][i];
