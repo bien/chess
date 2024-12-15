@@ -53,7 +53,7 @@ struct matrix {
                 sum_exp += exp_x[k];
             }
             for (k = 0; k < n; k++) {
-                this->data[i][k] = 1000000 * exp_x[k] / sum_exp;
+                this->data[i][k] = 10000 * exp_x[k] / sum_exp;
             }
         }
     }
@@ -128,12 +128,14 @@ struct matrix {
     int dot_product_n(const ntype *a, const btype *b) {
         int sum = 0;
         int k = 0;
+
 #ifdef __SSSE3__
-        if (n % 512 == 0) {
+        // 512 has some 16-bit overflow issues
+        /*if (n % 512 == 0) {
             for (; k + 512 <= n; k += 512) {
                 sum += dotProduct_512(&a[k], &b[k]);
             }
-        } else if (n % 32 == 0) {
+        } else */ if (n % 32 == 0) {
             for (; k + 32 <= n; k += 32) {
                 sum += dotProduct_32(&a[k], &b[k]);
             }
