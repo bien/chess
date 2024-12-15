@@ -220,6 +220,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         int currentnodescore;
         bool evaluated_nodescore = false;
         int tie_count = 1;
+        bool quiescent = true;
 
         if (hint) {
             // need to remake move to get captured piece and other details consistents
@@ -236,7 +237,9 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             move_t move = b.get_next_move(iter);
             bool cutoff;
 
-            if (use_quiescent_search && get_captured_piece(move, White) != EMPTY) {
+            quiescent = get_captured_piece(move, White) == EMPTY && !iter.in_captures();
+
+            if (use_quiescent_search && !quiescent) {
                 cutoff = (depth >= max_depth + quiescent_depth - 1);
             } else {
                 cutoff = (depth >= max_depth - 1);
@@ -274,6 +277,9 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 }
                 print_move_uci(move, std::cout) << " -> ";
                 print_move_uci(submove, std::cout) << " = " << subtree_score;
+                if (cutoff && !quiescent) {
+                    std::cout << "Q";
+                }
                 if (!first) {
                     std::cout << " best was ";
                     print_move_uci(best_move, std::cout) << " = " << best_score;
