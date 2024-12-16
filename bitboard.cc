@@ -420,6 +420,7 @@ bool Bitboard::is_not_illegal_due_to_check(Color color, piece_t piece, int start
                 return false;
             }
         }
+        // fall through: might still need removes_check test below
     }
     /*
     printf("is_legal %c%d-%c%d in_check=%d\n",
@@ -431,15 +432,8 @@ bool Bitboard::is_not_illegal_due_to_check(Color color, piece_t piece, int start
     if (!in_check && piece == bb_pawn && (start_pos % 8 != dest_pos % 8) && ((piece_bitmasks[bb_all + (1 - color) * (bb_king + 1)] & (1ULL << dest_pos)) == 0)) {
         uint64_t my_king = piece_bitmasks[bb_king + (bb_king + 1) * color];
         int king_square = get_low_bit(my_king, 0);
-        uint64_t king_rank = 0;
-        if (king_square / 8 == 3) {
-            king_rank = 0xff000000;
-        } else if (king_square / 8 == 4) {
-            king_rank = 0xff00000000;
-        }
-
         uint64_t attackers = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_rook] | piece_bitmasks[(1 - color) * (bb_king + 1) + bb_queen];
-        uint64_t all_pieces = king_rank & (piece_bitmasks[bb_all] | piece_bitmasks[(bb_king + 1) + bb_all]);
+        uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[(bb_king + 1) + bb_all];
 
         int df = 0;
         if (start_pos > king_square) {
@@ -451,9 +445,11 @@ bool Bitboard::is_not_illegal_due_to_check(Color color, piece_t piece, int start
         }
 
         int rank = start_pos / 8;
-        for (int file = start_pos % 8 + df; rank < 8 && rank >= 0; rank += df) {
+        for (int file = king_square % 8 + df; file < 8 && file >= 0; file += df) {
             if (attackers & (1ULL << (rank * 8 + file))) {
                 return false;
+            } else if (file == start_pos % 8 || file == dest_pos % 8) {
+                // continue
             } else if (all_pieces & (1ULL << (rank * 8 + file))) {
                 break;
             }
