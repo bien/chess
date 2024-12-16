@@ -170,7 +170,7 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
     int srcfile = INVALID;
     int destfile = INVALID;
     int destrank = INVALID;
-    int promotion = 0;
+    unsigned int promotion = 0;
 
     if (s[pos] == 'O') {
         castle = true;
