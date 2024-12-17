@@ -128,21 +128,22 @@ struct matrix {
     int dot_product_n(const ntype *a, const btype *b) {
         int sum = 0;
         int k = 0;
-
 #ifdef __SSSE3__
-        // 512 has some 16-bit overflow issues
-        /*if (n % 512 == 0) {
+        if (n % 512 == 0) {
             for (; k + 512 <= n; k += 512) {
                 sum += dotProduct_512(&a[k], &b[k]);
             }
-        } else */ if (n % 32 == 0) {
+        }
+        else if (n % 32 == 0) {
             for (; k + 32 <= n; k += 32) {
                 sum += dotProduct_32(&a[k], &b[k]);
             }
-        }
+        } else
 #endif
-        for (; k < n; k++) {
-            sum += a[k] * b[k];
+        {
+            for (; k < n; k++) {
+                sum += a[k] * b[k];
+            }
         }
         return sum;
     }
@@ -209,7 +210,7 @@ struct matrix {
         return dotProduct;
     }
 
-    static int16_t dotProduct_32(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
+    static int dotProduct_32(const unsigned char features[], const int8_t * weights) {
         // reads 32 bytes
        __m256i r0;
        __m256i* a = (__m256i*) features;
@@ -218,41 +219,19 @@ struct matrix {
 
        return sum_words_epi16(r0);
     }
-
-    static int16_t dotProduct_512(const unsigned char features[], const int8_t * weights /* XMM_ALIGN */) {
-        // reads 256 bytes
-       __m256i r0, r1, r2, r3, r4, r5, r6, r7, r8;
+    static int dotProduct_512(const unsigned char features[], const int8_t * weights) {
+        // reads 32 bytes
+       __m256i r0, r1, sum_epi16, sum_epi32 = _mm256_setzero_si256();
        __m256i* a = (__m256i*) features;
        __m256i* b = (__m256i*) weights;
-
-       for (int i = 0; i < 2; i++) {
-           r0 = _mm256_maddubs_epi16 (a[0], b[0]);
-           r1 = _mm256_maddubs_epi16 (a[1], b[1]);
-           r2 = _mm256_maddubs_epi16 (a[2], b[2]);
-           r3 = _mm256_maddubs_epi16 (a[3], b[3]);
-           r4 = _mm256_maddubs_epi16 (a[4], b[4]);
-           r5 = _mm256_maddubs_epi16 (a[5], b[5]);
-           r6 = _mm256_maddubs_epi16 (a[6], b[6]);
-           r7 = _mm256_maddubs_epi16 (a[7], b[7]);
-           r0 = _mm256_adds_epi16    (r0, r1);
-           r2 = _mm256_adds_epi16    (r2, r3);
-           r4 = _mm256_adds_epi16    (r4, r5);
-           r6 = _mm256_adds_epi16    (r6, r7);
-
-           r0 = _mm256_adds_epi16    (r0, r2);
-           r4 = _mm256_adds_epi16    (r4, r6);
-
-           if (i == 0) {
-               r8 = _mm256_adds_epi16    (r0, r4); // 16 shorts
-               a += 8;
-               b += 8;
-           } else {
-               r0 = _mm256_adds_epi16    (r0, r4); // 16 shorts
-           }
+       for (int i = 0; i < 16; i += 2) {
+           r0 = _mm256_maddubs_epi16 (a[i], b[i]);
+           r1 = _mm256_maddubs_epi16 (a[i+1], b[i+1]);
+           sum_epi16 = _mm256_add_epi16(r0, r1);
+           sum_epi32 = _mm256_add_epi32(sum_epi32, _mm256_madd_epi16(sum_epi16, _mm256_set1_epi16(1)));
        }
 
-       r0 = _mm256_adds_epi16    (r0, r8); // 16 shorts
-       return sum_words_epi16(r0);
+       return hsum_8x32(sum_epi32);
     }
 #endif
 

@@ -120,7 +120,7 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
         add_remove_piece(b, moved_piece, false, src_rank * 8 + src_file, dense_1_layer);
     } else {
         // need to redo the whole board so just start over
-        matrix<1, 512, int8_t, UNITY> layer;
+        matrix<1, 512, int16_t, UNITY> layer;
         b.apply_move(move);
         recalculate_dense1_layer(b, layer);
         score = calculate_score(layer, b.get_side_to_play());
@@ -130,7 +130,7 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
     return score;
 }
 
-void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type, bool remove, int piece_pos, matrix<1, 512, int8_t, UNITY> &layer)
+void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type, bool remove, int piece_pos, matrix<1, 512, int16_t, UNITY> &layer)
 {
     piece_t piece_type = colored_piece_type & PIECE_MASK;
     Color piece_color = (colored_piece_type > bb_king ? Black : White);
@@ -158,11 +158,11 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
         int dense_index = king_square * (64 * 10) + (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 5) * 64 + rel_pos;
         if (remove) {
             for (int k = 0; k < 256; k++) {
-                dense_1_layer.data[0][k + half_adj] -= dense_weights[dense_index][k];
+                layer.data[0][k + half_adj] -= dense_weights[dense_index][k];
             }
         } else {
             for (int k = 0; k < 256; k++) {
-                dense_1_layer.data[0][k + half_adj] += dense_weights[dense_index][k];
+                layer.data[0][k + half_adj] += dense_weights[dense_index][k];
             }
         }
     }
@@ -170,7 +170,7 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 }
 
 
-int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t, UNITY> &input_layer, Color side_to_play) const
+int NNUEEvaluation::calculate_score(const matrix<1, 512, int16_t, UNITY> &input_layer, Color side_to_play) const
 {
     matrix<1, 512, uint8_t, UNITY> dense_layer;
     matrix<1, 32, uint8_t, UNITY> dense_2_layer;
@@ -220,7 +220,7 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int8_t, UNITY> &input_l
     return score;
 }
 
-void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, int8_t, UNITY> &layer)
+void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, int16_t, UNITY> &layer)
 {
     int i;
     for (i = 0; i < 256; i++) {

@@ -9,6 +9,7 @@
 #include "move.hh"
 #include "bitboard.hh"
 #include "fenboard.hh"
+#include "matrix.hh"
 
 void assert_true(bool value)
 {
@@ -357,6 +358,21 @@ void test_move_finding()
     assert_equals(b.read_move("cxd4", White), move);
 }
 
+void test_matrix()
+{
+    alignas(32) unsigned char features[512];
+    alignas(32) int8_t weights[512];
+
+    for (int i = 0; i < 512; i++) {
+        features[i] = 64;
+        weights[i] = 64;
+    }
+    int result = matrix<1, 1, int, 1>::dotProduct_32(features, weights);
+    assert_equals(131072, result);
+    result = matrix<1, 1, int, 1>::dotProduct_512(features, weights);
+    assert_equals(2097152, result);
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2) {
@@ -366,5 +382,6 @@ int main(int argc, char **argv)
 
     test_legal_moves(argv[1]);
     test_move_finding();
+    test_matrix();
     return 0;
 }
