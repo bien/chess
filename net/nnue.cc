@@ -157,13 +157,19 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
         // nnue piece_type is 0 based instead of 1 based
         int dense_index = king_square * (64 * 10) + (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 5) * 64 + rel_pos;
         if (remove) {
+            matrix<1, 512, int16_t, UNITY>::vector_sub(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
+            /*
             for (int k = 0; k < 256; k++) {
                 layer.data[0][k + half_adj] -= dense_weights[dense_index][k];
             }
+            */
         } else {
+            matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
+            /*
             for (int k = 0; k < 256; k++) {
                 layer.data[0][k + half_adj] += dense_weights[dense_index][k];
             }
+            */
         }
     }
 
@@ -252,9 +258,11 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
                      }
                      // nnue piece_type is 0 based instead of 1 based
                      int dense_index = king_square * (64 * 10) + (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 5) * 64 + rel_start;
+                     matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
+                     /*
                      for (int k = 0; k < 256; k++) {
                          layer.data[0][k + half_adj] += dense_weights[dense_index][k];
-                     }
+                     }*/
                  }
              }
          }
