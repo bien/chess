@@ -408,33 +408,65 @@ uint64_t Bitboard::get_king_slide_blockers(int king_pos, Color king_color) const
 
 bool Bitboard::is_not_illegal_due_to_check(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const
 {
-    bool is_illegal = false;
-
     // special rules for king moves
     if (piece == bb_king) {
         // don't move into check
         if (covered_squares & (1ULL << dest_pos)) {
-            is_illegal = true;
+            return false;
         }
         else if (abs(start_pos - dest_pos) == 2) {
             // it's a castle: don't move out of check or through check
             if (in_check || (covered_squares & (1ULL << (start_pos + (dest_pos - start_pos) / 2)))) {
-                is_illegal = true;
+                return false;
             }
         }
     }
-/*
+    /*
     printf("is_legal %c%d-%c%d in_check=%d\n",
         start_pos%8+'a', start_pos/8 + 1, dest_pos%8+'a', dest_pos/8 + 1,
         in_check);
-*/
+    display_bitboard(covered_squares, -1, -1);
+    */
+    // enpassant captures can remove two pieces from sight of rook/queen on 4th rank
+    if (!in_check && piece == bb_pawn && (start_pos % 8 != dest_pos % 8) && ((piece_bitmasks[bb_all + (1 - color) * (bb_king + 1)] & (1ULL << dest_pos)) == 0)) {
+        uint64_t my_king = piece_bitmasks[bb_king + (bb_king + 1) * color];
+        int king_square = get_low_bit(my_king, 0);
+        uint64_t king_rank = 0;
+        if (king_square / 8 == 3) {
+            king_rank = 0xff000000;
+        } else if (king_square / 8 == 4) {
+            king_rank = 0xff00000000;
+        }
+
+        uint64_t attackers = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_rook] | piece_bitmasks[(1 - color) * (bb_king + 1) + bb_queen];
+        uint64_t all_pieces = king_rank & (piece_bitmasks[bb_all] | piece_bitmasks[(bb_king + 1) + bb_all]);
+
+        int df = 0;
+        if (start_pos > king_square) {
+            df = 1;
+        } else if (start_pos < king_square) {
+            df = -1;
+        } else {
+            assert(false);
+        }
+
+        int rank = start_pos / 8;
+        for (int file = start_pos % 8 + df; rank < 8 && rank >= 0; rank += df) {
+            if (attackers & (1ULL << (rank * 8 + file))) {
+                return false;
+            } else if (all_pieces & (1ULL << (rank * 8 + file))) {
+                break;
+            }
+        }
+
+    }
     if (!in_check && discovers_check(start_pos, dest_pos, color, covered_squares, true)) {
-        is_illegal = true;
+        return false;
     }
-    if (in_check && !removes_check(piece, start_pos, dest_pos, color, covered_squares)) {
-        is_illegal = true;
+    else if (in_check && !removes_check(piece, start_pos, dest_pos, color, covered_squares)) {
+        return false;
     }
-    return !is_illegal;
+    return true;
 }
 
 // color indicates which king would be checked
@@ -670,8 +702,8 @@ void BitboardMoveIterator::push_move_front(move_t move)
 void BitboardMoveIterator::advance(const Bitboard *board)
 {
     bool done = false;
-    if (inserted_move != -1) {
-        inserted_move = -1;
+    if (inserted_move != 0) {
+        inserted_move = 0;
         return;
     }
 
@@ -767,7 +799,7 @@ void BitboardMoveIterator::advance(const Bitboard *board)
 
 move_t BitboardMoveIterator::get_move(const Bitboard *board) const
 {
-    if (inserted_move != -1) {
+    if (inserted_move != 0) {
         return inserted_move;
     }
     return board->make_move(start_pos / 8, start_pos % 8, colored_piece_type, dest_pos / 8, dest_pos % 8, board->get_piece(dest_pos / 8, dest_pos % 8), get_promote_type());
