@@ -52,13 +52,13 @@ def centipawn_result_iterator(positions, batch_size=None):
 
 
             if len(centipawns) == batch_size:
-                yield {'side_0': myboards, 'side_1': theirboards}, {'centipawns': centipawns, 'result': keras.utils.to_categorical(int(np.sign(centipawns)) + 1, 3)}
+                yield (np.array(myboards), np.array(theirboards)), (np.array(keras.utils.to_categorical(np.sign(centipawns) + 1, 3)).astype(np.ubyte), np.array(centipawns).astype(np.int16))
                 myboards = []
                 theirboards = []
                 centipawns = []
 
-    if batch_size is not None:
-        yield {'side_0': myboards, 'side_1': theirboards}, {'centipawns': centipawns, 'result': keras.utils.to_categorical(int(np.sign(centipawns)) + 1, 3)}
+    if batch_size is not None and len(centipawns) > 0:
+        yield (np.array(myboards), np.array(theirboards)), (np.array(keras.utils.to_categorical(np.sign(centipawns) + 1, 3)).astype(np.ubyte), np.array(centipawns).astype(np.int16))
 
 
 def main(pgnfile):
@@ -66,7 +66,7 @@ def main(pgnfile):
     model = fentrain.make_nnue_model_mirror(fentrain.input_shape, include_centipawns=True)
     model.summary()
     print ("Calling fit")
-    tf_data_generator = tf.data.Dataset.from_generator(lambda: centipawn_result_iterator(get_positions(sys.argv[1])),
+    tf_data_generator = tf.data.Dataset.from_generator(lambda: centipawn_result_iterator(get_positions(sys.argv[1]), 2),
         output_signature=(
             (tf.TensorSpec(shape=(None, 40960), dtype=tf.uint8, name='side_0'),
             tf.TensorSpec(shape=(None, 40960), dtype=tf.uint8, name='side_1')),
