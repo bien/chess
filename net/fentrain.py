@@ -22,7 +22,7 @@ def mirror(board):
     return np.concatenate([board[(8*(7-i)):(8*(7-i))+8] for i in range(8)])
 
 def mirror_square(sq):
-    return sq % 8 + 8 * (7 - (sq // 8))    
+    return sq % 8 + 8 * (7 - (sq // 8))
 
 def get_line_count(filename):
     if filename.endswith('.gz'):
@@ -32,7 +32,7 @@ def get_line_count(filename):
         p2 = Popen(["wc", "-l"], stdin=p1.stdout, stdout=PIPE)
         p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
         output = p2.communicate()[0]
-        
+
         return int(output.decode('utf-8').split()[0])
 
 def interpret_stockfish(stockfish):
@@ -78,7 +78,7 @@ class PositionSequence(keras.utils.Sequence):
             self.file_df = pd.read_table(current_file, encoding="utf-8", index_col='url', names=self.colnames, sep='\t', on_bad_lines='warn')
             use_stockfish_score(self.file_df)
             if self.include_centipawns:
-                yval = (self.file_df.result.values, self.file_df.centipawns.values)        
+                yval = (self.file_df.result.values, self.file_df.centipawns.values)
             else:
                 yval = self.file_df.result.values
 
@@ -170,7 +170,7 @@ input_shape = (2, 64*64*10)
 BATCH_SIZE = 256
 
 def fiteval_model(model, x_train, x_test_data, epochs, batch_size, include_centipawns):
-    
+
     history = model.fit(x_train, validation_data=x_test_data, batch_size=batch_size, epochs=epochs)
     x_test = np.concatenate([x_test_data[i][0] for i in range(min(30, len(x_test_data)))], axis=1)
     if include_centipawns:
@@ -183,16 +183,16 @@ def fiteval_model(model, x_train, x_test_data, epochs, batch_size, include_centi
     else:
         y_pred = y_output[:,2]
     y_actual = y_test[:,2] - 0.5
-        
+
     cf_matrix = confusion_matrix(y_actual > 0, y_pred >= 0.5)
-    sns.heatmap(cf_matrix/np.sum(cf_matrix), annot=True, 
+    sns.heatmap(cf_matrix/np.sum(cf_matrix), annot=True,
                 fmt='.2%', cmap='Blues')
     plt.show()
-        
+
     fp, tp, _ = roc_curve(y_actual > 0, y_pred)
     plt.plot(fp,tp)
     plt.show()
-    
+
     print(roc_auc_score(y_actual > 0, y_pred))
     print(model)
     return history
@@ -204,7 +204,7 @@ def train_model_big(model, df_train_glob, df_test, include_centipawns=False, epo
 
     else:
         result_test = df_test.result.values
-        
+
     x_train_sparse = PositionSequence(df_train_glob, batch_size, mirror)
     x_test_sparse = FenSequence(df_test, result_test, batch_size, mirror)
     history = fiteval_model(model, x_train_sparse, x_test_sparse, epochs=epochs, batch_size=batch_size, include_centipawns=include_centipawns)
@@ -220,7 +220,7 @@ def train_model(model, df_train, df_test, include_centipawns=False, epochs=6, ba
     else:
         result_train = df_train.result.values
         result_test = df_test.result.values
-        
+
     x_train_sparse = FenSequence(df_train, result_train, batch_size, mirror)
     x_test_sparse = FenSequence(df_test, result_test, batch_size, mirror)
     fiteval_model(model, x_train_sparse, x_test_sparse, epochs=epochs, batch_size=batch_size, include_centipawns=include_centipawns)
@@ -235,7 +235,7 @@ def make_nnue_model_mirror(input_shape, num_classes=3, include_centipawns=False)
     hidden = []
     l1hidden = layers.Dense(256, activation=relu_sat)
     for color in range(2):
-        x = keras.Input(shape=input_shape[1:])
+        x = keras.Input(shape=input_shape[1:], name='side_{}'.format(color))
         inputs.append(x)
         hidden.append(l1hidden(x))
     x = layers.concatenate(hidden)
@@ -247,5 +247,14 @@ def make_nnue_model_mirror(input_shape, num_classes=3, include_centipawns=False)
         outputs = [result, centipawns]
     else:
         outputs = result
-        
-    return keras.Model(inputs=inputs, outputs=outputs, name="lobsternet_nnue")
+
+    model = keras.Model(inputs=inputs, outputs=outputs, name="lobsternet_nnue")
+    if include_centipawns:
+        model.compile(
+            loss=["categorical_crossentropy", "mean_squared_error"],
+            loss_weights=[1, .05],
+            optimizer="adam",
+            metrics=["categorical_accuracy", "mean_squared_error"])
+    else:
+        model.compile(loss=["categorical_crossentropy"], optimizer="adam", metrics=["categorical_accuracy"])
+    return model
