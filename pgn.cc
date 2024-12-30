@@ -282,7 +282,7 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
                     pos = end_annotation + 1;
                 } else {
                     std::cerr << "Unterminated move metadata around " << line.substr(pos - 5, 10) << std::endl;
-                    abort();
+                    return;
                 }
             }
         }
