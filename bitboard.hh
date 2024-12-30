@@ -160,7 +160,7 @@ private:
         return bit;
     }
 
-protected:
+public:
     uint64_t piece_bitmasks[2 * (bb_king + 1)];
 private:
     uint64_t attack_squares[64];
