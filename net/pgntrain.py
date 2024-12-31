@@ -257,7 +257,7 @@ def sqrelu_clamp(x):
 
 class BasicNNUE(NNUEModel):
     def __init__(self, num_hidden_layers=0, hidden_layers_width=32, **kwargs):
-        super().__init__(num_hidden_layers=num_hidden_layers, hidden_layers_width=hidden_layers_width, relu_fn=sqrelu_clamp, **kwargs)
+        super().__init__(num_hidden_layers=num_hidden_layers, hidden_layers_width=hidden_layers_width, relu_fn=relu_sat, **kwargs)
 
     def _num_king_buckets(self):
         return 1
