@@ -206,18 +206,18 @@ class NNUEModel:
         metrics = []
         losses = []
         loss_weights = []
-        if self.centipawn_output:
-            centipawns = layers.Dense(1, name="centipawns")(x)
-            outputs.append(centipawns)
-            metrics.append("mean_squared_error")
-            losses.append("mean_squared_error")
-            loss_weights.append(.000002)
         if self.wdl_output:
             result = layers.Dense(num_classes, activation="softmax", name="wdl")(x)
             outputs.append(result)
             metrics.append("categorical_accuracy")
             losses.append("categorical_crossentropy")
             loss_weights.append(1)
+        if self.centipawn_output:
+            centipawns = layers.Dense(1, name="centipawns")(x)
+            outputs.append(centipawns)
+            metrics.append("mean_squared_error")
+            losses.append("mean_squared_error")
+            loss_weights.append(.2)
 
         model = keras.Model(inputs=tuple(inputs), outputs=tuple(outputs), name="lobsternet_nnue")
         model.compile(
@@ -231,17 +231,17 @@ class NNUEModel:
         model = self.make_nnue_model_mirror(include_centipawns=True)
         model.summary()
         output_sig = []
-        if self.centipawn_output:
-            output_sig.append(tf.TensorSpec(shape=(None, ), dtype=tf.int16, name='centipawns'))
         if self.wdl_output:
             output_sig.append(tf.TensorSpec(shape=(None, 3), dtype=tf.float32, name='result'))
+        if self.centipawn_output:
+            output_sig.append(tf.TensorSpec(shape=(None, ), dtype=tf.int16, name='centipawns'))
 
         sign = ((tf.TensorSpec(shape=(None, self.INPUT_LENGTH), dtype=tf.uint8, name='side_0'),
                 tf.TensorSpec(shape=(None, self.INPUT_LENGTH), dtype=tf.uint8, name='side_1')),
                 tuple(output_sig))
         tf_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(train_pgn, batch_size=batch_size),
             output_signature=sign)
-        validation_data_generator = tf.data.Dataset.from_generator(lambda: self.centipawn_result_iterator(get_positions(valid_pgn)),
+        validation_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(valid_pgn, batch_size=batch_size),
             output_signature=sign)
         if profile:
             pr = cProfile.Profile()
