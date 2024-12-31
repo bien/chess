@@ -10,6 +10,7 @@ from keras import layers
 import random
 import cProfile, pstats, io
 from pstats import SortKey
+import os.path
 
 class TrainingPosition(ctypes.Structure):
     # PNBRQKpnbrqk
@@ -57,7 +58,7 @@ def get_positions(pgnfile):
 
 class NNUEModel:
 
-    TrainLib = ctypes.cdll.LoadLibrary('trainlib.dylib')
+    TrainLib = ctypes.cdll.LoadLibrary('trainlib.dylib' if os.path.exists('trainlib.dylib') else './trainlib.so')
     # https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#loss-functions-and-how-to-apply-them
     CP_WDL_SCALING_FACTOR = 410
 
