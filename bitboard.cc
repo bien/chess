@@ -708,8 +708,8 @@ void BitboardMoveIterator::advance(const Bitboard *board)
         uint64_t opponent_king_pos = board->piece_bitmasks[(1 - color) * (bb_king + 1) + bb_king];
         assert(opponent_king_pos > 0);
         // iterate through all the promotion types
-        if (get_promote_type() > 0 && get_promote_type() < bb_queen) {
-            set_promote_type(get_promote_type() + 1);
+        if (get_promote_type() > bb_knight && get_promote_type() <= bb_queen) {
+            set_promote_type(get_promote_type() - 1);
         }
         // iterate through all the possible destination squares for this piece
         else if (dest_squares >> (1 + dest_pos)) {
@@ -767,7 +767,7 @@ void BitboardMoveIterator::advance(const Bitboard *board)
             set_promote_type(0);
         }
         if ((colored_piece_type & PIECE_MASK) == bb_pawn && (dest_pos <= 7 || dest_pos >= 56) && get_promote_type() == 0) {
-            set_promote_type(bb_knight);
+            set_promote_type(bb_queen);
         }
 
         if (!board->in_check && king_slide_blockers == 0xffffffffffffffff) {
