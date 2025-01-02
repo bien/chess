@@ -148,7 +148,7 @@ class NNUEModel:
         elif self.centipawn_output:
             yield xfeat, (np.array(cp_evals).astype(np.int16),)
 
-    def fast_result_iterator(self, pgn_filename, batch_size):
+    def fast_result_iterator(self, pgn_filename, batch_size, freq=10, seed=0):
         board_step_size = 64 * len(self.white_piece_list)
         tp = TrainingPosition()
         self.TrainLib.create_training_iterator.restype = ctypes.c_void_p
@@ -156,7 +156,7 @@ class NNUEModel:
         self.TrainLib.read_position.argtypes = (ctypes.c_void_p, ctypes.POINTER(TrainingPosition))
         self.TrainLib.delete_training_iterator.argtypes = (ctypes.c_void_p, )
 
-        iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), 10)
+        iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
         has_more = 1
         cp_evals = []
         myboards = []
@@ -241,7 +241,7 @@ class NNUEModel:
                 tuple(output_sig))
         tf_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(train_pgn, batch_size=batch_size),
             output_signature=sign)
-        validation_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(valid_pgn, batch_size=batch_size),
+        validation_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(valid_pgn, batch_size=batch_size, freq=20, seed=42),
             output_signature=sign)
         if profile:
             pr = cProfile.Profile()

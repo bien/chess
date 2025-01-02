@@ -23,6 +23,9 @@ public:
     TrainingIterator(const char *filename, int move_freq)
         : input_stream(filename), distrib(1, move_freq), gen(rd())
     {}
+    TrainingIterator(const char *filename, int move_freq, unsigned int seed)
+        : input_stream(filename), distrib(1, move_freq), gen(seed)
+    {}
     bool read_position(TrainingPosition *tp);
 private:
     bool process_game(TrainingPosition *tp);
@@ -41,8 +44,13 @@ private:
 
 extern "C" {
 
-TrainingIterator *create_training_iterator(const char *filename, int move_freq) {
-    TrainingIterator *ti = new TrainingIterator(filename, move_freq);
+TrainingIterator *create_training_iterator(const char *filename, int move_freq, unsigned int seed) {
+    TrainingIterator *ti;
+    if (seed == 0) {
+        ti = new TrainingIterator(filename, move_freq);
+    } else {
+        ti = new TrainingIterator(filename, move_freq, seed);
+    }
     return ti;
 }
 bool read_position(TrainingIterator *iter, TrainingPosition *tp) {
