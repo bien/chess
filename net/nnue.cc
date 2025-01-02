@@ -7,9 +7,16 @@
 #include <stdio.h>
 #include <string.h>
 
+#define HALFKASINGLE 1
+
 extern "C" {
 extern const int8_t dense_bias[256];
+#ifdef HALFKP
 extern const int8_t dense_weights[40960][256];
+#endif
+#ifdef HALFKASINGLE
+extern const int8_t dense_weights[768][256];
+#endif
 
 extern const int16_t dense_1_bias[32];
 extern const int8_t dense_1_weights[512][32];
@@ -23,16 +30,16 @@ template <int m, int n, typename atype>
 struct WeightsFlip {
     WeightsFlip(const atype dense_1_weights[m][n]) {
         static_assert(m % 2 == 0, "size must be multiple of 2");
-        int half = m / 2;
+        int half = n / 2;
         for (int i = 0; i < m; i++) {
-            int index;
-            if (i >= half) {
-                index = i - half;
-            } else {
-                index = i + half;
-            }
+            int jflip;
             for (int j = 0; j < n; j++) {
-                data[i][j] = dense_1_weights[index][j];
+                if (j >= half) {
+                    jflip = j - half;
+                } else {
+                    jflip = j + half;
+                }
+                data[i][j] = dense_1_weights[i][jflip];
             }
         }
     }
@@ -76,12 +83,50 @@ template<int m, int n, typename atype, int unity>
 void dump_matrix(const matrix<m, n, atype, unity> &x)
 {
     for (int i = 0; i < m; i++) {
+        if (m > 2) {
+            std::cout << "row " << i << std::endl;
+        }
         for (int k = 0; k < n; k++) {
+            if (n > 16 && k % 16 == 0) {
+                std::cout << std::endl << k << ": ";
+            }
             std::cout << static_cast<int>(x.data[i][k]) << ", ";
         }
         std::cout << std::endl;
     }
 }
+
+// feature set dependent variables
+static piece_t get_max_piece()
+{
+#ifdef HALFKP
+    return bb_queen;
+#endif
+#ifdef HALFKASINGLE
+    return bb_king;
+#endif
+}
+
+static int get_dense_index(int king_square, int piece_type, int piece_pos, int piece_color, int king_color)
+{
+    int rel_pos;
+    int dense_index = 0;
+    if (king_color == Black) {
+        rel_pos = mirror_square(piece_pos);
+    } else {
+        rel_pos = piece_pos;
+    }
+
+     // nnue piece_type is 0 based instead of 1 based
+#ifdef HALFKP
+    dense_index = king_square * (64 * 10) + (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 5) * 64 + rel_pos;
+#endif
+#ifdef HALFKASINGLE
+    dense_index = (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 6) * 64 + rel_pos;
+#endif
+    return dense_index;
+}
+
 
 int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score) {
     int score;
@@ -101,7 +146,8 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
         enpassant_capture_square = src_rank * 8 + dest_file;
     }
 
-    if ((moved_piece & PIECE_MASK) != bb_king) {
+    // this works for HALFKP and HALFKA-single but maybe not other feature sets
+    if ((moved_piece & PIECE_MASK) <= get_max_piece()) {
         add_remove_piece(b, moved_piece, true, src_rank * 8 + src_file, dense_1_layer);
         if (captured_piece > 0) {
             add_remove_piece(b, captured_piece, true, dest_rank * 8 + dest_file, dense_1_layer);
@@ -148,28 +194,23 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
         } else {
             king_square = mirror_square(get_low_bit(b.piece_bitmasks[(bb_king + 1) + bb_king], 0));
         }
-        int rel_pos;
-        if (king_color == Black) {
-            rel_pos = mirror_square(piece_pos);
-        } else {
-            rel_pos = piece_pos;
-        }
-        // nnue piece_type is 0 based instead of 1 based
-        int dense_index = king_square * (64 * 10) + (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 5) * 64 + rel_pos;
+
+        int dense_index = get_dense_index(king_square, piece_type, piece_pos, piece_color, king_color);
+
         if (remove) {
-            matrix<1, 512, int16_t, UNITY>::vector_sub(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
-            /*
+            //matrix<1, 512, int16_t, UNITY>::vector_sub(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
+
             for (int k = 0; k < 256; k++) {
                 layer.data[0][k + half_adj] -= dense_weights[dense_index][k];
             }
-            */
+
         } else {
-            matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
-            /*
+//            matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
+
             for (int k = 0; k < 256; k++) {
                 layer.data[0][k + half_adj] += dense_weights[dense_index][k];
             }
-            */
+
         }
     }
 
@@ -196,14 +237,59 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int16_t, UNITY> &input_
     } else {
         dense_layer.matrix_multiply_add_div_relu(m_dense_1_weights_flipped, m_dense_1_bias, dense_2_layer);
     }
-#ifdef DEBUG
-    std::cout << "layer 1-2 relu" << std::endl;
-    dump_matrix(dense_2_layer);
-#endif
+
     dense_2_layer.matrix_multiply_add_div_relu(m_dense_2_weights, m_dense_2_bias, dense_3_layer);
 #ifdef DEBUG
+    for (int k = 0; k < 32; k++) {
+        std::cout << "output[" << k << "] = " << (int)m_dense_1_bias.data[k];
+        bool first = true;
+        int check = m_dense_1_bias.data[k];
+        for (int j = 0; j < 512; j++) {
+            if (j % 16 == 0) {
+                std::cout << std::endl << j << ": ";
+            }
+            if (dense_layer.data[0][j] > 0) {
+                std::cout << "+";
+                if (first) {
+                    std::cout << "(";
+                    first = false;
+                }
+                check += ((int)(side_to_play == White ? m_dense_1_weights_forward : m_dense_1_weights_flipped).data[k][j]) * dense_layer.data[0][j];
+                std::cout << (int)(side_to_play == White ? m_dense_1_weights_forward : m_dense_1_weights_flipped).data[k][j] << "*" << (int)dense_layer.data[0][j];
+            }
+        }
+        std::cout << ")/64 # " << (int)dense_2_layer.data[0][k] << " == " << check << std::endl;
+    }
+
+    std::cout << "layer 1-2 relu" << std::endl;
+    dump_matrix(dense_2_layer);
+    for (int k = 0; k < 32; k++) {
+        std::cout << "output[" << k << "] = " << (int)m_dense_2_bias.data[k];
+        bool first = true;
+        for (int j = 0; j < 32; j++) {
+            if (dense_2_layer.data[0][j] > 0) {
+                std::cout << "+";
+                if (first) {
+                    std::cout << "(";
+                    first = false;
+                }
+                std::cout << (int)m_dense_2_weights.data[k][j] << "*" << (int)dense_2_layer.data[0][j];
+            }
+        }
+        std::cout << ")/64 # " << (int)dense_3_layer.data[0][k] << std::endl;
+    }
     std::cout << "layer 2-3 relu" << std::endl;
     dump_matrix(dense_3_layer);
+    for (int k = 0; k < 3; k++) {
+        std::cout << "output[" << k << "] = " << (int)m_dense_3_bias.data[k];
+        for (int j = 0; j < 32; j++) {
+            if (dense_3_layer.data[0][j] > 0) {
+                std::cout << "+";
+                std::cout << (int)m_dense_3_weights.data[k][j] << "*" << (int)dense_3_layer.data[0][j];
+            }
+        }
+        std::cout << std::endl;
+    }
 #endif
     dense_3_layer.matrix_multiply_add_div(m_dense_3_weights, m_dense_3_bias, output_layer);
 
@@ -217,12 +303,30 @@ int NNUEEvaluation::calculate_score(const matrix<1, 512, int16_t, UNITY> &input_
     dump_matrix(output_layer);
 #endif
 
-    // nnue calculated in .0001% of a win
-    int score = (output_layer.data[0][2] - output_layer.data[0][0]);
+    // https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#loss-functions-and-how-to-apply-them
+    const int CP_WDL_SCALING_FACTOR = 410;
+    float winprob = (output_layer.data[0][2] + 0.5 * output_layer.data[0][1]) / 10000;
+    int score;
+    if (winprob == 0) {
+        score = VERY_BAD;
+    } else {
+        score = -CP_WDL_SCALING_FACTOR * log(1.0 / winprob - 1);
+    }
+    // don't output scores that are more extreme than forced mate
+    if (score > VERY_GOOD) {
+        score = VERY_GOOD;
+    } else if (score < VERY_BAD) {
+        score = -VERY_BAD;
+    }
+#ifdef DEBUG
+    std::cout << "wp = " << winprob << " score = " << score << std::endl;
+#endif
+    /*
     // nnue calculated with respect to side-to-play but engine wants respect to white
     if (side_to_play == Black) {
         score = -score;
     }
+    */
     return score;
 }
 
@@ -234,11 +338,11 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
         layer.data[0][i + 256] = dense_bias[i];
     }
 
-    // always put side-to-play on the first half of the nnue, other side on second half
-    for (int king_color = 0; king_color<= 1; king_color++) {
+    // always put white on the first half of the nnue, black on second half
+    for (int king_color = 0; king_color <= 1; king_color++) {
         int king_square, half_adj;
 
-        if (king_color != b.get_side_to_play()) {
+        if (king_color == Black) {
             half_adj = 256;
         } else {
             half_adj = 0;
@@ -248,21 +352,18 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, matrix<1, 512, 
         } else {
             king_square = mirror_square(get_low_bit(b.piece_bitmasks[(bb_king + 1) + bb_king], 0));
         }
-         for (int piece_color = 0; piece_color <= 1; piece_color++) {
-             for (int piece_type = bb_pawn; piece_type <= bb_queen; piece_type++) {
-                 int start = -1;
-                 while ((start = get_low_bit(b.piece_bitmasks[piece_color * (bb_king + 1) + piece_type], start + 1)) >= 0) {
-                     int rel_start = start;
-                     if (king_color == Black) {
-                         rel_start = mirror_square(rel_start);
-                     }
-                     // nnue piece_type is 0 based instead of 1 based
-                     int dense_index = king_square * (64 * 10) + (piece_type - 1 + (piece_color == king_color ? 0 : 1) * 5) * 64 + rel_start;
-                     matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
-                     /*
+        for (int piece_color = 0; piece_color <= 1; piece_color++) {
+            for (int piece_type = bb_pawn; piece_type <= get_max_piece(); piece_type++) {
+                int start = -1;
+                while ((start = get_low_bit(b.piece_bitmasks[piece_color * (bb_king + 1) + piece_type], start + 1)) >= 0) {
+
+                     int dense_index = get_dense_index(king_square, piece_type, start, piece_color, king_color);
+//                     std::cout << "place adj=" << half_adj << " piece=" << (int) piece_type << " color=" << piece_color << " kc=" << king_color << " at " << (int) start << " idx=" << dense_index << std::endl;
+//                     matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
+
                      for (int k = 0; k < 256; k++) {
                          layer.data[0][k + half_adj] += dense_weights[dense_index][k];
-                     }*/
+                     }
                  }
              }
          }

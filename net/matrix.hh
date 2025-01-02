@@ -124,6 +124,37 @@ struct matrix {
        }
     }
 
+    static void matrix_relu_n(const int32_t *input, uint8_t *output /* YMM_ALIGN */, int len) {
+        for (int i = 0; i < len; i++) {
+            if (input[i] > unity) {
+                output[i] = unity;
+            } else if (input[i] <= 0) {
+                output[i] = 0;
+            } else {
+                output[i] = input[i];
+            }
+        }
+        // clipped relu 0-1
+        /*
+        __m256i r1, r2, r3, r4, maxval;
+        __m256i* a = (__m256i*) input;
+        __m128i* b = (__m128i*) output;
+
+        maxval = _mm256_broadcastw_epi16(_mm_set_epi64x(0, unity));
+        __m256i zero = _mm256_setzero_si256();
+
+        for (int i = 0; i * 32 < len; i++) {
+            r1 = _mm256_min_epi32(maxval, a[i*2]);
+            r2 = _mm256_min_epi32(maxval, a[i*2 + 1]);
+            r3 = _mm256_packus_epi32(r1, r2);
+            r4 = _mm256_packus_epi16(r3, zero); // should give r2-low, 0, r2-high, 0
+
+            __m128i high =  _mm256_extracti128_si256(r4, 1);
+            __m128i lo = _mm256_castsi256_si128(r4);
+            b[i] = _mm_unpacklo_epi64(lo, high);
+        }
+        */
+    }
 #endif
 
 
@@ -131,6 +162,7 @@ struct matrix {
     int dot_product_n(const ntype *a, const btype *b) {
         int sum = 0;
         int k = 0;
+
 #ifdef __SSSE3__
         if (n % 512 == 0) {
             for (; k + 512 <= n; k += 512) {
@@ -143,6 +175,7 @@ struct matrix {
             }
         } else
 #endif
+
         {
             for (; k < n; k++) {
                 sum += a[k] * b[k];
@@ -174,7 +207,7 @@ struct matrix {
         int i, j;
 
         for (i = 0; i < m; i++) {
-            int16_t sums[j];
+            int32_t sums[j];
             for (j = 0; j < p; j++) {
                 int sum = dot_product_n(this->data[i], bT.data[j]);
                 sums[j] = sum / unity + c.data[j];
