@@ -11,9 +11,9 @@
 
 void tokenize(const std::string &s, unsigned char delimiter, std::vector<std::string> &tokens)
 {
-    std::string::size_type pos = 0;
+    unsigned int pos = 0;
     while (pos != std::string::npos) {
-        unsigned int nextdelim = s.find(delimiter, pos);
+        int nextdelim = s.find(delimiter, pos);
         if (nextdelim == std::string::npos) {
             tokens.push_back(s.substr(pos, s.length() - pos));
             break;
@@ -97,7 +97,7 @@ int main(int argc, char **argv)
         else if (line.rfind("position", 0) == 0) {
             std::vector<std::string> tokens;
             tokenize(line, ' ', tokens);
-            unsigned int pos = 1;
+            int pos = 1;
             if (tokens.size() > 2 && tokens[1] == "fen") {
                 b.set_fen(tokens[2]);
                 pos += 2;
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
             int movemillisecs = 0;
             unsigned int pos = line.find(' ', 1);
             while (pos != std::string::npos) {
-                unsigned int endpos = line.find(' ', pos + 1);
+                int endpos = line.find(' ', pos + 1);
                 if (endpos == std::string::npos) {
                     break;
                 }
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
                     increment_millis = std::stoi(options["binc"]);
                     time_millis = std::stoi(options["btime"]);
                 }
-                movemillisecs = (increment_millis + time_millis / 30) * .9;
+                movemillisecs = (increment_millis + time_millis / 40) * .9;
             }
             auto starttime = std::chrono::system_clock::now();
 
