@@ -13,7 +13,7 @@ void tokenize(const std::string &s, unsigned char delimiter, std::vector<std::st
 {
     std::string::size_type pos = 0;
     while (pos != std::string::npos) {
-        int nextdelim = s.find(delimiter, pos);
+        unsigned int nextdelim = s.find(delimiter, pos);
         if (nextdelim == std::string::npos) {
             tokens.push_back(s.substr(pos, s.length() - pos));
             break;
@@ -97,7 +97,7 @@ int main(int argc, char **argv)
         else if (line.rfind("position", 0) == 0) {
             std::vector<std::string> tokens;
             tokenize(line, ' ', tokens);
-            int pos = 1;
+            unsigned int pos = 1;
             if (tokens.size() > 2 && tokens[1] == "fen") {
                 b.set_fen(tokens[2]);
                 pos += 2;
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
             int movemillisecs = 0;
             unsigned int pos = line.find(' ', 1);
             while (pos != std::string::npos) {
-                int endpos = line.find(' ', pos + 1);
+                unsigned int endpos = line.find(' ', pos + 1);
                 if (endpos == std::string::npos) {
                     break;
                 }
