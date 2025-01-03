@@ -198,19 +198,14 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
         int dense_index = get_dense_index(king_square, piece_type, piece_pos, piece_color, king_color);
 
         if (remove) {
-            //matrix<1, 512, int16_t, UNITY>::vector_sub(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
-
             for (int k = 0; k < 256; k++) {
                 layer.data[0][k + half_adj] -= dense_weights[dense_index][k];
             }
 
         } else {
-//            matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
-
             for (int k = 0; k < 256; k++) {
                 layer.data[0][k + half_adj] += dense_weights[dense_index][k];
             }
-
         }
     }
 

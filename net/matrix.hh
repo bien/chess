@@ -22,7 +22,6 @@ struct mvector {
     alignas(32) ntype data[n];
 };
 
-
 // unity = N means that our units are in 1/N terms, ie N = 1
 template<int m, int n, typename ntype, int unity>
 struct matrix {
@@ -216,32 +215,6 @@ struct matrix {
         }
     }
 
-    typedef __m256i (*mm256_binop)(__m256i, __m256i);
-    template <mm256_binop operation>
-    static void vector_addsub(int16_t *src_dest, const int8_t *addends, int size) {
-        int i = 0;
-        // widen addends to 16 bits
-        __m256i* a = (__m256i*) addends;
-        __m256i* d = (__m256i*) src_dest;
-        for (i = 0; i + 32 <= size / 32; i++) {
-            __m256i addends16_lo = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(a[i]));
-            __m256i addends16_hi = _mm256_cvtepi8_epi16(_mm256_extracti128_si256(a[i], 1));
-
-
-            d[i * 2] = operation(d[i * 2], addends16_lo);
-            d[i * 2 + 1] = operation(d[i * 2 + 1], addends16_hi);
-        }
-    }
-
-    static void vector_add(int16_t *src_dest, const int8_t *addends, int size) {
-        vector_addsub<_mm256_add_epi32>(src_dest, addends, size);
-        assert(size % 32 == 0);
-    }
-
-    static void vector_sub(int16_t *src_dest, const int8_t *addends, int size) {
-        vector_addsub<_mm256_sub_epi32>(src_dest, addends, size);
-        assert(size % 32 == 0);
-    }
     /*
     static void vector_add(int16_t *src_dest, const int8_t *addends, int size) {
         int i = 0;
