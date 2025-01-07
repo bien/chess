@@ -191,14 +191,18 @@ class NNUEModel:
         self.TrainLib.delete_training_iterator(iter)
 
 
-    def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False):
+    def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False):
         inputs = []
         hidden = []
         l1hidden = layers.Dense(self.half_len_concat, activation=self.relu_fn)
+        side_pts = layers.Dense(1, activation='relu', name='pts')
+        pts_layers = []
         for color in range(2):
             x = keras.Input(shape=(self.INPUT_LENGTH,), name='side_{}'.format(color))
             inputs.append(x)
             hidden.append(l1hidden(x))
+            if include_side_pts:
+                pts_layers.append(side_pts(hidden[-1]))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
             x = layers.Dense(self.hidden_layers_width, activation=self.relu_fn)(x)
@@ -214,6 +218,9 @@ class NNUEModel:
             loss_weights.append(1)
         if self.centipawn_output:
             centipawns = layers.Dense(1, name="centipawns")(x)
+            if include_side_pts:
+                piece_delta = layers.Subtract()([pts_layers[0], pts_layers[1]])
+                centipawns = layers.Add()([piece_delta, centipawns])
             outputs.append(centipawns)
             metrics.append("mean_squared_error")
             losses.append("mean_squared_error")
@@ -227,8 +234,8 @@ class NNUEModel:
             metrics=metrics)
         return model
 
-    def train(self, train_pgn, valid_pgn, profile=False, batch_size=128, steps_per_epoch=256, **fit_args):
-        model = self.make_nnue_model_mirror(include_centipawns=True)
+    def train(self, train_pgn, valid_pgn, profile=False, batch_size=128, steps_per_epoch=256, include_side_pts=False, **fit_args):
+        model = self.make_nnue_model_mirror(include_centipawns=True, include_side_pts=include_side_pts)
         model.summary()
         output_sig = []
         if self.wdl_output:
@@ -257,8 +264,9 @@ def sqrelu_clamp(x):
     return tf.square(keras.activations.relu(x, max_value=1))
 
 class BasicNNUE(NNUEModel):
-    def __init__(self, num_hidden_layers=0, hidden_layers_width=32, **kwargs):
+    def __init__(self, num_hidden_layers=0, hidden_layers_width=32, half_len_concat=256, **kwargs):
         super().__init__(num_hidden_layers=num_hidden_layers, hidden_layers_width=hidden_layers_width, relu_fn=relu_sat, **kwargs)
+        self.half_len_concat = half_len_concat
 
     def _num_king_buckets(self):
         return 1
@@ -268,6 +276,25 @@ class BasicNNUE(NNUEModel):
 
     def _king_idx_map(self, present_board, castle_rights, king_idx):
         return 0, present_board
+
+class LimitedKP(NNUEModel):
+    def __init__(self, num_hidden_layers=0, hidden_layers_width=32, half_len_concat=256, **kwargs):
+        super().__init__(num_hidden_layers=num_hidden_layers, hidden_layers_width=hidden_layers_width, relu_fn=relu_sat, **kwargs)
+        self.half_len_concat = half_len_concat
+
+    def _num_king_buckets(self):
+        return 6
+
+    KING_MAP_ROW1 = [0, 0, 0, 1, 2, 3, 4, 4]
+
+    def _king_idx_map(self, present_board, castle_rights, king_idx):
+        if king_idx < 8:
+            new_idx = self.KING_MAP_ROW1[king_idx]
+        elif king_idx < 16:
+            new_idx = 5
+        else:
+            new_idx = 6
+        return new_idx, present_board
 
 def main(pgnfile, validation_pgn):
     print("Loading model")
