@@ -174,6 +174,7 @@ class NNUEModel:
                     if len(self.white_piece_list) == 12:
                         container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
                     elif len(self.white_piece_list) == 10:
+                        print("container[" , king_idx * board_step_size, (king_idx + 1) * board_step_size, "]")
                         container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
                     else:
                         raise Exception("Unsupported")
