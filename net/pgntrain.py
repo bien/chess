@@ -2,6 +2,7 @@ import sys
 import chess.pgn
 import chessdecode
 import ctypes
+import itertools
 import numpy as np
 import pandas as pd
 import keras.utils
@@ -190,19 +191,24 @@ class NNUEModel:
             yield x
         self.TrainLib.delete_training_iterator(iter)
 
+    PIECE_MAPPING = dict(Q=9, R=5, B=3, N=3, P=1, q=-9, r=-5, b=-3, n=-3, p=-1)
+    def initialize_pts(self, shape, dtype=None):
+        # initialize pts layer
+        init = [np.array(self.PIECE_MAPPING.get(p, 0) * np.ones((64, )), dtype=dtype) for p in self.white_piece_list]
+        return np.tile(np.concatenate(init), self._num_king_buckets()).reshape(-1, 1)
 
     def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False):
         inputs = []
         hidden = []
         l1hidden = layers.Dense(self.half_len_concat, activation=self.relu_fn)
-        side_pts = layers.Dense(1, activation='relu', name='pts')
+        side_pts = layers.Dense(1, activation='relu', name='pts', kernel_initializer=lambda shape, dtype: self.initialize_pts(shape, dtype))
         pts_layers = []
         for color in range(2):
             x = keras.Input(shape=(self.INPUT_LENGTH,), name='side_{}'.format(color))
             inputs.append(x)
             hidden.append(l1hidden(x))
             if include_side_pts:
-                pts_layers.append(side_pts(hidden[-1]))
+                pts_layers.append(side_pts(x))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
             x = layers.Dense(self.hidden_layers_width, activation=self.relu_fn)(x)
@@ -219,8 +225,8 @@ class NNUEModel:
         if self.centipawn_output:
             centipawns = layers.Dense(1, name="centipawns")(x)
             if include_side_pts:
-                piece_delta = layers.Subtract()([pts_layers[0], pts_layers[1]])
-                centipawns = layers.Add()([piece_delta, centipawns])
+                piece_delta = layers.Average()([pts_layers[0], pts_layers[1]])
+                centipawns = layers.Add(name="cp_final")([piece_delta, centipawns])
             outputs.append(centipawns)
             metrics.append("mean_squared_error")
             losses.append("mean_squared_error")
@@ -283,7 +289,7 @@ class LimitedKP(NNUEModel):
         self.half_len_concat = half_len_concat
 
     def _num_king_buckets(self):
-        return 6
+        return 7
 
     KING_MAP_ROW1 = [0, 0, 0, 1, 2, 3, 4, 4]
 
