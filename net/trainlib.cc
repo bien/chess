@@ -22,10 +22,20 @@ struct TrainingIterator {
 public:
     TrainingIterator(const char *filename, int move_freq)
         : input_stream(filename), distrib(1, move_freq), gen(rd())
-    {}
+    {
+        if (input_stream.fail()) {
+            std::cerr << "Couldn't open " << filename <<  std::endl;
+            abort();
+        }
+    }
     TrainingIterator(const char *filename, int move_freq, unsigned int seed)
         : input_stream(filename), distrib(1, move_freq), gen(seed)
-    {}
+    {
+        if (input_stream.fail()) {
+            std::cerr << "Couldn't open " << filename <<  std::endl;
+            abort();
+        }
+    }
     bool read_position(TrainingPosition *tp);
 private:
     bool process_game(TrainingPosition *tp);
@@ -145,4 +155,11 @@ bool TrainingIterator::process_game(TrainingPosition *tp)
     }
 
     return false;
+}
+
+int main()
+{
+    TrainingPosition tp;
+    std::cout << sizeof(tp) << std::endl;
+    return 0;
 }

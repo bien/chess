@@ -53,7 +53,7 @@ bool read_move_annot(const std::string &line, int &start_pos, move_annot &move)
             pos = end_annotation + 1;
         } else {
             std::cerr << "Unterminated move metadata around " << line.substr(pos - 5, 10) << std::endl;
-            abort();
+            return false;
         }
     }
     start_pos = pos;
@@ -251,7 +251,7 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
                 pos = end_annotation + 1;
             } else {
                 std::cerr << "Unterminated move metadata around " << line.substr(pos - 5, 10) << std::endl;
-                abort();
+                return;
             }
         }
         // check for restatement of move number, eg. "1..." but don't get tripped by 1/2-1/2

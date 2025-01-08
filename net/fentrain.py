@@ -85,8 +85,8 @@ class PositionSequence(keras.utils.Sequence):
             self.seq = FenSequence(self.file_df, yval, self.batch_size, self.mirror)
         return self.seq[idx - lineno]
 
+    
 class FenSequence(keras.utils.Sequence):
-    empty = np.zeros(64*64*10, dtype=np.ubyte)
     num_classes = 3
 
     def __init__(self, df, y, batch_size, random_mirroring=False, **kwargs):
@@ -94,9 +94,13 @@ class FenSequence(keras.utils.Sequence):
         self.random_mirroring = random_mirroring
         self.p = 0
         self.f = 0
-        self.boards = [self.read_fen(fen) for fen in df.fen.values]
         self.y = y
         self.batch_size = batch_size
+        self.boards = [self.read_fen(fen) for fen in df.fen.values]
+        self.empty = np.zeros(self.king_buckets()*64*2*len(self.get_kp_pieces()), dtype=np.ubyte)
+
+    def get_kp_pieces(self):
+        return 'PNBRQ'
 
     def on_epoch_end(self):
         if len(self.y) == 2:
@@ -113,8 +117,12 @@ class FenSequence(keras.utils.Sequence):
         """Return side-to-move-king, s-t-m-board-sequence, opp-king, opp-board, white-to-move, invert result"""
         b = chessdecode.Board()
         b.read_fen(fen)
-        w_full = np.packbits(np.concatenate([b.piece_boards[piece] for piece in 'PNBRQpnbrq']))
-        b_full = np.packbits(np.concatenate([mirror(b.piece_boards[piece]) for piece in 'pnbrqPNBRQ']))
+        kp_pieces = self.get_kp_pieces()
+        white_pieces = kp_pieces + kp_pieces.lower()
+        black_pieces = kp_pieces.lower() + kp_pieces
+
+        w_full = np.packbits(np.concatenate([b.piece_boards[piece] for piece in white_pieces]))
+        b_full = np.packbits(np.concatenate([mirror(b.piece_boards[piece]) for piece in black_pieces]))
         w_king_idx = np.where(b.piece_boards['K'] == 1)[0][0]
         b_king_idx = np.where(b.piece_boards['k'] == 1)[0][0]
 
@@ -137,12 +145,20 @@ class FenSequence(keras.utils.Sequence):
     def __len__(self):
         return math.ceil(len(self.boards) / self.batch_size)
 
+    def king_buckets(self):
+        return 64
+
+    def _update_king_idx(self, king_idx):
+        return king_idx
+
     def hydrate(self, a):
         w_king_idx, w_full, b_king_idx, b_full, white_to_play = a
         input_bits = []
+        increment_size = 64 * len(self.get_kp_pieces()) * 2
         for king_idx, present_board in ((w_king_idx, w_full), (b_king_idx, b_full)):
             board = self.empty.copy()
-            board[king_idx * 64 * 10:(king_idx + 1) * 64 * 10] = np.unpackbits(present_board)
+            king_idx = self._update_king_idx(king_idx)
+            board[king_idx * increment_size:(king_idx + 1) * increment_size] = np.unpackbits(present_board)
             input_bits.append(board)
         input_bits.append(white_to_play)
         return input_bits
@@ -165,6 +181,16 @@ class FenSequence(keras.utils.Sequence):
         else:
             y_value = keras.utils.to_categorical(batch_y * invert_result + 1, self.num_classes)
         return updated_x, y_value
+
+class KASingleFenSequence(FenSequence):
+    def get_kp_pieces(self):
+        return 'PNBRQK'
+
+    def _update_king_idx(self, king_idx):
+        return 0
+
+    def king_buckets(self):
+        return 1
 
 input_shape = (2, 64*64*10)
 BATCH_SIZE = 256

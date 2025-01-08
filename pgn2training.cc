@@ -88,7 +88,7 @@ int main(int argc, char **argv)
     std::istream *input_stream = &std::cin;
     std::random_device rd;  // a seed source for the random number engine
     std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    int repeat_times = 10;
+    int repeat_times = 20;
 
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " move-index [file.pgn]" << std::endl;
