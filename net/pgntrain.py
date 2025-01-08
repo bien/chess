@@ -216,7 +216,11 @@ class NNUEModel:
         metrics = []
         losses = []
         loss_weights = []
+        if include_side_pts:
+            piece_delta = layers.Average()([pts_layers[0], pts_layers[1]])
         if self.wdl_output:
+            if include_side_pts:
+                x = layers.Add(name="pre_wdl")([piece_delta, x])
             result = layers.Dense(num_classes, activation="softmax", name="wdl")(x)
             outputs.append(result)
             metrics.append("categorical_accuracy")
@@ -225,7 +229,6 @@ class NNUEModel:
         if self.centipawn_output:
             centipawns = layers.Dense(1, name="centipawns")(x)
             if include_side_pts:
-                piece_delta = layers.Average()([pts_layers[0], pts_layers[1]])
                 centipawns = layers.Add(name="cp_final")([piece_delta, centipawns])
             outputs.append(centipawns)
             metrics.append("mean_squared_error")
