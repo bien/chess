@@ -1,7 +1,8 @@
+CXX = g++-14
 INCLUDES = -Inet -I.
-CXXFLAGS = -Wall -g -std=c++20 -O3 -march=native $(INCLUDES)
+CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES) -DHALFKASINGLE -O3
 ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc logicalboard.cc net/nnue.cc
-ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o) net/nnue-staged-dual-1epochb-42.o
+ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o) net/model.2.768.20250101.o
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 
 all: uciinterface test
@@ -25,7 +26,10 @@ test: testexe puzzle
 	./testexe games/Fischer.pgn
 	./puzzle "polgar - fixed.pgn"
 
-testexe: bitboard.o fenboard.o test.o move.o search.o evaluate.o pgn.o logicalboard.o
+playover: $(ENGINE_OBJS) playover.o
+	$(CXX) $^ -o $@
+
+testexe: $(ENGINE_OBJS) test.o
 	$(CXX) $^ -o $@
 
 pgn2training: bitboard.o fenboard.o pgn2training.o move.o pgn.o logicalboard.o

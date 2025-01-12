@@ -1,4 +1,5 @@
 #include "fenboard.hh"
+#include "search.hh"
 #include <iostream>
 
 int main(int argc, char **argv)
@@ -9,6 +10,8 @@ int main(int argc, char **argv)
 
     if (argc > 1) {
         b.set_fen(argv[1]);
+    } else {
+        b.set_starting_position();
     }
     if (argc > 3) {
         Color c = White;
@@ -24,10 +27,11 @@ int main(int argc, char **argv)
             std::cout << "illegal" << std::endl;
         }
     } else {
-        for (BitboardMoveIterator iter = b.get_legal_moves(b.get_side_to_play()); b.has_more_moves(iter); ) {
-            move_t move = b.get_next_move(iter);
+        MoveSorter ms(&b, b.get_side_to_play());
+        while (ms.has_more_moves()) {
+            move_t move = ms.next_move();
             b.print_move(move, std::cout);
-            std::cout << std::endl;
+            std::cout << " ms=" << ms.get_score(move) << std::endl;
         }
     }
 

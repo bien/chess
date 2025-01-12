@@ -20,6 +20,7 @@ public:
     virtual int evaluate(const Fenboard &) = 0;
     virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score) = 0;
     virtual bool endgame(const Fenboard &b, int &eval) const = 0;
+    virtual ~Evaluation() {}
 };
 
 template <typename Key, typename Value, template <int Size> class Hasher, int Size>
@@ -95,6 +96,29 @@ struct SearchUpdate {
 };
 
 const SearchUpdate NullSearchUpdate;
+
+struct MoveSorter {
+    MoveSorter(Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
+    ~MoveSorter();
+    bool has_more_moves();
+    bool next_gives_check() const;
+    move_t next_move();
+
+    bool operator()(move_t a, move_t b) const;
+
+    int get_score(move_t) const;
+    unsigned int index;
+    unsigned int last_check;
+    Fenboard *b;
+    std::vector<move_t> buffer;
+    uint64_t stp_covered;
+    uint64_t opp_covered;
+    int phase;
+    Color side_to_play;
+    bool do_sort;
+    move_t hint;
+    Evaluation *eval;
+};
 
 struct Search {
     Search(Evaluation *eval, int transposition_table_size=1000 * 500 + 1);

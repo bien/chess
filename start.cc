@@ -9,9 +9,6 @@
 
 int main(int argc, char **argv)
 {
-    int seconds;
-    search_debug = 2;
-
     if (argc < 2) {
         std::cerr << "Usage: depth debug_level [fen]" << std::endl;
         return 1;
@@ -24,9 +21,11 @@ int main(int argc, char **argv)
     Search search(&simple);
     search.use_mtdf = true;
     search.use_quiescent_search = true;
+    search.use_iterative_deepening = true;
     search.use_pruning = true;
     search.max_depth = depth;
     search.use_transposition_table = true;
+    search.quiescent_depth = 6;
     /*
     search.use_mtdf = false;
     search.use_quiescent_search = false;

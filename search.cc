@@ -10,6 +10,7 @@
 #include "search.hh"
 #include "bitboard.hh"
 #include "move.hh"
+#include "nnue.hh"
 int search_debug = 0;
 
 move_t Search::minimax(Fenboard &b, Color color)
@@ -203,9 +204,15 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         best_score = eval->evaluate(b);
     } else {
 
-        BitboardMoveIterator iter = b.get_legal_moves(color);
+        if (hint) {
+            // need to remake move to get captured piece and other details consistents
+            hint = b.reinterpret_move(hint);
+        }
 
-        if (!b.has_more_moves(iter)) {
+
+        MoveSorter iter = MoveSorter(&b, color, max_depth - depth > 2, hint);
+
+        if (!iter.has_more_moves()) {
             if (b.king_in_check(color)) {
                 return std::tuple<move_t, move_t, int>(0, 0, is_white * (VERY_BAD + depth));
             } else {
@@ -219,25 +226,21 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
         int currentnodescore;
         bool evaluated_nodescore = false;
-        int tie_count = 1;
         bool quiescent = true;
-
-        if (hint) {
-            // need to remake move to get captured piece and other details consistents
-            move_t reint_hint = b.reinterpret_move(hint);
-            if (b.is_legal_move(reint_hint, b.get_side_to_play())) {
-                iter.push_move_front(b.reinterpret_move(reint_hint));
-            }
-        }
-
-        while (b.has_more_moves(iter)) {
+        int bestindex = -1;
+        int first_quiescent = -1;
+        bool pruned = false;
+        while (iter.has_more_moves()) {
             int subtree_score;
             move_t subresponse = 0;
             move_t submove = 0;
-            move_t move = b.get_next_move(iter);
+            move_t move = iter.next_move();
             bool cutoff;
 
-            quiescent = get_captured_piece(move, White) == EMPTY && !iter.in_captures();
+            quiescent = get_captured_piece(move, color) == EMPTY;// && !iter.in_captures();
+            if (quiescent && first_quiescent == -1) {
+                first_quiescent = iter.index;
+            }
 
             if (use_quiescent_search && !quiescent) {
                 cutoff = (depth >= max_depth + quiescent_depth - 1);
@@ -256,11 +259,11 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             } else {
                 b.apply_move(move);
                 move_t killer_move = 0;
-                /*
-                if (use_killer_move && best_response != 0) {
-                    killer_move = best_response;
+
+                if (use_killer_move && submove != 0) {
+                    killer_move = submove;
                 }
-*/
+
                 std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
                 subtree_score = std::get<2>(child);
                 submove = std::get<0>(child);
@@ -290,7 +293,8 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 best_score = subtree_score;
                 best_move = move;
                 best_response = submove;
-                tie_count = 1;
+                bestindex = iter.index;
+//                tie_count = 1;
 
                 if (use_pruning) {
                     if (color == White) {
@@ -304,6 +308,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                         if (search_debug >= depth + 1) {
                             std::cout << "!" << std::endl;
                         }
+                        pruned = true;
                         break;
                     }
                 }
@@ -311,18 +316,6 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 if (search_debug >= depth + 1) {
                     std::cout << "*";
                 }
-                /*
-            // make things slightly less predictable
-            } else if (subtree_score == best_score) {
-                tie_count++;
-                if ((random() % 101) <= (101 / tie_count)) {
-                    best_score = subtree_score;
-                    best_move = move;
-                    best_response = submove;
-                }
-                if (search_debug >= depth + 1) {
-                    std::cout << "*";
-                }*/
             }
             first = false;
             if (search_debug >= depth + 1) {
@@ -330,12 +323,14 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             }
 
         }
+//        std::cout << "M " << bestindex << "/" << iter.index << "/" << first_quiescent << "/" << (pruned ? "P" : "") << std::endl;
     }
 
     if (search_debug >= depth + 1) {
         std::cout << "depth=" << depth << " move=";
         print_move_uci(best_move, std::cout) << " score=" << best_score << std::endl;
     }
+
 
     // write to transposition table
     if (use_transposition_table) {
@@ -357,4 +352,148 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         }
     }
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);
+}
+
+const int piece_points[] = { 0, 1, 3, 3, 5, 9, 10000 };
+
+const int centralization[64] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 0,
+    0, 1, 2, 2, 2, 2, 1, 0,
+    0, 1, 2, 3, 3, 2, 1, 0,
+    0, 1, 2, 3, 3, 2, 1, 0,
+    0, 1, 2, 2, 2, 2, 1, 0,
+    0, 1, 1, 1, 1, 1, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+int MoveSorter::get_score(move_t move) const
+{
+    piece_t capture = get_captured_piece(move) & PIECE_MASK;
+    unsigned char src_rank, src_file, dest_rank, dest_file;
+    get_source(move, src_rank, src_file);
+    get_dest(move, dest_rank, dest_file);
+    piece_t actor = b->get_piece(src_rank, src_file) & PIECE_MASK;
+    piece_t promo = get_promotion(move);
+
+    int src_sq = (src_rank * 8 + src_file);
+    int dest_sq = (dest_rank * 8 + dest_file);
+
+    uint64_t attacked = opp_covered & ~stp_covered;
+
+    bool src_attacked = (1ULL << src_sq) & attacked;
+    bool dest_attacked = (1ULL << dest_sq) & attacked;
+
+    int invalidate_castle_penalty = 0;
+    if (actor == bb_king) {
+        if (dest_file - src_file == 2 || dest_file - src_file == -2) {
+            invalidate_castle_penalty += 3;
+        }
+        if (get_invalidates_kingside_castle(move)) {
+            invalidate_castle_penalty--;
+        }
+        if (get_invalidates_queenside_castle(move)) {
+            invalidate_castle_penalty--;
+        }
+    }
+
+    int score = (capture != 0 ? piece_points[capture] + piece_points[promo] - (dest_attacked ? piece_points[actor] : 0) + 5 : 0) + piece_points[actor] * (src_attacked - dest_attacked) + invalidate_castle_penalty;
+    int central = centralization[dest_sq] - centralization[src_sq];
+    // want best score first
+    return score * 10 + central;
+
+}
+
+
+struct MoveCmp {
+    MoveCmp(const MoveSorter *ms)
+        : ms(ms)
+    {}
+    bool operator()(move_t a, move_t b) const {
+        // sort from most delta points to least delta points
+//        return ms->eval->delta_evaluate(*ms->b, a, 0) < ms->eval->delta_evaluate(*ms->b, b, 0);
+        return ms->get_score(a) > ms->get_score(b);
+    }
+    const MoveSorter *ms;
+};
+
+MoveSorter::MoveSorter(Fenboard *b, Color side_to_play, bool do_sort, move_t hint)
+    : side_to_play(side_to_play), do_sort(do_sort), hint(hint)
+{
+    buffer.reserve(32);
+    index = 0;
+    phase = 0;
+    this->b = b;
+
+//    eval = new SimpleEvaluation();
+    /*
+    if (do_sort) {
+        eval->evaluate(*b);
+    }
+*/
+    MoveCmp move_cmp(this);
+
+    stp_covered = b->computed_covered_squares(side_to_play, 0, 0, 0, 2);
+    opp_covered = b->computed_covered_squares(side_to_play == Black ? White : Black, 0, 0, 0);
+
+    // checks captures
+    b->get_moves(side_to_play, true, true, buffer);
+    if (do_sort) {
+        std::sort(buffer.begin(), buffer.end(), move_cmp);
+    }
+    last_check = buffer.size() - 1;
+
+}
+
+MoveSorter::~MoveSorter()
+{
+//    delete eval;
+}
+
+bool MoveSorter::next_gives_check() const
+{
+    return index <= last_check;
+}
+
+
+bool MoveSorter::has_more_moves()
+{
+    MoveCmp move_cmp(this);
+    if (index == buffer.size()) {
+        while (phase < 3) {
+            phase++;
+            int start = buffer.size();
+            if (phase == 1) {
+                // checks non captures
+                b->get_moves(side_to_play, true, false, buffer);
+                last_check = buffer.size() - 1;
+            }
+            if (phase == 2) {
+                // other captures
+                b->get_moves(side_to_play, false, true, buffer);
+
+                if (do_sort) {
+                    std::sort(buffer.begin() + start, buffer.end(), move_cmp);
+                }
+            }
+            if (phase == 3) {
+                // non capture non checks
+                b->get_moves(side_to_play, false, false, buffer);
+                if (do_sort) {
+                    std::sort(buffer.begin() + start, buffer.end(), move_cmp);
+                }
+                auto match = std::find(buffer.begin() + start, buffer.end(), hint);
+                if (match != buffer.end()) {
+                    std::iter_swap(buffer.begin() + start, match);
+                }
+            }
+        }
+    }
+
+    return index < buffer.size();
+}
+
+move_t MoveSorter::next_move()
+{
+    return buffer[index++];
 }

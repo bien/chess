@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <stdlib.h>
 #include <iostream>
 #include <sstream>
@@ -49,6 +50,15 @@ void assert_not_equals(T expected, T actual)
 }
 
 template <class T>
+void assert_contains(const std::vector<T> &expected, T actual)
+{
+    if (std::find(expected.begin(), expected.end(), actual) == expected.end()) {
+        std::cout << "Test failed: unexpectedly got " << actual << std::endl;
+        abort();
+    }
+}
+
+template <class T>
 void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
 {
     std::set<T> aset(a.begin(), a.end());
@@ -68,12 +78,35 @@ void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
     }
 }
 
-void legal_moves(Bitboard *b, Color color, std::vector<move_t> &moves) {
+
+void legal_moves(Fenboard *b, Color color, std::vector<move_t> &moves) {
+    MoveSorter ms(b, color);
+    while (ms.has_more_moves()) {
+        moves.push_back(ms.next_move());
+    }
+    /*
     BitboardMoveIterator iter = b->get_legal_moves(color);
     while (b->has_more_moves(iter)) {
         moves.push_back(b->get_next_move(iter));
     }
+    */
 
+}
+
+void assert_moves(const std::string &fen, const std::vector<std::string> &expected_moves)
+{
+    Fenboard b;
+    std::vector<move_t> legal;
+    std::ostringstream movetext;
+
+    b.set_fen(fen);
+    legal_moves(&b, b.get_side_to_play(), legal);
+    assert_equals(expected_moves.size(), legal.size());
+    for (std::vector<move_t>::iterator iter = legal.begin(); iter != legal.end(); iter++) {
+        movetext.str("");
+        b.print_move(*iter, movetext);
+        assert_contains(expected_moves, movetext.str());
+    }
 }
 
 void test_legal_moves(std::string fischer_pgn_file)
@@ -175,6 +208,7 @@ void test_legal_moves(std::string fischer_pgn_file)
         std::cout << "Cannot load Fischer.pgn" << std::endl;
         assert_equals(0, 1);
     }
+
     // play one game
     read_pgn(fischer, game_metadata, movelist);
     for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
@@ -260,6 +294,22 @@ void test_legal_moves(std::string fischer_pgn_file)
     legal_moves(&b, Black, legal_black);
     assert_equals(0, static_cast<int>(legal_black.size()));
     assert_equals(true, b.king_in_check(Black));
+
+    // capture attacking piece
+    assert_moves("r4kr1/1b2R1Q1/pq4p1/8/1p4P1/5P2/PPP4P/1K2R3 b - - 0 1", { "Rg8xg7" });
+    assert_moves("r3Rkr1/6n1/pq4p1/4Q3/1p4P1/5b2/PPP4P/1K3R2 b - - 0 2", { "Kf7", "Ra8xe8", "Ng7xe8" });
+
+    // pinned piece
+    assert_moves("7k/6p1/6Pb/8/8/8/PPP5/1K5R b - - 0 4", { "Kg8" });
+
+    // capture pinning piece
+    assert_moves("1r6/8/8/8/8/r1k5/Q7/K7 w - - 0 1", { "Qa2xa3" });
+
+    // check mate
+    assert_moves("3R2k1/p1p2rpp/1q6/2p5/4P3/PQ6/1P4PP/7K b - - 0 1", {});
+
+    // enpassant capture checking pawn
+    assert_moves("3r1r2/pp2Qp2/7p/4PPpk/R5Pp/1P3N2/P3q2P/6K1 b - g3 0 1", { "hxg3" });
 
     // can't enpassant into check
     movetext.clear();

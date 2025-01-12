@@ -309,17 +309,19 @@ void Fenboard::print_move(move_t move, std::ostream &os) const
         os << "O-O";
     } else {
         os << piece;
+        // enpassant is also a capture
+        bool is_capture = get_captured_piece(move) != EMPTY || (piece_type == bb_pawn && srcfile != destfile);
         switch (piece_type) {
             case bb_bishop: case bb_knight: case bb_rook: case bb_queen:
                 os << static_cast<char>(srcfile + 'a') << static_cast<char>(srcrank + '1');
                 break;
             case bb_pawn:
-                if (get_captured_piece(move) != EMPTY) {
+                if (is_capture) {
                     os << static_cast<char>(srcfile + 'a');
                 }
                 break;
         }
-        os << (get_captured_piece(move) != EMPTY ? "x" : "")
+        os << (is_capture ? "x" : "")
             << static_cast<char>(destfile + 'a') << static_cast<char>(destrank + '1');
     }
     unsigned char promotion = get_promotion(move);

@@ -1,6 +1,8 @@
 #include <cassert>
 #include "fenboard.hh"
 #include "move.hh"
+#include <sstream>
+#include <iostream>
 
 const uint64_t zobrist_hashes[] = {0xe02111c7659eae86L, 0x6da4e7350d2011b3L, 0x83cd50fcc552e5e9L, 0x78615f6439c6c6b4L, 0x51c92cc23497add2L,
 0xc8fc6be58ad5a05fL, 0xd5e910e9d62f114dL, 0x7ef0daa1916a9daaL, 0xc6aac4139c2cc032L, 0x9003d09f97066fc5L, 0x6a78933e52670af4L, 0x6ad0ad6da26c3d19L,
@@ -130,6 +132,13 @@ void Logicalboard::apply_move(move_t move)
     piece_t resultpiece = sourcepiece;
     Color color = get_color(sourcepiece);
 
+#ifdef DEBUG
+    std::ostringstream debugging;
+    ((Fenboard*)this)->get_fen(debugging);
+    debugging << " -- ";
+    ((Fenboard*)this)->print_move(move, debugging);
+#endif
+
     set_piece(destrank, destfile, sourcepiece);
     set_piece(sourcerank, sourcefile, EMPTY);
 
@@ -211,6 +220,11 @@ void Logicalboard::apply_move(move_t move)
     this->in_check = this->king_in_check(this->side_to_play);
     update();
 
+#ifdef DEBUG
+	if (piece_bitmasks[(bb_king + 1) + bb_king] == 0 || piece_bitmasks[bb_king] == 0) {
+	    std::cout << debugging.str() << std::endl;
+	}
+#endif
 	assert(piece_bitmasks[(bb_king + 1) + bb_king] > 0);
 	assert(piece_bitmasks[bb_king] > 0);
     seen_positions.push_back(hash);
