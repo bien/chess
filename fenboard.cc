@@ -4,6 +4,7 @@
 #include <iostream>
 #include "fenboard.hh"
 #include "move.hh"
+#include "search.hh"
 
 Fenboard::Fenboard()
 {
@@ -262,9 +263,9 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
             }
         }
     } else {
-        BitboardMoveIterator candidates = this->get_legal_moves(color);
-        while (this->has_more_moves(candidates)) {
-            move_t move = this->get_next_move(candidates);
+        MoveSorter ms(this, color);
+        while (ms.has_more_moves()) {
+            move_t move = ms.next_move();
             unsigned char mdestfile, mdestrank, msourcefile, msourcerank;
             get_source(move, msourcerank, msourcefile);
             get_dest(move, mdestrank, mdestfile);
@@ -275,9 +276,9 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
             }
         }
         std::cout << (*this) << std::endl << "couldn't find legal moves among: " << std::endl;
-        candidates = this->get_legal_moves(color);
-        while (this->has_more_moves(candidates)) {
-            move_t move = this->get_next_move(candidates);
+        MoveSorter ms2(this, color);
+        while (ms2.has_more_moves()) {
+            move_t move = ms2.next_move();
             print_move(move, std::cout);
             std::cout << std::endl;
         }

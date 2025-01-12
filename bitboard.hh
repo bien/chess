@@ -107,43 +107,8 @@ static constexpr piece_t make_piece(piece_t type, Color color)
     }
 }
 
-class BitboardMoveIterator {
-public:
-    BitboardMoveIterator(Color color);
-    virtual ~BitboardMoveIterator() {}
-    move_t get_move(const Bitboard *board) const;
-    void advance(const Bitboard *board);
-    void push_move_front(move_t move);
-
-    bool in_captures() const {
-        return captures_promote_type & 0x8;
-    }
-    void set_promote_type(piece_t piece) {
-        captures_promote_type = (captures_promote_type & 0x8) | (piece & PIECE_MASK);
-    }
-
-    int get_promote_type() const {
-        return captures_promote_type & PIECE_MASK;
-    }
-
-    char start_pos;
-    char colored_piece_type;
-    char dest_pos;
-    char captures_promote_type;
-    bool processed_checks;
-
-    uint64_t dest_squares;
-    uint64_t covered_squares;
-    uint64_t king_slide_blockers;
-
-    move_t inserted_move = 0;
-    int index = 0;
-} ;
-
-
 class Bitboard
 {
-    friend class BitboardMoveIterator;
     friend class SimpleBitboardEvaluation;
     friend class SimpleEvaluation;
     friend class NNUEEvaluation;
@@ -157,19 +122,6 @@ public:
     bool operator==(const Bitboard&) const = default;
     void get_moves(Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) const;
 
-    BitboardMoveIterator get_legal_moves(Color color) const {
-        BitboardMoveIterator iter(color);
-        iter.advance(this);
-        return iter;
-    }
-    move_t get_next_move(BitboardMoveIterator &iter) const {
-        move_t move = iter.get_move(this);
-        iter.advance(this);
-        return move;
-    }
-    bool has_more_moves(BitboardMoveIterator iter) const {
-        return (iter.colored_piece_type & PIECE_MASK) <= bb_king;
-    }
     bool king_in_check(Color) const;
     uint64_t get_bitmask(Color color, piece_t piece_type) const {
         return piece_bitmasks[color * (bb_king + 1) + (PIECE_MASK & piece_type)];
