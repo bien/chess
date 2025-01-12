@@ -55,8 +55,12 @@ def get_positions(pgnfile):
             game = game_next
 
 
+def pts_initializer(nnue_model):
+    content = nnue_model.initialize_pts()
+    def fixed_initializer(shape, dtype):
+        return content.astype(dtype)
 
-
+kernel_initializer=lambda shape, dtype: self.initialize_pts(shape, dtype)
 class NNUEModel:
 
     TrainLib = ctypes.cdll.LoadLibrary('trainlib.dylib' if os.path.exists('trainlib.dylib') else './trainlib.so')
@@ -192,16 +196,16 @@ class NNUEModel:
         self.TrainLib.delete_training_iterator(iter)
 
     PIECE_MAPPING = dict(Q=9, R=5, B=3, N=3, P=1, q=-9, r=-5, b=-3, n=-3, p=-1)
-    def initialize_pts(self, shape, dtype=None):
+    def initialize_pts(self):
         # initialize pts layer
-        init = [np.array(self.PIECE_MAPPING.get(p, 0) * np.ones((64, )), dtype=dtype) for p in self.white_piece_list]
+        init = [np.array(self.PIECE_MAPPING.get(p, 0) * np.ones((64, ))) for p in self.white_piece_list]
         return np.tile(np.concatenate(init), self._num_king_buckets()).reshape(-1, 1)
 
     def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False):
         inputs = []
         hidden = []
         l1hidden = layers.Dense(self.half_len_concat, activation=self.relu_fn)
-        side_pts = layers.Dense(1, activation='relu', name='pts', kernel_initializer=lambda shape, dtype: self.initialize_pts(shape, dtype))
+        side_pts = layers.Dense(1, activation='relu', name='pts', kernel_initializer=pts_initializer(self))
         pts_layers = []
         for color in range(2):
             x = keras.Input(shape=(self.INPUT_LENGTH,), name='side_{}'.format(color))
