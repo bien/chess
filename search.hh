@@ -72,18 +72,18 @@ struct TrivialHash {
 };
 
 struct TranspositionEntry {
-    short depth;
-    int lower;
-    int upper;
     move_t move;
     move_t response;
+    int lower;
+    int upper;
+    short depth;
 
     TranspositionEntry()
-        : depth(0), lower(SCORE_MIN), upper(SCORE_MAX), move(0), response(0)
+        : move(0), response(0), lower(SCORE_MIN), upper(SCORE_MAX), depth(0)
     {}
 
     TranspositionEntry(const TranspositionEntry &entry)
-        : depth(entry.depth), lower(entry.lower), upper(entry.upper), move(entry.move), response(entry.response)
+        : move(entry.move), response(entry.response), lower(entry.lower), upper(entry.upper), depth(entry.depth)
     {}
 
     bool operator==(const TranspositionEntry o) const {
@@ -98,8 +98,7 @@ struct SearchUpdate {
 const SearchUpdate NullSearchUpdate;
 
 struct MoveSorter {
-    MoveSorter(Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
-    ~MoveSorter();
+    MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
     bool has_more_moves();
     bool next_gives_check() const;
     move_t next_move();
@@ -109,15 +108,12 @@ struct MoveSorter {
     int get_score(move_t) const;
     unsigned int index;
     unsigned int last_check;
-    Fenboard *b;
+    const Fenboard *b;
     std::vector<move_t> buffer;
-    uint64_t stp_covered;
-    uint64_t opp_covered;
     int phase;
     Color side_to_play;
     bool do_sort;
     move_t hint;
-    Evaluation *eval;
 };
 
 struct Search {

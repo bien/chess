@@ -121,6 +121,7 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t dead
         std::cout << "mtdf guess=" << guess << " depth=" << max_depth << std::endl;
     }
     const int window_size = 10;
+    bool last_search = false;
 
     do {
         int beta;
@@ -129,6 +130,16 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t dead
         }
         int alpha = std::max(score - window_size, lowerbound);
         beta = std::min(upperbound, alpha + window_size);
+
+        // if we know there's a checkmate then don't bother being cute
+        if (beta < -9900) {
+            alpha = SCORE_MIN;
+            last_search = true;
+        }
+        else if (alpha > 9900) {
+            beta = SCORE_MAX;
+            last_search = true;
+        }
         std::tuple<move_t, move_t, int> result = alphabeta_with_memory(b, 0, color, alpha, beta, move);
         if (std::get<0>(result) != -1) {
             move = std::get<0>(result);
@@ -144,7 +155,7 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t dead
             b.print_move(move, std::cout);
             std::cout << std::endl;
         }
-    } while (lowerbound < upperbound);
+    } while (lowerbound < upperbound && !last_search);
 
     return move;
 }
@@ -184,16 +195,28 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             if (entry.depth >= max_depth - depth) {
                 // found something at appropriate depth
                 bounds = entry;
+                int mate_depth_adjustment = 0;
+                if (entry.depth > max_depth - depth && (bounds.lower > 9900 || bounds.upper < -9900)) {
+                    // special adjustment for transposing into mate sequences -- need to change distance
+                    mate_depth_adjustment = (entry.depth - max_depth + depth);
+//                    std::cout << "HERE beta=" << beta << " lower=" << bounds.lower << " upper=" << bounds.upper << " adj=" << mate_depth_adjustment << std::endl;
+                }
                 if (bounds.lower >= beta) {
                     transposition_full_hits++;
-                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.lower);
+                    if (bounds.lower <= 9900) {
+                        mate_depth_adjustment = 0;
+                    }
+                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.lower - mate_depth_adjustment);
                 } else if (bounds.upper <= alpha) {
                     transposition_full_hits++;
-                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.upper);
+                    if (bounds.upper >= -9900) {
+                        mate_depth_adjustment = 0;
+                    }
+                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.upper + mate_depth_adjustment);
                 }
                 transposition_partial_hits++;
-                alpha = std::max(alpha, bounds.lower);
-                beta = std::min(beta, bounds.upper);
+                alpha = std::max(alpha, bounds.lower - (bounds.lower >= 9900 ? mate_depth_adjustment : 0));
+                beta = std::min(beta, bounds.upper + (bounds.upper <= 9900 ? mate_depth_adjustment : 0));
             } else {
                 transposition_insufficient_depth++;
             }
@@ -378,12 +401,12 @@ int MoveSorter::get_score(move_t move) const
 
     int src_sq = (src_rank * 8 + src_file);
     int dest_sq = (dest_rank * 8 + dest_file);
-
+    /*
     uint64_t attacked = opp_covered & ~stp_covered;
 
     bool src_attacked = (1ULL << src_sq) & attacked;
     bool dest_attacked = (1ULL << dest_sq) & attacked;
-
+*/
     int invalidate_castle_penalty = 0;
     if (actor == bb_king) {
         if (dest_file - src_file == 2 || dest_file - src_file == -2) {
@@ -397,7 +420,7 @@ int MoveSorter::get_score(move_t move) const
         }
     }
 
-    int score = (capture != 0 ? piece_points[capture] + piece_points[promo] - (dest_attacked ? piece_points[actor] : 0) + 5 : 0) + piece_points[actor] * (src_attacked - dest_attacked) + invalidate_castle_penalty;
+    int score = (capture != 0 ? piece_points[capture] + piece_points[promo] : 0) + invalidate_castle_penalty;
     int central = centralization[dest_sq] - centralization[src_sq];
     // want best score first
     return score * 10 + central;
@@ -417,7 +440,21 @@ struct MoveCmp {
     const MoveSorter *ms;
 };
 
-MoveSorter::MoveSorter(Fenboard *b, Color side_to_play, bool do_sort, move_t hint)
+void get_moves_check_capture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
+    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
+}
+void get_moves_nocheck_capture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
+    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
+}
+void get_moves_check_nocapture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
+    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
+}
+void get_moves_nocheck_nocapture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
+    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
+}
+
+
+MoveSorter::MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort, move_t hint)
     : side_to_play(side_to_play), do_sort(do_sort), hint(hint)
 {
     buffer.reserve(32);
@@ -433,11 +470,12 @@ MoveSorter::MoveSorter(Fenboard *b, Color side_to_play, bool do_sort, move_t hin
 */
     MoveCmp move_cmp(this);
 
-    stp_covered = b->computed_covered_squares(side_to_play, 0, 0, 0, 2);
-    opp_covered = b->computed_covered_squares(side_to_play == Black ? White : Black, 0, 0, 0);
+//    stp_covered = b->computed_covered_squares(side_to_play, 0, 0, 0, 2);
+//    opp_covered = b->computed_covered_squares(side_to_play == Black ? White : Black, 0, 0, 0);
 
     // checks captures
-    b->get_moves(side_to_play, true, true, buffer);
+//    b->get_moves(side_to_play, true, true, buffer);
+    get_moves_check_capture(b, side_to_play, true, true, buffer);
     if (do_sort) {
         std::sort(buffer.begin(), buffer.end(), move_cmp);
     }
@@ -445,15 +483,12 @@ MoveSorter::MoveSorter(Fenboard *b, Color side_to_play, bool do_sort, move_t hin
 
 }
 
-MoveSorter::~MoveSorter()
-{
-//    delete eval;
-}
 
 bool MoveSorter::next_gives_check() const
 {
     return index <= last_check;
 }
+
 
 
 bool MoveSorter::has_more_moves()
@@ -465,12 +500,14 @@ bool MoveSorter::has_more_moves()
             int start = buffer.size();
             if (phase == 1) {
                 // checks non captures
-                b->get_moves(side_to_play, true, false, buffer);
+                get_moves_check_nocapture(b, side_to_play, true, false, buffer);
+                //b->get_moves(side_to_play, true, false, buffer);
                 last_check = buffer.size() - 1;
             }
             if (phase == 2) {
                 // other captures
-                b->get_moves(side_to_play, false, true, buffer);
+                get_moves_nocheck_capture(b, side_to_play, false, true, buffer);
+                //b->get_moves(side_to_play, false, true, buffer);
 
                 if (do_sort) {
                     std::sort(buffer.begin() + start, buffer.end(), move_cmp);
@@ -478,7 +515,8 @@ bool MoveSorter::has_more_moves()
             }
             if (phase == 3) {
                 // non capture non checks
-                b->get_moves(side_to_play, false, false, buffer);
+                get_moves_nocheck_nocapture(b, side_to_play, false, false, buffer);
+//                b->get_moves(side_to_play, false, false, buffer);
                 if (do_sort) {
                     std::sort(buffer.begin() + start, buffer.end(), move_cmp);
                 }

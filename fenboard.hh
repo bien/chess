@@ -4,9 +4,9 @@
 #include <string>
 #include <ostream>
 #include <vector>
-#include "logicalboard.hh"
+#include "bitboard.hh"
 
-class Fenboard : public Logicalboard
+class Fenboard : public Bitboard
 {
 public:
     Fenboard();
@@ -19,7 +19,6 @@ public:
     void print_move(move_t, std::ostream &os) const;
     move_t read_move(const std::string &s, Color color) const;
     move_t reinterpret_move(move_t original) const;
-    Color get_side_to_play() const { return side_to_play; }
     short get_move_count() const { return move_count; }
 
 private:

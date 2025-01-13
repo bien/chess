@@ -84,13 +84,6 @@ void legal_moves(Fenboard *b, Color color, std::vector<move_t> &moves) {
     while (ms.has_more_moves()) {
         moves.push_back(ms.next_move());
     }
-    /*
-    BitboardMoveIterator iter = b->get_legal_moves(color);
-    while (b->has_more_moves(iter)) {
-        moves.push_back(b->get_next_move(iter));
-    }
-    */
-
 }
 
 void assert_moves(const std::string &fen, const std::vector<std::string> &expected_moves)
@@ -171,10 +164,12 @@ void test_legal_moves(std::string fischer_pgn_file)
     boardtext << b;
     assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), boardtext.str());
 
-    assert_equals(static_cast<uint64_t>(0), b.get_hash());
+    const int64_t initial_hash = 12941059376081559502ULL;
+
+    assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
     move_t e4 = b.read_move("e4", White);
     b.apply_move(e4);
-    assert_equals(static_cast<uint64_t>(0x4ee64568aacaeabb), b.get_hash());
+    assert_equals(static_cast<uint64_t>(13269685511240131605ULL), b.get_hash());
 
     boardtext.str("");
     boardtext << b;
@@ -183,7 +178,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     assert_equals(make_piece(bb_pawn, White), b.get_piece(3, 4));
     assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(1, 4));
     b.undo_move(e4);
-    assert_equals(static_cast<uint64_t>(0), b.get_hash());
+    assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
 
     boardtext.str("");
     boardtext << b;
@@ -230,7 +225,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     boardtext.str("");
     boardtext << b;
     assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 24"), boardtext.str());
-    assert_equals(static_cast<uint64_t>(0xf5d83e60125e3b39U), b.get_hash());
+    assert_equals(static_cast<uint64_t>(10878024775352243206ULL), b.get_hash());
 
     // play in reverse
     assert_equals(moverecord.size(), boardrecord.size());
@@ -245,7 +240,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     boardtext.str("");
     boardtext << b;
     assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), boardtext.str());
-    assert_equals(static_cast<uint64_t>(0), b.get_hash());
+    assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
 
     b.set_fen("r5k1/1p1brpbp/1npp2p1/q1n5/p1PNPP2/2N3PP/PPQ2B1K/3RRB2");
     move_t move = b.read_move("g4", White);

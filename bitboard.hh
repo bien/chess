@@ -4,6 +4,7 @@
 #define HAS_FFSLL
 
 #include <vector>
+#include <map>
 #include <cstdint>
 #include <strings.h>
 
@@ -131,13 +132,35 @@ public:
         int bit = get_castle_bit(color, kingside);
         return castle & (1 << bit);
     }
-    void set_can_castle(Color color, bool kingside, bool can_castle) {
+    void set_can_castle(Color color, bool kingside, bool enabled) {
         int bit = get_castle_bit(color, kingside);
-        if (can_castle) {
+        if (enabled) {
             castle |= (1 << bit);
         } else {
             castle &= ~(1 << bit);
         }
+        if (can_castle(color, kingside) != enabled) {
+            update_zobrist_hashing_castle(color, kingside, enabled);
+        }
+    }
+
+    Color get_side_to_play() const { return side_to_play; }
+    void set_side_to_play(Color stp) {
+        if (stp != side_to_play) {
+            update_zobrist_hashing_move();
+        }
+        side_to_play = stp;
+    }
+    char get_enpassant_file() const {
+        return enpassant_file;
+    }
+
+    void set_enpassant_file(char newfile) {
+        if (newfile != enpassant_file) {
+            update_zobrist_hashing_enpassant(enpassant_file, false);
+            update_zobrist_hashing_enpassant(newfile, true);
+        }
+        enpassant_file = newfile;
     }
 
 protected:
@@ -155,12 +178,12 @@ protected:
     // called whenever the board is updated
     void update() {}
 
-    Color side_to_play;
     short move_count;
-    char enpassant_file;
     bool in_check;
 
 private:
+    Color side_to_play;
+    char enpassant_file;
     int get_castle_bit(Color color, bool kingside) const {
         int bit = 0;
         if (kingside) {
@@ -198,6 +221,30 @@ private:
 
     const static uint64_t **rook_magic;
     const static uint64_t **bishop_magic;
+
+
+public:
+    void apply_move(move_t);
+    void undo_move(move_t);
+    int times_seen() {
+        auto iter = seen_positions.find(hash);
+        if (iter != seen_positions.end()) {
+            return iter->second;
+        } else {
+            return 0;
+        }
+    }
+    uint64_t get_hash() const { return hash; }
+
+protected:
+    std::map<uint64_t, int> seen_positions;
+private:
+    uint64_t hash;
+    void update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding);
+    void update_zobrist_hashing_castle(Color, bool kingside, bool enabling);
+    void update_zobrist_hashing_move();
+    void update_zobrist_hashing_enpassant(int file, bool enabling);
+
 };
 
 void display_bitboard(uint64_t n, int rank, int file);

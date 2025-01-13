@@ -1,7 +1,7 @@
 CXX = g++-14
 INCLUDES = -Inet -I.
-CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES) -DHALFKASINGLE -O3
-ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc logicalboard.cc net/nnue.cc
+CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES) -DHALFKASINGLE -O
+ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc net/nnue.cc
 ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o) net/model.2.768.20250101.o
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 
@@ -13,7 +13,7 @@ chess: bitboard.o fenboard.o test.o move.o
 uciinterface: $(ENGINE_OBJS) uciinterface.o
 	$(CXX) $^ -o $@
 
-moves: moves.o bitboard.o fenboard.o move.o search.o evaluate.o pgn.o logicalboard.o
+moves: moves.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 
 magicsquares: magicsquares.o bitboard.o
@@ -30,15 +30,6 @@ playover: $(ENGINE_OBJS) playover.o
 	$(CXX) $^ -o $@
 
 testexe: $(ENGINE_OBJS) test.o
-	$(CXX) $^ -o $@
-
-pgn2training: bitboard.o fenboard.o pgn2training.o move.o pgn.o logicalboard.o
-	$(CXX) $^ -o $@
-
-pgnreader: pgnreader.o pgn.o bitboard.o fenboard.o move.o logicalboard.o
-	$(CXX) $^ -o $@
-
-endgames: bitboard.o fenboard.o endgames.o move.o logicalboard.o
 	$(CXX) $^ -o $@
 
 puzzle: puzzle.o $(ENGINE_OBJS)

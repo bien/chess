@@ -13,7 +13,6 @@ Fenboard::Fenboard()
 void Fenboard::set_starting_position()
 {
     set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w kKqQ - 0 1");
-    this->side_to_play = White;
 }
 
 move_t Fenboard::invalid_move(const std::string &s) const
@@ -27,6 +26,7 @@ void Fenboard::reset()
 {
     set_fen("8/8/8/8/8/8/8/8 w - - 0 1");
 }
+
 
 void Fenboard::set_fen(const std::string &fen)
 {
@@ -71,13 +71,13 @@ void Fenboard::set_fen(const std::string &fen)
     // next comes the color
     while ((c = fen[pos++]) != 0 && c != ' ') {
         switch(c) {
-            case 'w': this->side_to_play = White; break;
-            case 'b': this->side_to_play = Black; break;
+            case 'w': set_side_to_play(White); break;
+            case 'b': set_side_to_play(Black); break;
             case ' ': case 0: break;
             default: std::cerr << "Can't read fen" << fen << std::endl; abort();
         }
     }
-    this->in_check = this->king_in_check(this->side_to_play);
+    this->in_check = this->king_in_check(get_side_to_play());
     if (c == 0) {
         return;
     }
@@ -103,11 +103,11 @@ void Fenboard::set_fen(const std::string &fen)
         return;
     }
 
-    this->enpassant_file = -1;
+    set_enpassant_file(-1);
 
     if ((c = fen[pos++]) != 0) {
         if (c >= 'a' && c <= 'h') {
-            this->enpassant_file = c - 'a';
+            set_enpassant_file(c - 'a');
         }
     }
     while (pos < fen.size() && fen[pos++] == ' ')
@@ -134,6 +134,8 @@ void Fenboard::set_fen(const std::string &fen)
                 break;
         }
     }
+    seen_positions.clear();
+    seen_positions[get_hash()] = 1;
 }
 
 
@@ -335,12 +337,18 @@ void Fenboard::print_move(move_t move, std::ostream &os) const
             case bb_queen: os << "Q"; break;
         }
     }
+    /*
+    if (piece_type == bb_pawn && get_captured_piece(move) == EMPTY && srcfile != destfile) {
+        os << "ep";
+    }
+
     if (get_invalidates_kingside_castle(move)) {
         os << "xk";
     }
     if (get_invalidates_queenside_castle(move)) {
         os << "xq";
     }
+    */
 }
 
 // uci move format (e7e8q)
@@ -423,10 +431,10 @@ void Fenboard::get_fen(std::ostream &os) const
                 os << "/";
         }
     }
-    switch (this->side_to_play) {
+    switch (this->get_side_to_play()) {
         case White: os << " w"; break;
         case Black: os << " b"; break;
-        default: std::cerr << "Unknown color " << (int)this->side_to_play << std::endl; abort();
+        default: std::cerr << "Unknown color " << (int)this->get_side_to_play() << std::endl; abort();
     }
     os << " ";
     bool some_castling = 0;
@@ -450,12 +458,12 @@ void Fenboard::get_fen(std::ostream &os) const
         os << "-";
     }
     os << " ";
-    if (this->enpassant_file < 0 || this->enpassant_file >= 8) {
+    if (this->get_enpassant_file() < 0 || this->get_enpassant_file() >= 8) {
         os << "-";
-    } else if (this->side_to_play == White) {
-        os << static_cast<char>(this->enpassant_file + 'a') << "6";
+    } else if (this->get_side_to_play() == White) {
+        os << static_cast<char>(this->get_enpassant_file() + 'a') << "6";
     } else {
-        os << static_cast<char>(this->enpassant_file + 'a') << "3";
+        os << static_cast<char>(this->get_enpassant_file() + 'a') << "3";
     }
     os << " 0 " << this->move_count;
 }
