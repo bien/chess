@@ -215,7 +215,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                     beta = std::min(beta, entry->value + mate_depth_adjustment);
                 }
                 if (alpha >= beta) {
-                    return std::tuple<move_t, move_t, int>(entry->move, 0, entry->value);
+                    return std::tuple<move_t, move_t, int>(entry->move, 0, entry->value > 0 ? entry->value - mate_depth_adjustment : entry->value + mate_depth_adjustment);
                 }
             } else {
                 transposition_insufficient_depth++;
