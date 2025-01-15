@@ -47,6 +47,14 @@ struct SimpleHash {
         valid[hashed / 64] |= 1ULL << (hashed % 64);
         return contents[hashed].second;
     }
+    bool contains(Key key) const {
+        int hashed = Hasher<Size>::hash(key);
+        if (contents[hashed].first == key && ((valid[hashed / 64] & (1ULL << (hashed % 64))) != 0)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
     std::pair<Key, Value> find(Key key) {
         int hashed = Hasher<Size>::hash(key);
         if (contents[hashed].first == key && ((valid[hashed / 64] & (1ULL << (hashed % 64))) != 0)) {
@@ -71,23 +79,32 @@ struct TrivialHash {
     }
 };
 
+const int TT_EXACT = 0;
+const int TT_UPPER = 1;
+const int TT_LOWER = 2;
+
 struct TranspositionEntry {
     move_t move;
-    move_t response;
-    int lower;
-    int upper;
-    short depth;
+
+    short value;
+    char depth;
+    char type;
+
 
     TranspositionEntry()
-        : move(0), response(0), lower(SCORE_MIN), upper(SCORE_MAX), depth(0)
+        : move(0), value(0), depth(0), type(0)
     {}
 
     TranspositionEntry(const TranspositionEntry &entry)
-        : move(entry.move), response(entry.response), lower(entry.lower), upper(entry.upper), depth(entry.depth)
+        : move(entry.move), value(entry.value), depth(entry.depth), type(entry.type)
     {}
 
     bool operator==(const TranspositionEntry o) const {
-        return o.move == move && o.upper == upper && o.lower == lower && o.depth == depth;
+        return o.move == move && o.value == value && o.type == type && o.depth == depth;
+    }
+
+    bool is_valid() const {
+        return true;
     }
 };
 
@@ -148,7 +165,8 @@ struct Search {
     int transposition_insufficient_depth;
 
 private:
-    SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
+//    SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
+    std::map<uint64_t, TranspositionEntry> transposition_table;
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
     move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);

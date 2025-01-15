@@ -165,8 +165,6 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 {
     nodecount++;
 
-    TranspositionEntry bounds;
-    bounds.depth = max_depth - depth;
     int best_score = 31415;
     move_t best_response = -1;
     move_t best_move = -1;
@@ -190,33 +188,35 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
     if (use_transposition_table) {
         transposition_checks += 1;
         auto transpose = transposition_table.find(b.get_hash());
-        if (transpose != transposition_table.end()) {
-            TranspositionEntry &entry = transpose.second;
-            if (entry.depth >= max_depth - depth) {
+        if (transpose != transposition_table.end() && transpose->second.is_valid()) {
+            if (transpose->second.depth >= max_depth - depth) {
                 // found something at appropriate depth
-                bounds = entry;
+                TranspositionEntry *entry = &transpose->second;
                 int mate_depth_adjustment = 0;
-                if (entry.depth > max_depth - depth && (bounds.lower > 9900 || bounds.upper < -9900)) {
+                if ((entry->depth > max_depth - depth) && (entry->value > 9900 || entry->value < -9900)) {
                     // special adjustment for transposing into mate sequences -- need to change distance
-                    mate_depth_adjustment = (entry.depth - max_depth + depth);
-//                    std::cout << "HERE beta=" << beta << " lower=" << bounds.lower << " upper=" << bounds.upper << " adj=" << mate_depth_adjustment << std::endl;
+                    mate_depth_adjustment = (entry->depth - max_depth + depth);
                 }
-                if (bounds.lower >= beta) {
+                if (entry->type == TT_EXACT) {
                     transposition_full_hits++;
-                    if (bounds.lower <= 9900) {
+                    beta = entry->value - mate_depth_adjustment;
+                    alpha = beta;
+                } else if (entry->type == TT_LOWER) {
+                    transposition_partial_hits++;
+                    if (entry->value <= 9900) {
                         mate_depth_adjustment = 0;
                     }
-                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.lower - mate_depth_adjustment);
-                } else if (bounds.upper <= alpha) {
-                    transposition_full_hits++;
-                    if (bounds.upper >= -9900) {
+                    alpha = std::max(alpha, entry->value - mate_depth_adjustment);
+                } else if (entry->type == TT_UPPER) {
+                    transposition_partial_hits++;
+                    if (entry->value >= -9900) {
                         mate_depth_adjustment = 0;
                     }
-                    return std::tuple<move_t, move_t, int>(bounds.move, bounds.response, bounds.upper + mate_depth_adjustment);
+                    beta = std::min(beta, entry->value + mate_depth_adjustment);
                 }
-                transposition_partial_hits++;
-                alpha = std::max(alpha, bounds.lower - (bounds.lower >= 9900 ? mate_depth_adjustment : 0));
-                beta = std::min(beta, bounds.upper + (bounds.upper <= 9900 ? mate_depth_adjustment : 0));
+                if (alpha >= beta) {
+                    return std::tuple<move_t, move_t, int>(entry->move, 0, entry->value);
+                }
             } else {
                 transposition_insufficient_depth++;
             }
@@ -357,22 +357,54 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
     // write to transposition table
     if (use_transposition_table) {
-        bool is_dirty = true;
+        TranspositionEntry *entry = &transposition_table[b.get_hash()];
+        entry->value = best_score;
+        entry->move = best_move;
+        entry->depth = max_depth - depth;
         if (best_score <= original_alpha) {
-            bounds.upper = best_score;
-        } else if (best_score > original_alpha && best_score < original_beta) {
-            bounds.lower = best_score;
-            bounds.upper = best_score;
-            bounds.move = best_move;
-            bounds.response = best_response;
+            entry->type = TT_UPPER;
         } else if (best_score >= original_beta) {
-            bounds.lower = best_score;
+            entry->type = TT_LOWER;
+        } else {
+            entry->type = TT_EXACT;
+        }
+        /*
+        bool is_dirty = false;
+        bool is_new = (entry == NULL);
+        if (entry == NULL) {
+            entry = &transposition_table[b.get_hash()];
+            entry->depth = max_depth - depth;
+        }
+        if (best_score <= original_alpha && entry->depth == max_depth - depth) {
+            entry->upper = best_score;
+            if (entry->upper < entry->lower) {
+                entry->lower = entry->upper;
+                entry->move = best_move;
+                entry->response = best_response;
+            }
+        } else if (best_score > original_alpha && best_score < original_beta) {
+            entry->lower = best_score;
+            entry->upper = best_score;
+            entry->move = best_move;
+            entry->response = best_response;
+            is_dirty = true;
+        } else if (best_score >= original_beta) {
+            entry->lower = best_score;
+            if (entry->upper < entry->lower) {
+                entry->upper = entry->lower;
+                entry->move = best_move;
+                entry->response = best_response;
+            }
+//            std::cout << "Fail high: is_new=" << is_new << " lower=" << entry->lower << " upper=" << entry->upper << " move=" << entry->move << " depth=" << entry->depth << std::endl;
         } else {
             is_dirty = false;
         }
+
         if (is_dirty) {
-            transposition_table[b.get_hash()] = bounds;
+            transposition_table[b.get_hash()] = *entry;
         }
+        */
+
     }
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);
 }
