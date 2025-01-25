@@ -18,7 +18,6 @@ public:
     void set_fen(const std::string &fen);
     void print_move(move_t, std::ostream &os) const;
     move_t read_move(const std::string &s, Color color) const;
-    move_t reinterpret_move(move_t original) const;
     short get_move_count() const { return move_count; }
 
 private:
@@ -32,5 +31,8 @@ private:
 
 std::ostream &print_move_uci(move_t, std::ostream &os);
 std::ostream &operator<<(std::ostream &os, const Fenboard &b);
+std::string board_to_fen(const Fenboard *b);
+std::string move_to_uci(move_t);
+std::string move_to_algebra(const Fenboard *b, move_t);
 
 #endif

@@ -10,6 +10,23 @@
 #include <cassert>
 #include <type_traits>
 
+const uint64_t file_a = 0x0101010101010101ULL;
+const uint64_t file_h = file_a << 7;
+const uint64_t rank_1 = 0xff;
+const uint64_t rank_2 = 0xff00;
+const uint64_t rank_7 = rank_1 << 48;
+const uint64_t rank_8 = rank_1 << 56;
+
+constexpr uint64_t shift_right(uint64_t x, int amount) {
+    if (amount > 0) {
+        return x >> amount;
+    } else if (amount < 0) {
+        return x << -amount;
+    } else {
+        return x;
+    }
+}
+
 constexpr uint64_t project_bitset(uint64_t bitset, uint64_t bitmask)
 {
     uint64_t projection = 0;
@@ -170,94 +187,6 @@ public:
      typedef generate_array<64, BishopBitCounter>::result bishop_bitboard_bitcount;
 
  };
-
- // FIX: switch from 8-bit to 6-bit board positions, add source piece, move-gives-check
- // for non-capture non-promote
-void Bitboard::make_moves(std::vector<move_t> &dest,
-         int source_pos,
-         unsigned char source_piece,
-         uint64_t dest_squares) const
-{
-//    move_t move = srcrank << 12 | srcfile << 8 | destrank << 4 | destfile;
-    move_t move = (source_pos / 8) << 12 | (source_pos % 8) << 8;
-
-    // save misc state
-    if (in_check) {
-        move |= MOVE_FROM_CHECK;
-    }
-    if (enpassant_file != -1) {
-        move |= (0xf & enpassant_file) << 20;
-    } else {
-        move |= ENPASSANT_STATE_MASK;
-    }
-    move_t invalidates_castle = 0;
-    if ((source_piece & PIECE_MASK) == bb_king) {
-        if (can_castle(get_color(source_piece), true)) {
-            invalidates_castle |= INVALIDATES_CASTLE_K;
-        }
-        if (can_castle(get_color(source_piece), false)) {
-            invalidates_castle |= INVALIDATES_CASTLE_Q;
-        }
-    }
-    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), false) && source_pos % 8 == 0) {
-        invalidates_castle |= INVALIDATES_CASTLE_Q;
-    }
-    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), true) && source_pos % 8 == 7) {
-        invalidates_castle |= INVALIDATES_CASTLE_K;
-    }
-    move |= invalidates_castle;
-
-    int dest_pos = -1;
-    while ((dest_pos = get_low_bit(dest_squares, dest_pos+1)) >= 0) {
-        move_t copied = move;
-        copied |= (dest_pos / 8) << 4 | (dest_pos % 8);
-        if ((source_piece & PIECE_MASK) == bb_pawn && (source_pos % 8) != (dest_pos % 8)) {
-            assert(false);
-        }
-        dest.push_back(copied);
-    }
-}
-
-move_t Bitboard::make_move(unsigned char srcrank, unsigned char srcfile,
-        unsigned char source_piece,
-        unsigned char destrank, unsigned char destfile,
-        unsigned char captured_piece, unsigned char promote) const
-{
-    move_t move = srcrank << 12 | srcfile << 8 | destrank << 4 | destfile;
-    move |= (promote & PIECE_MASK) << 24;
-    move |= (captured_piece & PIECE_MASK) << 16;
-    if (((source_piece & PIECE_MASK) == bb_pawn) && (srcfile != destfile) && (this->get_piece(destrank, destfile) == EMPTY)) {
-        move |= ENPASSANT_FLAG;
-    }
-
-    // save misc state
-    if (in_check) {
-        move |= MOVE_FROM_CHECK;
-    }
-    if (enpassant_file != -1) {
-        move |= (0xf & enpassant_file) << 20;
-    } else {
-        move |= ENPASSANT_STATE_MASK;
-    }
-    move_t invalidates_castle = 0;
-    if ((source_piece & PIECE_MASK) == bb_king) {
-        if (can_castle(get_color(source_piece), true)) {
-            invalidates_castle |= INVALIDATES_CASTLE_K;
-        }
-        if (can_castle(get_color(source_piece), false)) {
-            invalidates_castle |= INVALIDATES_CASTLE_Q;
-        }
-    }
-    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), false) && srcfile == 0) {
-        invalidates_castle |= INVALIDATES_CASTLE_Q;
-    }
-    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), true) && srcfile == 7) {
-        invalidates_castle |= INVALIDATES_CASTLE_K;
-    }
-    move |= invalidates_castle;
-
-    return move;
-}
 
 //constexpr
 uint64_t bishop_slide_moves(BoardPos src, uint64_t blockboard) {
@@ -449,7 +378,7 @@ const uint64_t **Bitboard::bishop_magic = const_cast<const uint64_t **>(initiali
 
 
 Bitboard::Bitboard()
-    : hash(0)
+    : side_to_play(White), hash(0)
 {
     memset(piece_bitmasks, 0, sizeof(piece_bitmasks));
     enpassant_file = -1;
@@ -504,172 +433,178 @@ void Bitboard::set_piece(unsigned char rank, unsigned char file, piece_t piece)
     }
 }
 
-void Bitboard::next_pnk_move(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, bool checks_only, bool exclude_checks, bool include_promo, bool exclude_promo) const
+
+ // FIX: add source piece, move-gives-check
+ // for non-promote
+void Bitboard::make_moves(std::vector<move_t> &dest,
+         int source_pos,
+         unsigned char source_piece,
+         uint64_t dest_squares,
+         uint64_t gives_check) const
 {
-	/**
-	FL_CAPTURES: consider attacks against enemy pieces
-	FL_EMPTY: consider moves to empty squares
-	FL_ALL: consider attacks against own side's pieces (defending own piece)
-	*/
-    uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type];
-    uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)];
+    move_t move = (source_pos & 0x3f) << 6;
 
-    while ((start_pos = get_low_bit(actors, start_pos)) > -1) {
-        bool is_promo = (piece_type & PIECE_MASK) == bb_pawn && ((color == White && start_pos >= 48) || (color == Black && start_pos <= 15));
-        dest_squares = 0;
+    if (dest_squares == 0) {
+        return;
+    }
 
-        if (((fl_flags & (FL_CAPTURES | FL_ALL)) && !(exclude_promo && is_promo)) || (include_promo && is_promo)) {
-            dest_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][start_pos];
-            if (!(fl_flags & FL_ALL)) {
-                // only capture opponent's pieces
-                dest_squares &= piece_bitmasks[(1 - color) * (bb_king + 1) + bb_all];
-            }
-            // pawns can't capture on empty squares
-            else if ((piece_type & PIECE_MASK) == bb_pawn) {
-                dest_squares &= all_pieces;
-            }
-
-            // except enpassant where "capture" isn't in the destination square
-            int ep_rank = color == White ? 4 : 3;
-            if (enpassant_file >= 0 && (piece_type & PIECE_MASK) == bb_pawn && ep_rank == start_pos / 8 && ((enpassant_file + 1) == start_pos % 8 || (enpassant_file - 1) == start_pos % 8)) {
-                dest_squares |= 1ULL << ((ep_rank + (color == White ? 1 : -1)) * 8 + enpassant_file);
-            }
+    // save misc state
+    if (in_check) {
+        move |= MOVE_FROM_CHECK;
+    }
+    if (enpassant_file != -1) {
+        move |= (0xf & enpassant_file) << 20;
+    } else {
+        move |= ENPASSANT_STATE_MASK;
+    }
+    move_t invalidates_castle = 0;
+    if ((source_piece & PIECE_MASK) == bb_king) {
+        if (can_castle(get_color(source_piece), true)) {
+            invalidates_castle |= INVALIDATES_CASTLE_K;
         }
-        if (((fl_flags & (FL_EMPTY | FL_ALL)) && !(exclude_promo && is_promo)) || (include_promo && is_promo)) {
-            uint64_t dest_squares_empty = BitboardCaptures::PregeneratedMoves[color * 8 + piece_type][start_pos] & ~all_pieces;
-            int starting_king_pos = (color == White ? 4 : 60);
-            if (dest_squares_empty != 0 && (piece_type & PIECE_MASK) == bb_pawn) {
-                uint64_t two_square_dest = 0;
-                if (start_pos / 8 == 1 && color == White) {
-                    two_square_dest = 1ULL << (start_pos + 16);
-                } else if (start_pos / 8 == 6 && color == Black) {
-                    two_square_dest = 1ULL << (start_pos - 16);
-                }
-                two_square_dest &= ~all_pieces;
-                dest_squares_empty |= two_square_dest;
-            } else if (dest_squares_empty != 0 && (piece_type & PIECE_MASK) == bb_king && start_pos == starting_king_pos) {
-                // castle king-side
-                uint64_t castle_dest = 0;
-
-                if (can_castle(color, true) &&
-                    (dest_squares_empty & (1ULL << (starting_king_pos + 1))) &&
-                    ((1ULL << (starting_king_pos + 2)) & ~all_pieces) &&
-                    ((1ULL << (starting_king_pos + 3)) & piece_bitmasks[color * (bb_king + 1) + bb_rook])) {
-                    castle_dest |= (1ULL << (starting_king_pos + 2));
-                }
-                // queen-side
-                if (can_castle(color, false) &&
-                    (dest_squares_empty & (1ULL << (starting_king_pos - 1))) &&
-                    (((1ULL << (starting_king_pos - 3)) | (1ULL << (starting_king_pos - 2))) & all_pieces) == 0 &&
-                    ((1ULL << (starting_king_pos - 4)) & piece_bitmasks[color * (bb_king + 1) + bb_rook])) {
-                    castle_dest |= (1ULL << (starting_king_pos - 2));
-                }
-
-                dest_squares_empty |= castle_dest;
-            }
-            dest_squares |= dest_squares_empty;
+        if (can_castle(get_color(source_piece), false)) {
+            invalidates_castle |= INVALIDATES_CASTLE_Q;
         }
-        // check prioritization logic
+    }
+    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), false) && source_pos % 8 == 0) {
+        invalidates_castle |= INVALIDATES_CASTLE_Q;
+    }
+    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), true) && source_pos % 8 == 7) {
+        invalidates_castle |= INVALIDATES_CASTLE_K;
+    }
+    move |= invalidates_castle;
 
-        if (checks_only || exclude_checks) {
-            uint64_t check_squares = 0;
-            uint64_t opponent_king_pos = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_king];
-            int opponent_king_square = get_low_bit(opponent_king_pos, 0);
-            if ((piece_type & PIECE_MASK) == bb_knight) {
-                check_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][opponent_king_square];
-            } else if ((piece_type & PIECE_MASK) == bb_pawn) {
-                check_squares = BitboardCaptures::PregeneratedCaptures[1 - color][piece_type][opponent_king_square];
-            }
-
-            if (checks_only) {
-                dest_squares &= check_squares;
-            } else if (exclude_checks) {
-                dest_squares &= ~check_squares;
-            }
+    int dest_pos = -1;
+    while ((dest_pos = get_low_bit(dest_squares, dest_pos+1)) >= 0) {
+        move_t copied = move;
+        copied |= dest_pos & 0x3f;
+        if (gives_check & (1ULL << dest_pos)) {
+            copied |= GIVES_CHECK;
         }
+        piece_t captured_piece = get_piece(dest_pos / 8, dest_pos % 8);
+        if ((captured_piece & PIECE_MASK) == bb_king) {
+            std::cout << board_to_fen((const Fenboard *)this) << std::endl;
+        }
+        assert((captured_piece & PIECE_MASK) != bb_king);
+        copied |= (captured_piece & PIECE_MASK) << 16;
+        dest.push_back(copied);
+    }
+}
 
-        if (dest_squares) {
-            break;
+ // FIX: add source piece
+void Bitboard::make_pawn_moves(std::vector<move_t> &dest,
+         uint64_t source_squares,
+         int dest_offset,
+         bool all_give_check) const
+{
+    // dest_offset should be negative for black move
+    move_t move = 0;
+
+    if (source_squares == 0) {
+        return;
+    }
+
+    // save misc state
+    if (in_check) {
+        move |= MOVE_FROM_CHECK;
+    }
+    if (enpassant_file != -1) {
+        move |= (0xf & enpassant_file) << 20;
+    } else {
+        move |= ENPASSANT_STATE_MASK;
+    }
+
+    int source_pos = -1;
+    while ((source_pos = get_low_bit(source_squares, source_pos+1)) >= 0) {
+        move_t copied = move;
+        int dest_pos = source_pos + dest_offset;
+        copied |= (source_pos & 0x3f) << 6;
+        copied |= dest_pos & 0x3f;
+        if (all_give_check) {
+            copied |= GIVES_CHECK;
+        }
+        piece_t captured_piece = get_piece(dest_pos / 8, dest_pos % 8);
+        assert((captured_piece & PIECE_MASK) != bb_king);
+        if ((dest_offset % 8 != 0) && (captured_piece == EMPTY)) {
+            copied |= ENPASSANT_FLAG;
+        }
+        copied |= (captured_piece & PIECE_MASK) << 16;
+        if (dest_pos < 8 || dest_pos >= 56) {
+            Color side_to_play = get_color(get_piece(source_pos / 8, source_pos % 8));
+            uint64_t all_pieces = get_bitmask(side_to_play, bb_all) | get_bitmask(get_opposite_color(side_to_play), bb_all);
+            uint64_t opp_king_square = get_bitmask(get_opposite_color(side_to_play), bb_king);
+            int opposite_king_pos = get_low_bit(opp_king_square, 0);
+            // use reverse order because queen is probably better move
+            for (piece_t promote = bb_queen; promote >= bb_knight; promote--) {
+                move_t c2 = copied;
+                c2 |= (promote & PIECE_MASK) << 24;
+                // does the promoted piece give check?
+                bool gives_check = false;
+                if (promote == bb_knight) {
+                    gives_check = BitboardCaptures::PregeneratedCaptures[side_to_play][promote][dest_pos] & opp_king_square;
+                }
+                else if (promote == bb_bishop || promote == bb_queen) {
+                    gives_check |= (get_bishop_moves(dest_pos, all_pieces & ~(1ULL << source_pos)) & (1ULL << opposite_king_pos)) > 0;
+                }
+                if (promote == bb_rook || promote == bb_queen) {
+                    gives_check |= (get_rook_moves(dest_pos, all_pieces & ~(1ULL << source_pos)) & (1ULL << opposite_king_pos)) > 0;
+                }
+                if (gives_check) {
+                    c2 |= GIVES_CHECK;
+                }
+                dest.push_back(c2);
+            }
         } else {
-            start_pos += 1;
+            dest.push_back(copied);
         }
     }
 }
 
-
-
-uint64_t Bitboard::get_king_slide_blockers(int king_pos, Color king_color) const
+move_t Bitboard::make_move(unsigned char srcrank, unsigned char srcfile,
+        unsigned char source_piece,
+        unsigned char destrank, unsigned char destfile,
+        unsigned char captured_piece, unsigned char promote, bool gives_check) const
 {
-    uint64_t potential_blockers = 0;
-    uint64_t bishop_moves = BitArrays::bishop_moves::data[king_pos];
-    uint64_t rook_moves = BitArrays::rook_moves::data[king_pos];
-    if (bishop_moves & (get_bitmask(get_opposite_color(king_color), bb_bishop) | get_bitmask(get_opposite_color(king_color), bb_queen))) {
-        potential_blockers |= bishop_moves;
+    move_t move = srcrank << 9 | srcfile << 6 | destrank << 3 | destfile;
+    move |= (promote & PIECE_MASK) << 24;
+    move |= (captured_piece & PIECE_MASK) << 16;
+    assert((captured_piece & PIECE_MASK) != bb_king);
+    if (((source_piece & PIECE_MASK) == bb_pawn) && (srcfile != destfile) && (this->get_piece(destrank, destfile) == EMPTY)) {
+        move |= ENPASSANT_FLAG;
     }
-    if (rook_moves & (get_bitmask(get_opposite_color(king_color), bb_rook) | get_bitmask(get_opposite_color(king_color), bb_queen))) {
-        potential_blockers |= rook_moves;
+
+    // save misc state
+    if (in_check) {
+        move |= MOVE_FROM_CHECK;
     }
-    return potential_blockers;
+    if (enpassant_file != -1) {
+        move |= (0xf & enpassant_file) << 20;
+    } else {
+        move |= ENPASSANT_STATE_MASK;
+    }
+    move_t invalidates_castle = 0;
+    if ((source_piece & PIECE_MASK) == bb_king) {
+        if (can_castle(get_color(source_piece), true)) {
+            invalidates_castle |= INVALIDATES_CASTLE_K;
+        }
+        if (can_castle(get_color(source_piece), false)) {
+            invalidates_castle |= INVALIDATES_CASTLE_Q;
+        }
+    }
+    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), false) && srcfile == 0) {
+        invalidates_castle |= INVALIDATES_CASTLE_Q;
+    }
+    else if ((source_piece & PIECE_MASK) == bb_rook && can_castle(get_color(source_piece), true) && srcfile == 7) {
+        invalidates_castle |= INVALIDATES_CASTLE_K;
+    }
+    if (gives_check) {
+        move |= GIVES_CHECK;
+    }
+    move |= invalidates_castle;
+
+    return move;
 }
 
-bool Bitboard::is_not_illegal_due_to_check(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const
-{
-    // special rules for king moves
-    if (piece == bb_king) {
-        // don't move into check
-        if (covered_squares & (1ULL << dest_pos)) {
-            return false;
-        }
-        else if (abs(start_pos - dest_pos) == 2) {
-            // it's a castle: don't move out of check or through check
-            if (in_check || (covered_squares & (1ULL << (start_pos + (dest_pos - start_pos) / 2)))) {
-                return false;
-            }
-        }
-        // fall through: might still need removes_check test below
-    }
-    /*
-    printf("is_legal %c%d-%c%d in_check=%d\n",
-        start_pos%8+'a', start_pos/8 + 1, dest_pos%8+'a', dest_pos/8 + 1,
-        in_check);
-    display_bitboard(covered_squares, -1, -1);
-    */
-    // enpassant captures can remove two pieces from sight of rook/queen on 4th rank
-    if (!in_check && piece == bb_pawn && (start_pos % 8 != dest_pos % 8) && ((piece_bitmasks[bb_all + (1 - color) * (bb_king + 1)] & (1ULL << dest_pos)) == 0)) {
-        uint64_t my_king = piece_bitmasks[bb_king + (bb_king + 1) * color];
-        int king_square = get_low_bit(my_king, 0);
-        uint64_t attackers = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_rook] | piece_bitmasks[(1 - color) * (bb_king + 1) + bb_queen];
-        uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[(bb_king + 1) + bb_all];
-
-        int df = 0;
-        if (start_pos > king_square) {
-            df = 1;
-        } else if (start_pos < king_square) {
-            df = -1;
-        } else {
-            assert(false);
-        }
-
-        int rank = start_pos / 8;
-        for (int file = king_square % 8 + df; file < 8 && file >= 0; file += df) {
-            if (attackers & (1ULL << (rank * 8 + file))) {
-                return false;
-            } else if (file == start_pos % 8 || file == dest_pos % 8) {
-                // continue
-            } else if (all_pieces & (1ULL << (rank * 8 + file))) {
-                break;
-            }
-        }
-
-    }
-    if (!in_check && discovers_check(start_pos, dest_pos, color, covered_squares, true)) {
-        return false;
-    }
-    else if (in_check && !removes_check(piece, start_pos, dest_pos, color, covered_squares)) {
-        return false;
-    }
-    return true;
-}
 
 uint64_t Bitboard::get_rook_moves(int start_pos, uint64_t blockers) const {
     // returns bits that rook at start_pos has access to, including bits in blockers
@@ -687,27 +622,332 @@ uint64_t Bitboard::get_bishop_moves(int start_pos, uint64_t blockers) const {
     return bishop_magic[start_pos][magic_index >> (64 - BitArrays::bishop_bitboard_bitcount::data[start_pos])];
 }
 
-uint64_t Bitboard::get_blocking_squares(int src, int dest) const
+uint64_t Bitboard::get_blocking_squares(int src, int dest, uint64_t blockers) const
 {
     // returns bits that break connection from src <-> dest
-    uint64_t srcmask = 1ULL << src;
-    uint64_t destmask = 1ULL << dest;
-
     if ((src / 8 == dest / 8) || (src % 8 == dest % 8)) {
         // same rank or file
-        return get_rook_moves(src, destmask) & get_rook_moves(dest, srcmask);
+        return get_rook_moves(src, blockers) & get_rook_moves(dest, blockers);
     }
-    else if (BitArrays::bishop_moves::data[src] & destmask) {
-        return get_bishop_moves(src, destmask) & get_bishop_moves(dest, srcmask);
+    else if (BitArrays::bishop_moves::data[src] & (1ULL << dest)) {
+        return get_bishop_moves(src, blockers) & get_bishop_moves(dest, blockers);
     }
 
     return 0;
 }
 
 
+bool Bitboard::king_in_check(Color color) const
+{
+    uint64_t king_pos = get_bitmask(color, bb_king);
+    uint64_t covered = computed_covered_squares(get_opposite_color(color));
+    return covered & king_pos;
+}
+
+
+/* returns squares of color pieces that attack this square */
+uint64_t Bitboard::square_attackers(int dest, Color color) const
+{
+    uint64_t attackers = 0;
+
+    uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)];
+    uint64_t bishop_attackers = piece_bitmasks[color * (bb_king + 1) + bb_bishop];
+    uint64_t rook_attackers = piece_bitmasks[color * (bb_king + 1) + bb_rook];
+    uint64_t queen_attackers = piece_bitmasks[color * (bb_king + 1) + bb_queen];
+
+    piece_t pnk_pieces[3] = { bb_pawn, bb_knight, bb_king };
+    /* rook or queen attacks */
+    attackers |= get_rook_moves(dest, all_pieces) & (rook_attackers | queen_attackers);
+    attackers |= get_bishop_moves(dest, all_pieces) & (bishop_attackers | queen_attackers);
+
+    for (int i = 0; i < 3; i++) {
+        int piece_type = pnk_pieces[i];
+        attackers |= BitboardCaptures::PregeneratedCaptures[1 - color][piece_type][dest] & piece_bitmasks[color * (bb_king + 1) + piece_type];
+    }
+
+
+    return attackers;
+}
+
+/* returns squares that are currently attacked/defended by pieces of Color color */
+uint64_t Bitboard::computed_covered_squares(Color color) const
+{
+    uint64_t squares = 0;
+    int one_rank_forward = (color == White ? -8 : 8);
+
+    std::vector<PackedMoves> moves;
+    get_nk_pseudo_moves(color, bb_king, moves, false);
+    get_nk_pseudo_moves(color, bb_knight, moves, false);
+    get_slide_pseudo_moves(color, moves, false, get_bitmask(get_opposite_color(color), bb_king));
+    for (auto iter = moves.begin(); iter != moves.end(); iter++) {
+        squares |= iter->dest_squares;
+    }
+    // pawn moves
+    squares |= shift_right(get_bitmask(color, bb_pawn) & ~file_a, one_rank_forward + 1)
+            | shift_right(get_bitmask(color, bb_pawn) & ~file_h, one_rank_forward - 1);
+    return squares;
+}
+
+
+void Bitboard::get_moves(Color side_to_play, bool checks, bool captures_or_promo, const PackedMoveIterator &packed, std::vector<move_t> &moves) const
+{
+    int one_rank_forward = (side_to_play == White ? 8 : -8);
+
+    // pawn moves
+    if (captures_or_promo) {
+        uint64_t check_mask_src_award = packed.capture_award_gives_check | shift_right(packed.pawn_check_squares, one_rank_forward - 1);
+        uint64_t check_mask_src_hward = packed.capture_hward_gives_check | shift_right(packed.pawn_check_squares, one_rank_forward + 1);
+        if (checks) {
+            make_pawn_moves(moves, packed.capture_award & check_mask_src_award, one_rank_forward - 1, true);
+            make_pawn_moves(moves, packed.capture_hward & check_mask_src_hward, one_rank_forward + 1, true);
+        } else {
+            make_pawn_moves(moves, packed.capture_award & ~check_mask_src_award, one_rank_forward - 1, false);
+            make_pawn_moves(moves, packed.capture_hward & ~check_mask_src_hward, one_rank_forward + 1, false);
+        }
+    } else {
+        uint64_t check_mask_src = packed.advance_gives_check;
+        uint64_t check_mask_src_move_one = check_mask_src | shift_right(packed.pawn_check_squares, one_rank_forward);
+        uint64_t check_mask_src_move_two = check_mask_src | shift_right(packed.pawn_check_squares, 2*one_rank_forward);
+        if (checks) {
+            make_pawn_moves(moves, packed.pawn_move_one & check_mask_src_move_one, one_rank_forward, true);
+            make_pawn_moves(moves, packed.pawn_move_two & check_mask_src_move_two, one_rank_forward * 2, true);
+        } else {
+            make_pawn_moves(moves, packed.pawn_move_one & ~check_mask_src_move_one, one_rank_forward, false);
+            make_pawn_moves(moves, packed.pawn_move_two & ~check_mask_src_move_two, one_rank_forward * 2, false);
+        }
+    }
+
+    // king moves
+    uint64_t capture_mask = get_bitmask(get_opposite_color(side_to_play), bb_all);
+    uint64_t king_mask = packed.king_move.dest_squares;
+    if (checks) {
+        king_mask &= packed.king_move.check_squares;
+    } else {
+        king_mask &= ~packed.king_move.check_squares;
+    }
+    if (captures_or_promo) {
+        king_mask &= capture_mask;
+    } else {
+        king_mask &= ~capture_mask;
+    }
+    if (king_mask) {
+        make_moves(moves, packed.king_move.source_pos, bb_king, king_mask, packed.king_move.check_squares);
+    }
+
+    // other moves
+    for (auto iter = packed.packed_moves.begin(); iter != packed.packed_moves.end(); iter++) {
+        uint64_t mask = 0;
+        if (checks) {
+            mask = iter->check_squares;
+        } else {
+            mask = ~iter->check_squares;
+        }
+        if (captures_or_promo) {
+            mask &= get_bitmask(get_opposite_color(side_to_play), bb_all);
+        } else {
+            mask &= ~get_bitmask(get_opposite_color(side_to_play), bb_all);
+
+        }
+        make_moves(moves, iter->source_pos, iter->piece_type, iter->dest_squares & mask, iter->check_squares);
+    }
+
+}
+
+void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &moves) const
+{
+    uint64_t my_king = get_bitmask(side_to_play, bb_king);
+    int king_square = get_low_bit(my_king, 0);
+    uint64_t opp_king = get_bitmask(get_opposite_color(side_to_play), bb_king);
+    uint64_t all_pieces = get_bitmask(side_to_play, bb_all) | get_bitmask(get_opposite_color(side_to_play), bb_all);
+    int opp_king_square = get_low_bit(opp_king, 0);
+    uint64_t king_attackers = 0;
+    uint64_t opp_covered_squares = computed_covered_squares(get_opposite_color(side_to_play));
+    moves.pawn_check_squares = BitboardCaptures::PregeneratedCaptures[get_opposite_color(side_to_play)][bb_pawn][opp_king_square];
+    uint64_t blocking_pieces;
+    uint64_t total_blocking_pieces;
+    uint64_t pawn_advance_discovers = 0, pawn_capture_award_discovers = 0, pawn_capture_hward_discovers = 0;
+    blocking_pieces = get_blocking_pieces(opp_king_square, get_opposite_color(side_to_play), side_to_play, total_blocking_pieces, pawn_advance_discovers, pawn_capture_award_discovers, pawn_capture_hward_discovers);
+
+    if (in_check) {
+        king_attackers = square_attackers(king_square, get_opposite_color(side_to_play));
+    }
+
+    // filter out illegal moves
+    get_nk_pseudo_moves(side_to_play, bb_king, moves.packed_moves, true);
+    assert(moves.packed_moves.size() <= 1);
+    if (moves.packed_moves.size() == 0) {
+        moves.king_move.dest_squares = 0;
+    } else {
+        moves.king_move = moves.packed_moves.back();
+        moves.packed_moves.pop_back();
+        // don't move into check
+        moves.king_move.dest_squares &= ~opp_covered_squares;
+        // castling: don't move out of check
+        if (in_check) {
+            moves.king_move.dest_squares &= BitArrays::king_moves::data[king_square];
+        }
+        // or through check king-side
+        if (opp_covered_squares & (1ULL << (king_square + 1))) {
+            moves.king_move.dest_squares &= ~(1ULL << (king_square + 2));
+        }
+        // or through check queen-side
+        if (opp_covered_squares & (1ULL << (king_square - 1))) {
+            moves.king_move.dest_squares &= ~(1ULL << (king_square - 2));
+        }
+        moves.king_move.check_squares = 0;
+        if (moves.king_move.dest_squares != 0) {
+            if (total_blocking_pieces & (1ULL << moves.king_move.source_pos)) {
+                moves.king_move.check_squares = moves.king_move.dest_squares;
+            } else if (blocking_pieces & (1ULL << moves.king_move.source_pos)) {
+                moves.king_move.check_squares = moves.king_move.dest_squares & ~pinned_piece_legal_dest(bb_king, moves.king_move.source_pos, moves.king_move.dest_squares, get_opposite_color(side_to_play), ~0);
+            }
+        }
+        // king-side castle gives check
+        uint64_t ks_castle_dest = moves.king_move.dest_squares & (1ULL << (6 + (side_to_play == Black ? 56 : 0)));
+        if (king_square % 8 == 4 && ks_castle_dest != 0) {
+            if (get_rook_moves(king_square + 1, all_pieces & ~(1ULL << king_square)) & opp_king) {
+                moves.king_move.check_squares |= ks_castle_dest;
+            }
+        }
+        // qs castle
+        uint64_t qs_castle_dest = moves.king_move.dest_squares & (1ULL << (2 + (side_to_play == Black ? 56 : 0)));
+        if (king_square % 8 == 4 && qs_castle_dest != 0) {
+            if (get_rook_moves(king_square - 1, all_pieces & ~(1ULL << king_square)) & opp_king) {
+                moves.king_move.check_squares |= qs_castle_dest;
+            }
+        }
+    }
+
+
+    if (count_bits(king_attackers) < 2) {
+        // if in double-check, don't bother generating non-king moves
+        get_nk_pseudo_moves(side_to_play, bb_knight, moves.packed_moves, true);
+        get_slide_pseudo_moves(side_to_play, moves.packed_moves, true, 0);
+        get_pawn_pseudo_moves(side_to_play, moves.pawn_move_one, moves.pawn_move_two, moves.capture_award, moves.capture_hward);
+
+        // filter non-king moves
+        uint64_t legal_dest_squares = ~0;
+        uint64_t legal_enpassant_captures = 0;
+        uint64_t legal_captures = king_attackers;
+        int one_rank_forward = (side_to_play == White ? 8 : -8);
+
+        if (in_check) {
+
+            int attacker = get_low_bit(king_attackers, 0);
+            assert(attacker >= 0);
+
+            // special enpassant rules: captured piece won't be on dest_squares
+            if ((get_bitmask(get_opposite_color(side_to_play), bb_pawn) & (1ULL << attacker)) && attacker % 8 == enpassant_file) {
+                legal_enpassant_captures = shift_right(king_attackers, -one_rank_forward);
+            }
+
+            uint64_t legal_blocks = get_blocking_squares(king_square, attacker, all_pieces);
+            legal_dest_squares = legal_blocks | legal_captures;
+        }
+
+        // filter out moving pinned pieces
+        uint64_t immobile_pinned_pieces = 0;
+        uint64_t pawn_advance_illegal = 0, pawn_capture_award_illegal = 0, pawn_capture_hward_illegal = 0;
+        uint64_t pinned_pieces = get_blocking_pieces(king_square, side_to_play, side_to_play, immobile_pinned_pieces, pawn_advance_illegal, pawn_capture_award_illegal, pawn_capture_hward_illegal);
+
+        // apply filters to nbrq
+        for (auto iter = moves.packed_moves.begin(); iter != moves.packed_moves.end(); ) {
+            if ((1ULL << iter->source_pos) & immobile_pinned_pieces) {
+                iter->dest_squares = 0;
+            }
+            else if ((1ULL << iter->source_pos) & pinned_pieces) {
+                iter->dest_squares = pinned_piece_legal_dest(iter->piece_type, iter->source_pos, iter->dest_squares, side_to_play, opp_covered_squares);
+            }
+            iter->dest_squares &= legal_dest_squares;
+            // add discovered checks
+            if (total_blocking_pieces & (1ULL << iter->source_pos)) {
+                iter->check_squares = iter->dest_squares;
+            } else if (blocking_pieces & (1ULL << moves.king_move.source_pos)) {
+                iter->check_squares |= iter->dest_squares & ~pinned_piece_legal_dest(bb_king, iter->source_pos, iter->dest_squares, get_opposite_color(side_to_play), ~0);
+            }
+
+            if (iter->dest_squares == 0) {
+                iter = moves.packed_moves.erase(iter);
+            } else {
+                iter++;
+            }
+        }
+
+        // apply pin filters to pawns
+        moves.pawn_move_one = moves.pawn_move_one & shift_right(legal_dest_squares, one_rank_forward) & ~pawn_advance_illegal;
+        moves.pawn_move_two = moves.pawn_move_two & shift_right(legal_dest_squares, one_rank_forward*2) & ~pawn_advance_illegal;
+        moves.capture_award = moves.capture_award & shift_right(legal_dest_squares|legal_enpassant_captures, one_rank_forward - 1) & ~pawn_capture_award_illegal;
+        moves.capture_hward = moves.capture_hward & shift_right(legal_dest_squares|legal_enpassant_captures, one_rank_forward + 1) & ~pawn_capture_hward_illegal;
+        /*
+        moves.pawn_move_one = moves.pawn_move_one & shift_right(legal_dest_squares, one_rank_forward) & ~immobile_pinned_pieces;
+        moves.pawn_move_two = moves.pawn_move_two & shift_right(legal_dest_squares, 2 * one_rank_forward) & ~immobile_pinned_pieces;
+        moves.capture_award = moves.capture_award & shift_right(legal_enpassant_captures | legal_dest_squares, one_rank_forward - 1) & ~immobile_pinned_pieces;
+        moves.capture_hward = moves.capture_hward & shift_right(legal_enpassant_captures | legal_dest_squares, one_rank_forward + 1) & ~immobile_pinned_pieces;
+        uint64_t advance_illegal = 0, capture_a_illegal = 0, capture_h_illegal = 0;
+        move_discovers_check(side_to_play, side_to_play, moves, pinned_pieces, immobile_pinned_pieces, advance_illegal, capture_a_illegal, capture_h_illegal);
+        moves.pawn_move_one &= ~advance_illegal;
+        moves.capture_award &= ~capture_a_illegal;
+        moves.capture_hward &= ~capture_h_illegal;
+*/
+        // add pawn discovered checks
+        moves.advance_gives_check |= (moves.pawn_move_one | moves.pawn_move_two) & pawn_advance_discovers;
+        moves.capture_award_gives_check |= moves.capture_award & pawn_capture_award_discovers;
+        moves.capture_hward_gives_check |= moves.capture_hward & pawn_capture_hward_discovers;
+    }
+
+}
+/*
+void Bitboard::move_discovers_check(Color color, Color king_color, const PackedMoveIterator &moves, uint64_t pinned_pieces, uint64_t total_pinned_pieces, uint64_t &advance_discovers_check, uint64_t &capture_a_discovers_check, uint64_t &capture_h_discovers_check) const
+{
+    // advance_gives_check and captures_gives_check assumed to already be initialized, bits marked on
+    // color refers to side making moves
+    // king color is king in question
+    int one_rank_forward = (color == White ? 8 : -8);
+
+    if ((moves.pawn_move_one & pinned_pieces) & ~total_pinned_pieces) {
+        int start_pos = -1;
+        while ((start_pos = get_low_bit((moves.pawn_move_one & pinned_pieces) & ~total_pinned_pieces, start_pos + 1)) >= 0) {
+            uint64_t advance_legal_dest = pinned_piece_legal_dest(bb_pawn, start_pos, shift_right(moves.pawn_move_one, -one_rank_forward) | shift_right(moves.pawn_move_two, -2*one_rank_forward), king_color, ~0);
+            if (color != king_color) {
+                // invert
+                advance_legal_dest = ~advance_legal_dest;
+            }
+            if ((advance_legal_dest & shift_right(1ULL << start_pos, -one_rank_forward)) > 0) {
+                advance_discovers_check |= (1ULL << start_pos);
+            }
+        }
+    }
+    if ((moves.capture_award & pinned_pieces) & ~total_pinned_pieces) {
+        int start_pos = -1;
+        while ((start_pos = get_low_bit((moves.capture_award & pinned_pieces) & ~total_pinned_pieces, start_pos + 1)) >= 0) {
+            uint64_t capt_legal_dest = pinned_piece_legal_dest(bb_pawn, start_pos, shift_right(moves.capture_award, -one_rank_forward+1), king_color, ~0);
+            if (color != king_color) {
+                // invert
+                capt_legal_dest = ~capt_legal_dest;
+            }
+            if ((capt_legal_dest & shift_right(moves.capture_award, -one_rank_forward+1)) > 0) {
+                capture_a_discovers_check |= (1ULL << start_pos);
+            }
+        }
+    }
+    if ((moves.capture_hward & pinned_pieces) & ~total_pinned_pieces) {
+        int start_pos = -1;
+        while ((start_pos = get_low_bit((moves.capture_hward & pinned_pieces) & ~total_pinned_pieces, start_pos + 1)) >= 0) {
+            uint64_t capt_legal_dest = pinned_piece_legal_dest(bb_pawn, start_pos, shift_right(moves.capture_hward, -one_rank_forward-1), king_color, ~0);
+            if (color != king_color) {
+                // invert
+                capt_legal_dest = ~capt_legal_dest;
+            }
+            if ((capt_legal_dest & shift_right(moves.capture_hward, -one_rank_forward-1)) > 0) {
+                capture_h_discovers_check |= (1ULL << start_pos);
+            }
+        }
+    }
+}
+*/
 // color indicates which king would be checked
 // returns legal destination squares if any, given pseudo-legal dest_squares as candidates
-uint64_t Bitboard::remove_discovered_checks(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const
+uint64_t Bitboard::pinned_piece_legal_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const
 {
     // requirement #1: source position is covered by opponent
     // requirement #2: direct attack from rook/bishop/queen to king
@@ -761,8 +1001,8 @@ uint64_t Bitboard::remove_discovered_checks(piece_t piece_type, int start_pos, u
             // taking this piece off the board discovers check, but it can still stay on the pinned rank/file or capture pinning piece
             int attacker = get_low_bit(all_attackers, 0);
             assert(attacker >= 0);
-            if (get_blocking_squares(attacker, king_square) & source_pieces) {
-                return (get_blocking_squares(attacker, king_square) | all_attackers) & dest_squares;
+            if (get_blocking_squares(attacker, king_square, all_pieces) & source_pieces) {
+                return (get_blocking_squares(attacker, king_square, all_pieces) | all_attackers) & dest_squares;
             } else {
                 return dest_squares;
             }
@@ -772,511 +1012,199 @@ uint64_t Bitboard::remove_discovered_checks(piece_t piece_type, int start_pos, u
     return dest_squares;
 }
 
-// color indicates which king would be checked
-bool Bitboard::discovers_check(int start_pos, int dest_pos, Color color, uint64_t covered_squares, bool inverted) const
+
+uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blocked_piece_color, uint64_t &immobile_pinned_pieces, uint64_t &pawn_cannot_advance, uint64_t &pawn_cannot_capture_award, uint64_t &pawn_cannot_capture_hward) const
 {
-    // requirement #1: source position is covered by opponent
-    // requirement #2: direct attack from rook/bishop/queen to king
+    /** returns pinned pieces or blocked pieces (piece who can move with discovered check).
+        immobile_pinned_pieces are subset that definitely have no squares they can move without discovering check
+        pawn_cannot_advance are subset that cannot advance without discovering check */
+    uint64_t bishop_moves = BitArrays::bishop_moves::data[king_pos];
+    uint64_t rook_moves = BitArrays::rook_moves::data[king_pos];
+    uint64_t opp_diag_pieces = get_bitmask(get_opposite_color(king_color), bb_bishop) | get_bitmask(get_opposite_color(king_color), bb_queen);
+    uint64_t opp_lat_pieces = get_bitmask(get_opposite_color(king_color), bb_rook) | get_bitmask(get_opposite_color(king_color), bb_queen);
+    uint64_t my_pieces = get_bitmask(king_color, bb_all);
+    uint64_t my_pawns = get_bitmask(blocked_piece_color, bb_pawn);
+    uint64_t all_pieces = get_bitmask(get_opposite_color(king_color), bb_all) | my_pieces;
+    uint64_t blocking_pieces = get_bitmask(blocked_piece_color, bb_all);
 
-    bool source_pos_covered = covered_squares & (1ULL << start_pos);
+    uint64_t xray_diag_attackers = bishop_moves & opp_diag_pieces;
+    uint64_t xray_lateral_attackers = rook_moves & opp_lat_pieces;
+    int one_rank_forward = (blocked_piece_color == White ? 8 : -8);
 
-    if (source_pos_covered) {
-        uint64_t my_king = piece_bitmasks[bb_king + (bb_king + 1) * color];
-        int king_square = get_low_bit(my_king, 0);
-        uint64_t source_pieces = (1ULL << start_pos);
-        uint64_t all_pieces = ((piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)]) & ~source_pieces);
+    uint64_t pinned_pieces = 0;
+    immobile_pinned_pieces = 0;
 
-        /* rook or queen attacks */
-        uint64_t block_board = BitArrays::rook_blockboard::data[king_square];
-        if (block_board & source_pieces) {
-            uint64_t mask = block_board & all_pieces;
-            uint64_t magic_index = (lateral_slide_magic_factor[king_square] * mask);
-            uint64_t all_dest_squares = rook_magic[king_square][magic_index >> (64 - BitArrays::rook_bitboard_bitcount::data[king_square])];
-            uint64_t attackers = ~(1ULL << dest_pos) & all_dest_squares & (piece_bitmasks[(1 - color) * (bb_king + 1) + bb_rook] | piece_bitmasks[(1 - color) * (bb_king + 1) + bb_queen]);
-            int attacker = -1;
-            int dr = (king_square / 8) - (start_pos / 8);
-            int df = (king_square % 8) - (start_pos % 8);
-            int dest_dr = (king_square / 8) - (dest_pos / 8);
-            int dest_df = (king_square % 8) - (dest_pos % 8);
-            while ((attacker = get_low_bit(attackers, attacker + 1)) >= 0) {
-                if (attacker == dest_pos) {
-                    continue;
-                }
-                int adr = (start_pos / 8) - (attacker / 8);
-                int adf = (start_pos % 8) - (attacker % 8);
-                if ((adr == 0 && dr == 0 && (sign(df) == sign(adf)) && !(dest_dr == 0 && ((df > 0) == (dest_df > 0)) && abs(adf+df) > abs(dest_df))) ||
-                    (adf == 0 && df == 0 && (sign(dr) == sign(adr)) && !(dest_df == 0 && ((dr > 0) == (dest_dr > 0)) && abs(adr+dr) > abs(dest_dr)))) {
-                    return true;
-                }
-            }
-        }
+    uint64_t ep_capturable = get_bitmask(get_opposite_color(blocked_piece_color), bb_pawn) & (file_a << enpassant_file) & (rank_1 << (8 * (blocked_piece_color == White ? 4:3)));
 
-        /* bishop or queen attacks */
-        block_board = BitArrays::bishop_blockboard::data[king_square];
-        if (block_board & source_pieces) {
-            uint64_t mask = block_board & all_pieces;
-            uint64_t magic_index = (diag_slide_magic_factor[king_square] * mask);
-            uint64_t all_dest_squares = bishop_magic[king_square][magic_index >> (64 - BitArrays::bishop_bitboard_bitcount::data[king_square])];
-
-            uint64_t attackers = all_dest_squares & (piece_bitmasks[(1 - color) * (bb_king + 1) + bb_bishop] | piece_bitmasks[(1 - color) * (bb_king + 1) + bb_queen]);
-            int attacker = -1;
-            int dr = (king_square / 8) - (start_pos / 8);
-            int df = (king_square % 8) - (start_pos % 8);
-            int dest_dr = (king_square / 8) - (dest_pos / 8);
-            int dest_df = (king_square % 8) - (dest_pos % 8);
-
-            while ((attacker = get_low_bit(attackers, attacker + 1)) >= 0) {
-                if (attacker == dest_pos) {
-                    continue;
-                }
-                int adr = (king_square / 8) - (attacker / 8);
-                int adf = (king_square % 8) - (attacker % 8);
-                if (sign(dr) == sign(adr) && abs(adr) > abs(dr) &&
-                    sign(df) == sign(adf) && abs(adf) > abs(df) &&
-                    !(abs(dest_dr) == abs(dest_df) && sign(dest_dr) == sign(dr) && abs(adr) > abs(dest_dr) &&
-                        sign(dest_df) == sign(df) && abs(adf) > abs(dest_df))) {
-                    return true;
-                }
-            }
-        }
-
+    int start_pos = -1;
+    while ((start_pos = get_low_bit(xray_diag_attackers, start_pos + 1)) >= 0) {
+        uint64_t pins = get_blocking_squares(start_pos, king_pos, all_pieces) & (blocking_pieces | ep_capturable);
+        // rooks and knights are definitely immobile under pins.
+        // pawns are immobile if greater than one square from pinner
+        pinned_pieces |= pins;
+        immobile_pinned_pieces |= (pins & (get_bitmask(blocked_piece_color, bb_rook) | get_bitmask(blocked_piece_color, bb_knight)));
+        // immobile_pinned_pieces |= (pins & get_bitmask(blocked_piece_color, bb_pawn)) & ~BitArrays::king_moves::data[start_pos];
+        pawn_cannot_advance |= pins;
+        uint64_t pinned_squares = get_blocking_squares(start_pos, king_pos, (1ULL << start_pos) | (1ULL << king_pos)) | (1ULL << start_pos);
+        pawn_cannot_capture_award |= pins & shift_right(shift_right(my_pawns, -one_rank_forward + 1) & ~pinned_squares, one_rank_forward - 1);
+        pawn_cannot_capture_award |= shift_right(ep_capturable & pinned_squares & pins, -1) & my_pawns;
+        pawn_cannot_capture_hward |= pins & shift_right(shift_right(my_pawns, -one_rank_forward - 1) & ~pinned_squares, one_rank_forward + 1);
+        pawn_cannot_capture_hward |= shift_right(ep_capturable & pinned_squares & pins, 1) & my_pawns;
     }
-
-    return false;
-
-}
-
-uint64_t Bitboard::get_captures(Color color, piece_t piece_type, int start_pos) const
-{
-    uint64_t piece_covers = 0;
-    switch (piece_type) {
-    case bb_queen: case bb_bishop: case bb_rook:
-        next_piece_slide(color, piece_type, start_pos, piece_covers, FL_CAPTURES | FL_EMPTY);
-        break;
-    case bb_knight: case bb_king:
-        next_pnk_move(color, piece_type, start_pos, piece_covers, FL_CAPTURES | FL_EMPTY, false, false);
-        break;
-    case bb_pawn:
-        piece_covers = BitboardCaptures::PregeneratedCaptures[color][bb_pawn][start_pos];
-        break;
-    }
-    return piece_covers;
-}
-
-/* find dest_pos that removes check against the king of color color? */
-uint64_t Bitboard::removes_check_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares, uint64_t attackers) const
-{
-    // to remove check, the move must a) move the king, b) capture the threatening piece, or c) block a threatening piece
-    //  these are not sufficient conditions since they do not account for double check or discovering another check
-    uint64_t king_pos = piece_bitmasks[bb_king + (bb_king + 1) * color];
-    int king_square = get_low_bit(king_pos, 0);
-    uint64_t legal_captures = 0;
-
-    if ((piece_type & PIECE_MASK) == bb_king) {
-        // need to ensure the king isn't blocking its own check
-        uint64_t covered = computed_covered_squares(color == White ? Black : White, king_pos, 0, king_pos);
-        return ~covered & dest_squares;
-    }
-
-    // captures or blocks (other than with king, which should be covered by case a)
-    else if (count_bits(attackers) == 1) {
-        // can't move a piece which is already pinned
-        dest_squares = remove_discovered_checks(piece_type, start_pos, dest_squares, color, covered_squares);
-        legal_captures = dest_squares & attackers;
-        int attacker = get_low_bit(attackers, 0);
-        assert(attacker >= 0);
-
-        // special enpassant rules: captured piece won't be on dest_squares
-        if ((piece_type & PIECE_MASK) == bb_pawn && attacker % 8 == enpassant_file) {
-            if (color == Black && (0xff000000 & (dest_squares << 8)) == attackers) {
-                legal_captures = attackers >> 8;
-            } else if (color == White && (0xff00000000ULL & (dest_squares >> 8)) == attackers) {
-                legal_captures = attackers << 8;
-            }
-        }
-
-        uint64_t legal_lateral_blocks = get_blocking_squares(king_square, attacker) & dest_squares;
-        return legal_captures | legal_lateral_blocks;
-    } else {
-        // in case of double check, only king moves are legal
-        return 0;
-    }
-}
-
-/* does it remove check against the king of color color? */
-bool Bitboard::removes_check(piece_t piece_type, int start_pos, int dest_pos, Color color, uint64_t covered_squares) const
-{
-    // to remove check, the move must a) move the king, b) capture the threatening piece, or c) block a threatening piece
-    //  these are not sufficient conditions since they do not account for double check or discovering another check
-    uint64_t opponent_pieces = piece_bitmasks[bb_all + (bb_king + 1) * (1 - color)];
-    uint64_t my_king = piece_bitmasks[bb_king + (bb_king + 1) * color];
-
-    if ((piece_type & PIECE_MASK) == bb_king) {
-        // need to ensure the king isn't blocking its own check
-        uint64_t covered = computed_covered_squares(color == White ? Black : White, my_king, 0, my_king);
-        if (!(covered & (1ULL << dest_pos))) {
-            return true;
+    while ((start_pos = get_low_bit(xray_lateral_attackers, start_pos + 1)) >= 0) {
+        uint64_t pins = get_blocking_squares(start_pos, king_pos, all_pieces) & (blocking_pieces | ep_capturable);
+        // bishops and knights are definitely immobile under pins.
+        // pawns cannot capture and are immobile if on different file from pinner or king
+        pinned_pieces |= pins;
+        pawn_cannot_capture_award |= pins;
+        pawn_cannot_capture_hward |= pins;
+        immobile_pinned_pieces |= (pins & (get_bitmask(blocked_piece_color, bb_bishop) | get_bitmask(blocked_piece_color, bb_knight)));
+        if (king_pos % 8 == start_pos % 8) {
+            pawn_cannot_advance |= (pins & get_bitmask(blocked_piece_color, bb_pawn)) & ~(file_a << (start_pos % 8));
+        } else {
+            pawn_cannot_advance |= pins;
         }
     }
-
-    // capture
-    piece_t dest_piece = get_piece(dest_pos / 8, dest_pos % 8) & PIECE_MASK;
-    int captured_pos = dest_pos;
-    piece_t captured_piece = dest_piece;
-
-    if (piece_type == bb_pawn && start_pos % 8 != dest_pos % 8 && dest_piece == EMPTY) {
-        captured_pos = 8 * (start_pos / 8) + (dest_pos % 8);
-        captured_piece = bb_pawn;
-    }
-
-    if ((opponent_pieces & (1ULL << captured_pos)) &&
-        (get_captures(color == White ? Black : White, captured_piece & PIECE_MASK, captured_pos) & my_king) &&
-        !discovers_check(start_pos, dest_pos, color, covered_squares, true) &&
-        !(computed_covered_squares(color == White ? Black : White, 1ULL << captured_pos, 1ULL << start_pos, 0) & my_king)) {
-        // need to do an extra test for double-check
-        return true;
-    }
-    // block
-    if (discovers_check(dest_pos, start_pos, color, covered_squares, true) &&
-        !discovers_check(start_pos, dest_pos, color, covered_squares, false) &&
-        !(computed_covered_squares(color == White ? Black : White, (1ULL << start_pos), (1ULL << dest_pos), 1ULL << start_pos) & my_king)) {
-        return true;
-    }
-    return false;
-}
-
-bool Bitboard::king_in_check(Color color) const
-{
-    uint64_t king_pos = piece_bitmasks[color * (bb_king + 1) + bb_king];
-    int king_square = get_low_bit(king_pos, 0);
-    uint64_t covered = computed_covered_squares(color == White ? Black : White, ~attack_squares[king_square], 0, 0);
-    return covered & king_pos;
+    return pinned_pieces;
 }
 
 
-/* returns squares of color pieces that attack this square */
-uint64_t Bitboard::square_attackers(int dest, Color color) const
+void Bitboard::get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &move_repr, bool remove_self_captures, uint64_t exclude_pieces) const
 {
-    uint64_t attackers = 0;
+    uint64_t my_pieces = get_bitmask(color, bb_all);
+    uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
+    uint64_t all_pieces = (my_pieces | opp_pieces) & ~exclude_pieces;
+    uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
+    int opponent_king_square = get_low_bit(opponent_king_pos, 0);
+    PackedMoves pm;
 
-    uint64_t all_pieces = piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)];
-    uint64_t bishop_attackers = piece_bitmasks[color * (bb_king + 1) + bb_bishop];
-    uint64_t rook_attackers = piece_bitmasks[color * (bb_king + 1) + bb_rook];
-    uint64_t queen_attackers = piece_bitmasks[color * (bb_king + 1) + bb_queen];
-
-    piece_t pnk_pieces[3] = { bb_pawn, bb_knight, bb_king };
-    /* rook or queen attacks */
-    attackers |= get_rook_moves(dest, all_pieces) & (rook_attackers | queen_attackers);
-    attackers |= get_bishop_moves(dest, all_pieces) & (bishop_attackers | queen_attackers);
-
-    for (int i = 0; i < 3; i++) {
-        int piece_type = pnk_pieces[i];
-        attackers |= BitboardCaptures::PregeneratedCaptures[1 - color][piece_type][dest] & piece_bitmasks[color * (bb_king + 1) + piece_type];
-    }
-
-
-    return attackers;
-}
-
-/* returns squares that are empty or occupied by opposite color pieces, and currently attacked by pieces of Color color */
-void Bitboard::computed_covered_squares_b(Color color, uint64_t exclude_pieces, uint64_t include_pieces, uint64_t exclude_block_pieces, int times, uint64_t *covered_squares) const
-{
-    for (int i = 0; i < times; i++) {
-        covered_squares[i] = 0;
-    }
-
-    for (piece_t piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
-        uint64_t piece_covers = 0;
+    for (piece_t piece_type = bb_bishop; piece_type <= bb_queen; piece_type++) {
+        uint64_t actors = get_bitmask(color, piece_type);
         int start_pos = -1;
+        pm.piece_type = piece_type;
 
-        uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type] & ~exclude_pieces;
-
-        while ((start_pos = get_low_bit(actors, start_pos+1)) > -1) {
-
-            switch (piece_type) {
-                case bb_queen: case bb_bishop: case bb_rook:
-                    next_piece_slide(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, exclude_block_pieces, exclude_pieces, include_pieces, false, false);
-                    break;
-                case bb_knight: case bb_king:
-                    next_pnk_move(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, false, false);
-                    break;
-                case bb_pawn:
-                    piece_covers = BitboardCaptures::PregeneratedCaptures[color][bb_pawn][start_pos];
-                    break;
-            }
-            // carry adder
-            uint64_t carry = piece_covers;
-            for (int i = 0; i < times; i++) {
-                if (i == times - 1) {
-                    covered_squares[i] |= carry;
-                } else {
-                    uint64_t new_carry = covered_squares[i] & carry;
-                    covered_squares[i] = covered_squares[i] ^ carry;
-                    carry = new_carry;
-                }
-            }
-
-            if (start_pos < 0) {
-                break;
-            }
-        }
-    }
-}
-
-/* returns squares that are empty or occupied by opposite color pieces, and currently attacked by pieces of Color color */
-uint64_t Bitboard::computed_covered_squares(Color color, uint64_t exclude_pieces, uint64_t include_pieces, uint64_t exclude_block_pieces, int times) const
-{
-    uint64_t covered_squares[times];
-    for (int i = 0; i < times; i++) {
-        covered_squares[i] = 0;
-    }
-
-    for (piece_t piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
-        uint64_t piece_covers = 0;
-        int start_pos = -1;
-
-        uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type] & ~exclude_pieces;
-
-        while ((start_pos = get_low_bit(actors, start_pos+1)) > -1) {
-
-            switch (piece_type) {
-                case bb_queen: case bb_bishop: case bb_rook:
-                    next_piece_slide(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, exclude_block_pieces, exclude_pieces, include_pieces, false, false);
-                    break;
-                case bb_knight: case bb_king:
-                    next_pnk_move(color, piece_type, start_pos, piece_covers, FL_ALL | FL_EMPTY | FL_CAPTURES, false, false);
-                    break;
-                case bb_pawn:
-                    piece_covers = BitboardCaptures::PregeneratedCaptures[color][bb_pawn][start_pos];
-                    break;
-            }
-            // carry adder
-            uint64_t carry = piece_covers;
-            for (int i = 0; i < times; i++) {
-                if (i == times - 1) {
-                    covered_squares[i] |= carry;
-                } else {
-                    uint64_t new_carry = covered_squares[i] & carry;
-                    covered_squares[i] = covered_squares[i] ^ carry;
-                    carry = new_carry;
-                }
-            }
-
-            if (start_pos < 0) {
-                break;
-            }
-        }
-    }
-    return covered_squares[times - 1];
-}
-
-bool Bitboard::is_legal_move(move_t move, Color color) const
-{
-    unsigned char dest_rank, dest_file, src_rank, src_file;
-    uint64_t dest_squares = 0;
-
-    get_source(move, src_rank, src_file);
-    get_dest(move, dest_rank, dest_file);
-
-    int actor = src_rank * 8 + src_file;
-    int dest_pos = dest_rank * 8 + dest_file;
-
-    // is there a piece there
-    piece_t piece = get_piece(src_rank, src_file);
-    if ((piece > bb_king ? Black : White) != color) {
-        // piece is wrong color
-        return false;
-    }
-    else if (piece == 0) {
-        // square is empty
-        return false;
-    }
-
-    piece_t dest_piece = get_piece(dest_rank, dest_file);
-    if (dest_piece != 0 && (dest_piece > bb_king ? White : Black) != color) {
-        // can't capture our own piece
-        return false;
-    }
-    // save this value because next_pnk_move might advance to next piece
-    int original_actor = actor;
-
-    switch(piece & PIECE_MASK) {
-        case bb_pawn:
-            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, dest_piece == 0 ? FL_EMPTY : FL_CAPTURES, false, false);
-            break;
-        case bb_king: case bb_knight:
-            next_pnk_move(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL, false, false);
-            break;
-        case bb_bishop: case bb_rook: case bb_queen:
-            next_piece_slide(color, piece & PIECE_MASK, actor, dest_squares, FL_ALL);
-            break;
-    }
-
-    if (original_actor != actor || !(dest_squares & (1ULL << dest_pos))) {
-        // not a move
-        return false;
-    }
-
-    uint64_t covered_squares = computed_covered_squares(color == Black ? White : Black, 0, 0, 0);
-    return is_not_illegal_due_to_check(color, piece & PIECE_MASK, actor, dest_pos, covered_squares);
-}
-
-void Bitboard::get_moves(Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) const
-{
-    uint64_t king_slide_blockers = 0;
-    uint64_t covered_squares = computed_covered_squares(side_to_play == Black ? White : Black, 0, 0, 0);
-    uint64_t my_king = piece_bitmasks[bb_king + (bb_king + 1) * side_to_play];
-    assert(my_king > 0);
-    int king_square = get_low_bit(my_king, 0);
-    uint64_t king_attackers = square_attackers(king_square, side_to_play == White ? Black : White);
-
-    if (!in_check) {
-        king_slide_blockers = get_king_slide_blockers(king_square, side_to_play);
-    }
-
-        // find the next piece to move
-    for (piece_t piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
-        uint64_t dest_squares = 0;
-        int index = piece_type + side_to_play * (bb_king+1);
-        int actor = -1;
-        while ((actor = get_low_bit(piece_bitmasks[index], actor+1)) >= 0) {
-            // get quasi-legal moves
-            switch(piece_type) {
-                case bb_king: case bb_pawn: case bb_knight:
-                    next_pnk_move(side_to_play, piece_type, actor, dest_squares, captures_or_promo ? FL_CAPTURES : FL_EMPTY, checks, !checks, captures_or_promo, !captures_or_promo);
-                    break;
-                case bb_bishop: case bb_rook: case bb_queen:
-                    next_piece_slide(side_to_play, piece_type, actor, dest_squares, captures_or_promo ? FL_CAPTURES : FL_EMPTY, 0, 0, 0, checks, !checks);
-                    break;
-            }
-            if (actor < 0) {
-                break;
-            }
-            // filter out illegal moves
-            if (piece_type == bb_king) {
-                // don't move into check
-                dest_squares &= ~covered_squares;
-                // castling: don't move out of check
-                if (in_check) {
-                    dest_squares &= BitArrays::king_moves::data[king_square];
-                }
-                // or through check king-side
-                if (covered_squares & (1ULL << (king_square + 1))) {
-                    dest_squares &= ~(1ULL << (king_square + 2));
-                }
-                // or through check queen-side
-                if (covered_squares & (1ULL << (king_square - 1))) {
-                    dest_squares &= ~(1ULL << (king_square - 2));
-                }
-
-                // fall through: might still need removes_check test below
-            }
-            if (!in_check && ((1ULL << actor) & king_slide_blockers) > 0) {
-                dest_squares = remove_discovered_checks(piece_type, actor, dest_squares, side_to_play, covered_squares);
-            }
-            else if (in_check) {
-                dest_squares = removes_check_dest(piece_type, actor, dest_squares, side_to_play, covered_squares, king_attackers);
-            }
-
-            if (!captures_or_promo) {
-                make_moves(moves, actor, piece_type + (side_to_play == Black ? 8 : 0), dest_squares);
-            } else {
-                int dest_pos = -1;
-                while ((dest_pos = get_low_bit(dest_squares, dest_pos+1)) >= 0) {
-                    move_t move;
-                    if (piece_type == bb_pawn && (dest_pos <= 7 || dest_pos >= 56)) {
-                        if (captures_or_promo) {
-                            for (piece_t promote_type = bb_queen; promote_type >= bb_knight; promote_type--) {
-                                move = make_move(actor / 8, actor % 8,
-                                    piece_type + (side_to_play == Black ? 8 : 0),
-                                    dest_pos / 8, dest_pos % 8,
-                                    get_piece(dest_pos / 8, dest_pos % 8),
-                                    promote_type);
-                                moves.push_back(move);
-                            }
-                        }
-                    } else {
-                        move = make_move(actor / 8, actor % 8,
-                            piece_type + (side_to_play == Black ? 8 : 0),
-                            dest_pos / 8, dest_pos % 8,
-                            get_piece(dest_pos / 8, dest_pos % 8),
-                            0);
-                        moves.push_back(move);
-                    }
-                }
-            }
-        }
-    }
-}
-
-void Bitboard::next_piece_slide(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, uint64_t exclude_block_pieces, uint64_t exclude_source_pieces, uint64_t include_pieces, bool checks_only, bool exclude_checks) const
-{
-    uint64_t actors = piece_bitmasks[color * (bb_king + 1) + piece_type] & ~exclude_source_pieces;
-    uint64_t all_pieces = ((piece_bitmasks[bb_all] | piece_bitmasks[bb_all + (bb_king + 1)]) & ~exclude_block_pieces) | include_pieces;
-
-    while ((start_pos = get_low_bit(actors, start_pos)) > -1) {
-        uint64_t block_board = 0;
-        uint64_t all_dest_squares = 0;
-
-        if (piece_type == bb_rook || piece_type == bb_queen) {
-            block_board = BitArrays::rook_blockboard::data[start_pos];
-            uint64_t mask = block_board & all_pieces;
-            uint64_t magic_index = (lateral_slide_magic_factor[start_pos] * mask);
-            all_dest_squares |= rook_magic[start_pos][magic_index >> (64 - BitArrays::rook_bitboard_bitcount::data[start_pos])];
-        }
-        if (piece_type == bb_bishop || piece_type == bb_queen) {
-            block_board = BitArrays::bishop_blockboard::data[start_pos];
-            uint64_t mask = block_board & all_pieces;
-            uint64_t magic_index = (diag_slide_magic_factor[start_pos] * mask);
-            all_dest_squares |= bishop_magic[start_pos][magic_index >> (64 - BitArrays::bishop_bitboard_bitcount::data[start_pos])];
-        }
-
-        dest_squares = 0;
-        if (fl_flags & FL_ALL) {
-            dest_squares = all_dest_squares;
-        }
-        else {
-            if (fl_flags & FL_EMPTY) {
-                dest_squares |= (all_dest_squares & ~all_pieces);
-            }
-            if (fl_flags & FL_CAPTURES) {
-                dest_squares |= (all_dest_squares & piece_bitmasks[(1 - color) * (bb_king + 1) + bb_all]);
-            }
-        }
-        if (checks_only || exclude_checks) {
-            uint64_t check_squares = 0;
-            uint64_t opponent_king_pos = piece_bitmasks[(1 - color) * (bb_king + 1) + bb_king];
-            int opponent_king_square = get_low_bit(opponent_king_pos, 0);
+        while ((start_pos = get_low_bit(actors, start_pos + 1)) > -1) {
+            pm.source_pos = start_pos;
+            pm.dest_squares = 0;
 
             if (piece_type == bb_rook || piece_type == bb_queen) {
-                block_board = BitArrays::rook_blockboard::data[opponent_king_square];
-                uint64_t mask = block_board & all_pieces;
-                uint64_t magic_index = (lateral_slide_magic_factor[opponent_king_square] * mask);
-                check_squares |= rook_magic[opponent_king_square][magic_index >> (64 - BitArrays::rook_bitboard_bitcount::data[opponent_king_square])];
+                pm.dest_squares |= get_rook_moves(start_pos, all_pieces);
             }
             if (piece_type == bb_bishop || piece_type == bb_queen) {
-                block_board = BitArrays::bishop_blockboard::data[opponent_king_square];
-                uint64_t mask = block_board & all_pieces;
-                uint64_t magic_index = (diag_slide_magic_factor[opponent_king_square] * mask);
-                check_squares |= bishop_magic[opponent_king_square][magic_index >> (64 - BitArrays::bishop_bitboard_bitcount::data[opponent_king_square])];
+                pm.dest_squares |= get_bishop_moves(start_pos, all_pieces);
             }
 
-            if (checks_only) {
-                dest_squares &= check_squares;
-            } else if (exclude_checks) {
-                dest_squares &= ~check_squares;
+            if (remove_self_captures) {
+                pm.dest_squares &= ~my_pieces;
+            }
+            if (pm.dest_squares == 0) {
+                continue;
+            }
+            pm.check_squares = 0;
+
+            if (piece_type == bb_rook || piece_type == bb_queen) {
+                pm.check_squares |= get_rook_moves(opponent_king_square, all_pieces & ~(1ULL << start_pos));
+            }
+            if (piece_type == bb_bishop || piece_type == bb_queen) {
+                pm.check_squares |= get_bishop_moves(opponent_king_square, all_pieces & ~(1ULL << start_pos));
+            }
+            pm.check_squares &= pm.dest_squares;
+            move_repr.push_back(pm);
+        }
+    }
+
+}
+
+void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<PackedMoves> &move_repr, bool remove_self_captures) const
+{
+    uint64_t my_pieces = get_bitmask(color, bb_all);
+    uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
+    uint64_t all_pieces = my_pieces | opp_pieces;
+    uint64_t actors = get_bitmask(color, piece_type);
+    uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
+    int opponent_king_square = get_low_bit(opponent_king_pos, 0);
+    PackedMoves pm;
+    int starting_king_pos = (color == White ? 4 : 60);
+
+    pm.piece_type = piece_type;
+    int start_pos = -1;
+
+    while ((start_pos = get_low_bit(actors, start_pos + 1)) >= 0) {
+        pm.source_pos = start_pos;
+        pm.dest_squares = 0;
+        pm.check_squares = 0;
+
+        pm.dest_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][start_pos];
+        if (remove_self_captures) {
+            pm.dest_squares &= ~my_pieces;
+        }
+        if (pm.dest_squares == 0) {
+            continue;
+        }
+        // castling isn't possible unless Kf1/Kd1 are legal
+
+        if (piece_type == bb_king && start_pos == starting_king_pos) {
+            // castle king-side
+            uint64_t required_empty_ks = 0x60;
+            uint64_t required_rook_ks = 0x80;
+            uint64_t required_empty_qs = 0x0c;
+            uint64_t required_rook_qs = 0x01;
+            uint64_t my_rooks = get_bitmask(color, bb_rook);
+
+            if (color == Black) {
+                required_empty_ks = required_empty_ks << 56;
+                required_rook_ks = required_rook_ks << 56;
+                required_empty_qs = required_empty_qs << 56;
+                required_rook_qs = required_rook_qs << 56;
+            }
+
+            if (can_castle(color, true) &&
+                (required_empty_ks & all_pieces) == 0 &&
+                (required_rook_ks & my_rooks) != 0) {
+                pm.dest_squares |= (1ULL << (starting_king_pos + 2));
+            }
+            // queen-side
+            if (can_castle(color, false) &&
+                (required_empty_qs & all_pieces) == 0 &&
+                (required_rook_qs & my_rooks) != 0) {
+                pm.dest_squares |= (1ULL << (starting_king_pos - 2));
             }
         }
 
-
-        if (dest_squares) {
-            break;
-        } else {
-            start_pos += 1;
+        if (piece_type == bb_knight) {
+            pm.check_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][opponent_king_square];
         }
+
+        pm.check_squares &= pm.dest_squares;
+        move_repr.push_back(pm);
     }
 }
 
+void Bitboard::get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const
+{
+    uint64_t my_pieces = get_bitmask(color, bb_all);
+    uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
+    uint64_t my_pawns = get_bitmask(color, bb_pawn);
+    uint64_t all_pieces = my_pieces | opp_pieces;
+
+    int one_rank_backward = 8;
+    uint64_t starting_rank = rank_2;
+    if (color == Black) {
+        one_rank_backward = -8;
+        starting_rank = rank_7;
+    }
+
+    // enpassant capture
+    int ep_dest_rank = color == White ? 5 : 2;
+    if (enpassant_file >= 0) {
+        opp_pieces |= 1ULL << (ep_dest_rank * 8 + enpassant_file);
+    }
+
+    move_one = my_pawns & shift_right(~all_pieces, one_rank_backward);
+    move_two = move_one & shift_right(~all_pieces, 2 * one_rank_backward) & starting_rank;
+    capture_award = (my_pawns & ~file_a) & shift_right(opp_pieces, one_rank_backward - 1);
+    capture_hward = (my_pawns & ~file_h) & shift_right(opp_pieces, one_rank_backward + 1);
+}
 
 
 // zobrist hashing stuff
@@ -1408,9 +1336,10 @@ void Bitboard::apply_move(move_t move)
     /*
     //#ifdef DEBUG
 //    std::ostringstream debugging;
-    ((Fenboard*)this)->get_fen(std::cout);
-    std::cout << " -- ";
+//    ((Fenboard*)this)->get_fen(std::cout);
+    std::cout << " apply ";
     ((Fenboard*)this)->print_move(move, std::cout);
+    std::cout << std::endl;
     //#endif
 //    std::cout << std::endl << "new hash: " << hash << " - ";
 */
@@ -1473,12 +1402,14 @@ void Bitboard::apply_move(move_t move)
     if (!allows_enpassant) {
         set_enpassant_file(-1);
     }
-    side_to_play = get_opposite_color(color);
+    set_side_to_play(get_opposite_color(color));
     if (color == Black) {
         move_count++;
     }
 
-    this->in_check = this->king_in_check(this->side_to_play);
+    this->in_check = move & GIVES_CHECK;
+    assert(this->in_check == king_in_check(side_to_play));
+
     update();
 
 #ifdef DEBUG
@@ -1527,7 +1458,7 @@ void Bitboard::undo_move(move_t move)
     in_check = move & MOVE_FROM_CHECK;
 
     // flags
-    side_to_play = color;
+    set_side_to_play(color);
 
     if ((move & INVALIDATES_CASTLE_K) != 0) {
         set_can_castle(color, true, true);
@@ -1580,6 +1511,10 @@ void Bitboard::undo_move(move_t move)
     if (fail) {
         assert(false);
     }
+
+    std::cout << " undo ";
+    ((Fenboard*)this)->print_move(move, std::cout);
+    std::cout << " capt " << static_cast<int>(captured_piece) << std::endl;
     */
 }
 
@@ -1606,6 +1541,7 @@ char fen_repr(unsigned char p)
 void Bitboard::update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding)
 {
     Color color = get_color(piece);
+    //std::cout << "z +" << fen_repr(piece) << static_cast<char>(file + 'a') << static_cast<char>(rank + '1') << std::endl;
     int pt = (piece & PIECE_MASK) - 1;
     if (pt >= 0) {
         int posindex = file + rank * 8;
@@ -1615,6 +1551,7 @@ void Bitboard::update_zobrist_hashing_piece(unsigned char rank, unsigned char fi
 
 void Bitboard::update_zobrist_hashing_move()
 {
+    //std::cout << "z move" << std::endl;
     hash ^= zobrist_hashes[64*6*2];
 }
 
@@ -1622,11 +1559,13 @@ void Bitboard::update_zobrist_hashing_castle(Color color, bool kingside, bool en
 {
     int index = 0;
     if (color == Black) {
-        index += 1;
+        index += 2;
     }
     if (kingside) {
         index += 1;
     }
+    //std::cout << "z c" << index << std::endl;
+
     hash ^= zobrist_hashes[64*6*2 + 1 + index];
 }
 
@@ -1635,6 +1574,7 @@ void Bitboard::update_zobrist_hashing_enpassant(int file, bool enabling)
     if (file != -1) {
         assert(file >= 0 && file < 8);
         hash ^= zobrist_hashes[64*6*2 + 1 + 4 + file];
+        //std::cout << "z ep=" << static_cast<char>('a' + file) << std::endl;
     }
 }
 

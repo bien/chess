@@ -37,6 +37,7 @@ const int ENPASSANT_STATE_MASK = 0xf00000;
 const int ENPASSANT_FLAG = 0x8000000;
 const int INVALIDATES_CASTLE_K = 0x10000000;
 const int INVALIDATES_CASTLE_Q = 0x20000000;
+const int GIVES_CHECK = 0x40000000;
 
 const int FL_ALL = 4;
 const int FL_CAPTURES = 2;
@@ -108,6 +109,42 @@ static constexpr piece_t make_piece(piece_t type, Color color)
     }
 }
 
+
+struct PackedMoves {
+    char source_pos;
+    char piece_type;
+    uint64_t dest_squares;
+    uint64_t check_squares;
+    // missing moving_discovers_check
+    PackedMoves() {
+        dest_squares = 0;
+    }
+};
+
+struct PackedMoveIterator {
+    uint64_t pawn_check_squares; // in dest space
+    uint64_t advance_gives_check; // via discovery, in source space
+    uint64_t capture_award_gives_check; // via discovery, in source space
+    uint64_t capture_hward_gives_check; // via discovery, in source space
+    uint64_t pawn_move_one;
+    uint64_t pawn_move_two;
+    uint64_t capture_award;
+    uint64_t capture_hward;
+    PackedMoves king_move;
+    std::vector<PackedMoves> packed_moves;
+    PackedMoveIterator()
+    {
+        pawn_move_one = 0;
+        pawn_move_two = 0;
+        capture_award = 0;
+        capture_hward = 0;
+        pawn_check_squares = 0;
+        advance_gives_check = 0;
+        capture_award_gives_check = 0;
+        capture_hward_gives_check = 0;
+    }
+};
+
 class Bitboard
 {
     friend class SimpleBitboardEvaluation;
@@ -119,9 +156,10 @@ public:
 
     piece_t get_piece(unsigned char rank, unsigned char file) const;
     void set_piece(unsigned char rank, unsigned char file, piece_t);
-    bool is_legal_move(move_t move, Color color) const;
     bool operator==(const Bitboard&) const = default;
-    void get_moves(Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) const;
+
+    void get_packed_legal_moves(Color side_to_play, PackedMoveIterator &moves) const;
+    void get_moves(Color side_to_play, bool checks, bool captures_or_promo, const PackedMoveIterator &packed, std::vector<move_t> &moves) const;
 
     bool king_in_check(Color) const;
     uint64_t get_bitmask(Color color, piece_t piece_type) const {
@@ -167,13 +205,17 @@ protected:
     move_t make_move(unsigned char srcrank, unsigned char srcfile,
             unsigned char source_piece,
             unsigned char destrank, unsigned char destfile,
-            unsigned char captured_piece, unsigned char promote) const;
+            unsigned char captured_piece, unsigned char promote, bool gives_check) const;
 
-    // for non-capture non-promote
+    // for non-promote
     void make_moves(std::vector<move_t> &dest,
             int srcfile,
             unsigned char source_piece,
-            uint64_t dest_squares) const;
+            uint64_t dest_squares, uint64_t dest_gives_check) const;
+
+    void make_pawn_moves(std::vector<move_t> &dest,
+             uint64_t source_squares,
+             int dest_offset, bool gives_check) const;
 
     // called whenever the board is updated
     void update() {}
@@ -197,27 +239,29 @@ private:
 
 public:
     uint64_t piece_bitmasks[2 * (bb_king + 1)];
-    void computed_covered_squares_b(Color color, uint64_t exclude_pieces, uint64_t include_pieces, uint64_t exclude_block_pieces, int times, uint64_t *covered_squares) const;
+
+
 private:
     uint64_t attack_squares[64];
     char castle;
-    void next_pnk_move(Color color, piece_t, int &start_pos, uint64_t &dest_squares, int fl_flags, bool checks_only, bool exclude_checks, bool include_promo=false, bool exclude_promo=false) const;
-    void next_piece_slide(Color color, piece_t piece_type, int &start_pos, uint64_t &dest_squares, int fl_flags, uint64_t exclude_block_pieces=0, uint64_t exclude_source_pieces=0, uint64_t include_pieces=0, bool checks_only=false, bool exclude_checks=false) const;
-
-    bool is_not_illegal_due_to_check(Color color, piece_t piece, int start_pos, int dest_pos, uint64_t covered_squares) const;
-    bool discovers_check(int start_pos, int dest_pos, Color color, uint64_t covered_squares, bool inverted) const;
     uint64_t get_captures(Color color, piece_t piece_type, int start_pos) const;
     bool removes_check(piece_t piece_type, int start_pos, int dest_pos, Color color, uint64_t covered_squares) const;
-    uint64_t computed_covered_squares(Color color, uint64_t exclude_pieces, uint64_t include_pieces, uint64_t exclude_block_pieces, int times=1) const;
-
-    uint64_t get_king_slide_blockers(int king_pos, Color king_color) const;
+    uint64_t computed_covered_squares(Color color) const;
 
     uint64_t square_attackers(int dest, Color color) const;
     uint64_t removes_check_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares, uint64_t attackers) const;
     uint64_t remove_discovered_checks(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const;
-    uint64_t get_blocking_squares(int src, int dest) const;
+    uint64_t get_blocking_squares(int src, int dest, uint64_t blockers) const;
     uint64_t get_bishop_moves(int start_pos, uint64_t blockers) const;
     uint64_t get_rook_moves(int start_pos, uint64_t blockers) const;
+
+    uint64_t pinned_piece_legal_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const;
+    uint64_t get_blocking_pieces(int king_pos, Color king_color, Color blocked_piece_color, uint64_t &immobile_pinned_pieces, uint64_t &pawn_cannot_advance, uint64_t &pawn_cannot_capture_award, uint64_t &pawn_cannot_capture_hward) const;
+    void get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &move_repr, bool remove_self_captures, uint64_t exclude_pieces=0) const;
+    void get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<PackedMoves> &move_repr, bool remove_self_captures) const;
+    void get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const;
+//    void move_discovers_check(Color color, Color king_color, const PackedMoveIterator &moves, uint64_t pinned_pieces, uint64_t total_pinned_pieces, uint64_t &advance_discovers_check, uint64_t &capture_a_discovers_check, uint64_t &capture_h_discovers_check) const;
+
 
     const static uint64_t **rook_magic;
     const static uint64_t **bishop_magic;

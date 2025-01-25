@@ -127,6 +127,7 @@ struct MoveSorter {
     unsigned int last_check;
     const Fenboard *b;
     std::vector<move_t> buffer;
+    PackedMoveIterator move_iter;
     int phase;
     Color side_to_play;
     bool do_sort;

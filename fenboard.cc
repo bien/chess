@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <iostream>
+#include <sstream>
 #include "fenboard.hh"
 #include "move.hh"
 #include "search.hh"
@@ -17,6 +18,9 @@ void Fenboard::set_starting_position()
 
 move_t Fenboard::invalid_move(const std::string &s) const
 {
+    std::cerr << "In position: ";
+    get_fen(std::cerr);
+    std::cerr << std::endl;
     std::cerr << "Can't read move " << s << std::endl;
     std::cerr << this << std::endl;
     abort();
@@ -77,7 +81,6 @@ void Fenboard::set_fen(const std::string &fen)
             default: std::cerr << "Can't read fen" << fen << std::endl; abort();
         }
     }
-    this->in_check = this->king_in_check(get_side_to_play());
     if (c == 0) {
         return;
     }
@@ -136,6 +139,8 @@ void Fenboard::set_fen(const std::string &fen)
     }
     seen_positions.clear();
     seen_positions[get_hash()] = 1;
+
+    this->in_check = this->king_in_check(get_side_to_play());
 }
 
 
@@ -150,15 +155,6 @@ unsigned char Fenboard::read_piece(unsigned char c) const
         case 'P': return bb_pawn;
     }
     return 0;
-}
-
-move_t Fenboard::reinterpret_move(move_t move) const
-{
-    unsigned char destrank, destfile, srcrank, srcfile;
-    get_source(move, srcrank, srcfile);
-    get_dest(move, destrank, destfile);
-
-    return make_move(srcrank, srcfile, get_piece(srcrank, srcfile), destrank, destfile, get_piece(destrank, destfile), get_promotion(move));
 }
 
 move_t Fenboard::read_move(const std::string &s, Color color) const
@@ -253,15 +249,15 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
         piece_t piece = bb_king | (color == White ? WhiteMask : BlackMask);
         if (bb_queenside_castle) {
             if (color == White) {
-                return this->make_move(0, 4, piece, 0, 2, EMPTY, 0);
+                return this->make_move(0, 4, piece, 0, 2, EMPTY, 0, check);
             } else {
-                return this->make_move(7, 4, piece, 7, 2, EMPTY, 0);
+                return this->make_move(7, 4, piece, 7, 2, EMPTY, 0, check);
             }
         } else {
             if (color == White) {
-                return this->make_move(0, 4, piece, 0, 6, EMPTY, 0);
+                return this->make_move(0, 4, piece, 0, 6, EMPTY, 0, check);
             } else {
-                return this->make_move(7, 4, piece, 7, 6, EMPTY, 0);
+                return this->make_move(7, 4, piece, 7, 6, EMPTY, 0, check);
             }
         }
     } else {
@@ -281,6 +277,11 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
         MoveSorter ms2(this, color);
         while (ms2.has_more_moves()) {
             move_t move = ms2.next_move();
+            unsigned char mdestfile, mdestrank, msourcefile, msourcerank;
+            get_source(move, msourcerank, msourcefile);
+            get_dest(move, mdestrank, mdestfile);
+            unsigned int msourcepiece = this->get_piece(msourcerank, msourcefile) & PIECE_MASK;
+            unsigned int mpromote = get_promotion(move);
             print_move(move, std::cout);
             std::cout << std::endl;
         }
@@ -337,11 +338,15 @@ void Fenboard::print_move(move_t move, std::ostream &os) const
             case bb_queen: os << "Q"; break;
         }
     }
-    /*
-    if (piece_type == bb_pawn && get_captured_piece(move) == EMPTY && srcfile != destfile) {
+
+    if (move & ENPASSANT_FLAG) {
         os << "ep";
     }
 
+    if (move & GIVES_CHECK) {
+        os << "+";
+    }
+    /*
     if (get_invalidates_kingside_castle(move)) {
         os << "xk";
     }
@@ -472,4 +477,25 @@ std::ostream &operator<<(std::ostream &os, const Fenboard &b)
 {
     b.get_fen(os);
     return os;
+}
+
+std::string board_to_fen(const Fenboard *b)
+{
+    std::ostringstream fen;
+    b->get_fen(fen);
+    return fen.str();
+}
+
+std::string move_to_uci(move_t move)
+{
+    std::ostringstream fen;
+    print_move_uci(move, fen);
+    return fen.str();
+}
+
+std::string move_to_algebra(const Fenboard *b, move_t move)
+{
+    std::ostringstream fen;
+    b->print_move(move, fen);
+    return fen.str();
 }

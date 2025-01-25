@@ -226,13 +226,6 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
     if ((!use_quiescent_search && depth == max_depth) || (use_quiescent_search && depth == max_depth + quiescent_depth)) {
         best_score = eval->evaluate(b);
     } else {
-
-        if (hint) {
-            // need to remake move to get captured piece and other details consistents
-            hint = b.reinterpret_move(hint);
-        }
-
-
         MoveSorter iter = MoveSorter(&b, color, max_depth - depth > 2, hint);
 
         if (!iter.has_more_moves()) {
@@ -452,7 +445,7 @@ int MoveSorter::get_score(move_t move) const
         }
     }
 
-    int score = (capture != 0 ? piece_points[capture] + piece_points[promo] : 0) + invalidate_castle_penalty;
+    int score = (capture != 0 ? piece_points[capture] + piece_points[promo] - piece_points[actor]: 0) + invalidate_castle_penalty;
     int central = centralization[dest_sq] - centralization[src_sq];
     // want best score first
     return score * 10 + central;
@@ -466,24 +459,10 @@ struct MoveCmp {
     {}
     bool operator()(move_t a, move_t b) const {
         // sort from most delta points to least delta points
-//        return ms->eval->delta_evaluate(*ms->b, a, 0) < ms->eval->delta_evaluate(*ms->b, b, 0);
         return ms->get_score(a) > ms->get_score(b);
     }
     const MoveSorter *ms;
 };
-
-void get_moves_check_capture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
-    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
-}
-void get_moves_nocheck_capture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
-    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
-}
-void get_moves_check_nocapture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
-    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
-}
-void get_moves_nocheck_nocapture(const Bitboard *b, Color side_to_play, bool checks, bool captures_or_promo, std::vector<move_t> &moves) {
-    return b->get_moves(side_to_play, checks, captures_or_promo, moves);
-}
 
 
 MoveSorter::MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort, move_t hint)
@@ -494,25 +473,16 @@ MoveSorter::MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort, move
     phase = 0;
     this->b = b;
 
-//    eval = new SimpleEvaluation();
-    /*
-    if (do_sort) {
-        eval->evaluate(*b);
-    }
-*/
     MoveCmp move_cmp(this);
+    b->get_packed_legal_moves(side_to_play, move_iter);
 
-//    stp_covered = b->computed_covered_squares(side_to_play, 0, 0, 0, 2);
-//    opp_covered = b->computed_covered_squares(side_to_play == Black ? White : Black, 0, 0, 0);
 
     // checks captures
-//    b->get_moves(side_to_play, true, true, buffer);
-    get_moves_check_capture(b, side_to_play, true, true, buffer);
+    b->get_moves(side_to_play, true, true, move_iter, buffer);
     if (do_sort) {
         std::sort(buffer.begin(), buffer.end(), move_cmp);
     }
     last_check = buffer.size() - 1;
-
 }
 
 
@@ -520,8 +490,6 @@ bool MoveSorter::next_gives_check() const
 {
     return index <= last_check;
 }
-
-
 
 bool MoveSorter::has_more_moves()
 {
@@ -532,14 +500,12 @@ bool MoveSorter::has_more_moves()
             int start = buffer.size();
             if (phase == 1) {
                 // checks non captures
-                get_moves_check_nocapture(b, side_to_play, true, false, buffer);
-                //b->get_moves(side_to_play, true, false, buffer);
+                b->get_moves(side_to_play, true, false, move_iter, buffer);
                 last_check = buffer.size() - 1;
             }
             if (phase == 2) {
                 // other captures
-                get_moves_nocheck_capture(b, side_to_play, false, true, buffer);
-                //b->get_moves(side_to_play, false, true, buffer);
+                b->get_moves(side_to_play, false, true, move_iter, buffer);
 
                 if (do_sort) {
                     std::sort(buffer.begin() + start, buffer.end(), move_cmp);
@@ -547,14 +513,15 @@ bool MoveSorter::has_more_moves()
             }
             if (phase == 3) {
                 // non capture non checks
-                get_moves_nocheck_nocapture(b, side_to_play, false, false, buffer);
-//                b->get_moves(side_to_play, false, false, buffer);
+                b->get_moves(side_to_play, false, false, move_iter, buffer);
                 if (do_sort) {
                     std::sort(buffer.begin() + start, buffer.end(), move_cmp);
                 }
-                auto match = std::find(buffer.begin() + start, buffer.end(), hint);
-                if (match != buffer.end()) {
-                    std::iter_swap(buffer.begin() + start, match);
+                if (hint != 0) {
+                    auto match = std::find_if(buffer.begin() + start, buffer.end(), [hint = this->hint] (move_t m) { return (m & 0xfff) == hint; } );
+                    if (match != buffer.end()) {
+                        std::iter_swap(buffer.begin() + start, match);
+                    }
                 }
             }
         }

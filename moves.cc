@@ -20,12 +20,6 @@ int main(int argc, char **argv)
         }
         test_move = atoi(argv[2]);
         print_move_uci(test_move, std::cout);
-        std::cout << ": ";
-        if (b.is_legal_move(test_move, c)) {
-            std::cout << "legal" << std::endl;
-        } else {
-            std::cout << "illegal" << std::endl;
-        }
     } else {
         MoveSorter ms(&b, b.get_side_to_play());
         while (ms.has_more_moves()) {

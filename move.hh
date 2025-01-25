@@ -26,12 +26,12 @@ const int MEMORY_FILES = 8;
 
 inline BoardPos get_source_pos(move_t move)
 {
-    return make_board_pos((move >> 12 & 0x7), (move >> 8) & 0x7);
+    return make_board_pos(((move >> 9) & 0x7), (move >> 6) & 0x7);
 }
 
 inline BoardPos get_dest_pos(move_t move)
 {
-    return make_board_pos((move >> 4 & 0x7), move & 0x7);
+    return make_board_pos(((move >> 3) & 0x7), move & 0x7);
 }
 
 inline unsigned char get_board_rank(BoardPos bp)

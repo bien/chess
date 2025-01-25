@@ -50,10 +50,10 @@ void assert_not_equals(T expected, T actual)
 }
 
 template <class T>
-void assert_contains(const std::vector<T> &expected, T actual)
+void assert_contains(const std::vector<T> &expected, T actual, const std::string &msg = "")
 {
     if (std::find(expected.begin(), expected.end(), actual) == expected.end()) {
-        std::cout << "Test failed: unexpectedly got " << actual << std::endl;
+        std::cout << "Test failed: unexpectedly got " << actual << " " << msg << std::endl;
         abort();
     }
 }
@@ -86,6 +86,25 @@ void legal_moves(Fenboard *b, Color color, std::vector<move_t> &moves) {
     }
 }
 
+void assert_legal_move(Fenboard *b, Color side_to_play, move_t move) {
+    std::vector<move_t> move_list;
+    std::ostringstream movetext;
+    legal_moves(b, side_to_play, move_list);
+    b->print_move(move, movetext);
+    assert_contains(move_list, move, movetext.str());
+}
+
+void assert_illegal_move(Fenboard *b, Color side_to_play, move_t move) {
+    std::vector<move_t> move_list;
+    legal_moves(b, side_to_play, move_list);
+    if (std::find(move_list.begin(), move_list.end(), move) != move_list.end()) {
+        std::ostringstream movetext;
+        b->print_move(move, movetext);
+        std::cout << "Found unexpected value " << movetext.str() << std::endl;
+        abort();
+    }
+}
+
 void assert_moves(const std::string &fen, const std::vector<std::string> &expected_moves)
 {
     Fenboard b;
@@ -107,6 +126,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     Fenboard b;
     std::ostringstream movetext;
     std::vector<move_t> legal_white, legal_black;
+    const int64_t initial_hash = 12941059376081559502ULL;
 
     for (unsigned char r = 0; r < 8; r++) {
         for (unsigned char f = 0; f < 8; f++) {
@@ -116,6 +136,7 @@ void test_legal_moves(std::string fischer_pgn_file)
         }
     }
     b.set_starting_position();
+    assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
     int pieces[8] = { bb_rook, bb_knight, bb_bishop, bb_queen, bb_king, bb_bishop, bb_knight, bb_rook };
     for (int i = 0; i < 8; i++) {
         assert_equals(make_piece(pieces[i], White), b.get_piece(0, i));
@@ -137,23 +158,23 @@ void test_legal_moves(std::string fischer_pgn_file)
             os << char('a' + i) << j;
             if (j >= 5) {
                 expected_black.push_back(b.read_move(os.str(), Black));
-                assert_true(b.is_legal_move(expected_black.back(), Black));
-                assert_true(!b.is_legal_move(expected_black.back(), White));
+                assert_legal_move(&b, Black, expected_black.back());
+                assert_illegal_move(&b, White, expected_black.back());
             } else {
                 expected_white.push_back(b.read_move(os.str(), White));
-                assert_true(b.is_legal_move(expected_white.back(), White));
-                assert_true(!b.is_legal_move(expected_white.back(), Black));
+                assert_legal_move(&b, White, expected_white.back());
+                assert_illegal_move(&b, Black, expected_white.back());
             }
         }
         if (i == 0 || i == 2 || i == 5 || i == 7) {
             std::ostringstream os;
             os << 'N' << char('a' + i) << 3;
             expected_white.push_back(b.read_move(os.str(), White));
-            assert_true(b.is_legal_move(expected_white.back(), White));
+            assert_legal_move(&b, White, expected_white.back());
             os.str("");
             os << 'N' << char('a' + i) << 6;
             expected_black.push_back(b.read_move(os.str(), Black));
-            assert_true(b.is_legal_move(expected_black.back(), Black));
+            assert_legal_move(&b, Black, expected_black.back());
         }
     }
 
@@ -164,12 +185,11 @@ void test_legal_moves(std::string fischer_pgn_file)
     boardtext << b;
     assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), boardtext.str());
 
-    const int64_t initial_hash = 12941059376081559502ULL;
 
     assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
     move_t e4 = b.read_move("e4", White);
     b.apply_move(e4);
-    assert_equals(static_cast<uint64_t>(13269685511240131605ULL), b.get_hash());
+    assert_equals(static_cast<uint64_t>(18262560039210235253ULL), b.get_hash());
 
     boardtext.str("");
     boardtext << b;
@@ -266,16 +286,18 @@ void test_legal_moves(std::string fischer_pgn_file)
         b.set_starting_position();
         for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
             move_t move = b.read_move(iter->first.move, White);
+//            std::cout << board_to_fen(&b) << " + " << iter->first.move << " = " << move_to_algebra(&b, move) << std::endl;
             b.apply_move(move);
             if (iter->second.move.length() > 1) {
                 move = b.read_move(iter->second.move, Black);
+//                std::cout << board_to_fen(&b) << " + " << iter->second.move << " = " << move_to_algebra(&b, move) << std::endl;
                 b.apply_move(move);
             }
         }
     }
 
     // bug in check computation
-    b.set_fen("r4kr1/1b2R1n1/pq4p1/7Q/1p4P1/5P2/PPP4P/1K2R3 w - - 0 1");
+    b.set_fen("r4kr1/1b2R1n1/pq4p1/7Q/1p4P1/5P2/PPP4P/1K2R3 b - - 0 1");
     legal_black.clear();
     legal_moves(&b, Black, legal_black);
     for (std::vector<move_t>::iterator iter = legal_black.begin(); iter != legal_black.end(); iter++) {
@@ -296,17 +318,37 @@ void test_legal_moves(std::string fischer_pgn_file)
 
     // pinned piece
     assert_moves("7k/6p1/6Pb/8/8/8/PPP5/1K5R b - - 0 4", { "Kg8" });
+    assert_moves("7K/8/8/8/8/5B1R/6p1/7k b - - 0 1", { "Kg1" });
+    assert_moves("8/8/8/6R1/8/4K2Q/6p1/6k1 b - - 0 1", { "Kf1" });
+
+    // pinned pawn
+    assert_moves("r4k2/8/5b2/8/1p6/1pP5/P7/K7 w - - 0 2", { "Kb1", "Kb2", "a3", "a4" });
 
     // capture pinning piece
-    assert_moves("1r6/8/8/8/8/r1k5/Q7/K7 w - - 0 1", { "Qa2xa3" });
+    assert_moves("1r6/8/8/8/8/r1k5/Q7/K7 w - - 0 1", { "Qa2xa3+" });
 
     // check mate
     assert_moves("3R2k1/p1p2rpp/1q6/2p5/4P3/PQ6/1P4PP/7K b - - 0 1", {});
 
     // enpassant capture checking pawn
-    assert_moves("3r1r2/pp2Qp2/7p/4PPpk/R5Pp/1P3N2/P3q2P/6K1 b - g3 0 1", { "hxg3" });
+    assert_moves("3r1r2/pp2Qp2/7p/4PPpk/R5Pp/1P3N2/P3q2P/6K1 b - g3 0 1", { "hxg3ep" });
 
+    // moving pawn forward doesn't discover check here
+    assert_moves("k7/8/8/8/8/Pp6/RP6/K7 w - - 0 2", { "a4", "Kb1" });
+
+    // discovered check
+    assert_moves("2r5/8/8/8/3k4/p7/1P6/BK6 w - - 0 2", { "bxa3+", "b3+", "b4+", "Ka2"});
+    assert_moves("8/8/8/3B4/K6r/8/5BP1/7k w - - 0 2", { "g4+", "Bf2xh4", "Bf2d4", "Kb3", "Kb5", "Ka3", "Ka5", "Bd5e4", "Bd5c4" });
+    assert_moves("kb6/8/8/2Pp4/8/8/6B1/7K w - d6 0 2", { "cxd6ep+", "Bg2xd5+", "Bg2e4", "Bg2f3", "c6", "Kg1", "Bg2f1", "Bg2h3" });
+
+    // promote check
+    assert_moves("8/5P2/1p6/pP6/P6p/8/5k2/7K w - - 0 67", { "Kh2", "f8=Q+", "f8=R+", "f8=B", "f8=N" });
+    assert_moves("8/8/8/8/4K3/2N5/6p1/k5NB b - - 0 2", { "Kb2", "gxh1=Q+", "gxh1=R", "gxh1=B+", "gxh1=N" });
+
+    // castle gives check
+    assert_moves("8/8/8/8/8/7p/1pr4P/r1k1K2R w K - 0 1", { "Kf1", "O-O+", "Rh1g1", "Rh1f1" });
     // can't enpassant into check
+
     movetext.clear();
     b.set_fen("8/6r1/4B3/n1p1p1rb/2p1kPpR/1pR1P1b1/6P1/1K6 b - f3 0 2");
     legal_black.clear();
