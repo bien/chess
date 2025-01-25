@@ -878,17 +878,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
         moves.pawn_move_two = moves.pawn_move_two & shift_right(legal_dest_squares, one_rank_forward*2) & ~pawn_advance_illegal;
         moves.capture_award = moves.capture_award & shift_right(legal_dest_squares|legal_enpassant_captures, one_rank_forward - 1) & ~pawn_capture_award_illegal;
         moves.capture_hward = moves.capture_hward & shift_right(legal_dest_squares|legal_enpassant_captures, one_rank_forward + 1) & ~pawn_capture_hward_illegal;
-        /*
-        moves.pawn_move_one = moves.pawn_move_one & shift_right(legal_dest_squares, one_rank_forward) & ~immobile_pinned_pieces;
-        moves.pawn_move_two = moves.pawn_move_two & shift_right(legal_dest_squares, 2 * one_rank_forward) & ~immobile_pinned_pieces;
-        moves.capture_award = moves.capture_award & shift_right(legal_enpassant_captures | legal_dest_squares, one_rank_forward - 1) & ~immobile_pinned_pieces;
-        moves.capture_hward = moves.capture_hward & shift_right(legal_enpassant_captures | legal_dest_squares, one_rank_forward + 1) & ~immobile_pinned_pieces;
-        uint64_t advance_illegal = 0, capture_a_illegal = 0, capture_h_illegal = 0;
-        move_discovers_check(side_to_play, side_to_play, moves, pinned_pieces, immobile_pinned_pieces, advance_illegal, capture_a_illegal, capture_h_illegal);
-        moves.pawn_move_one &= ~advance_illegal;
-        moves.capture_award &= ~capture_a_illegal;
-        moves.capture_hward &= ~capture_h_illegal;
-*/
+
         // add pawn discovered checks
         moves.advance_gives_check |= (moves.pawn_move_one | moves.pawn_move_two) & pawn_advance_discovers;
         moves.capture_award_gives_check |= moves.capture_award & pawn_capture_award_discovers;
@@ -896,55 +886,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
     }
 
 }
-/*
-void Bitboard::move_discovers_check(Color color, Color king_color, const PackedMoveIterator &moves, uint64_t pinned_pieces, uint64_t total_pinned_pieces, uint64_t &advance_discovers_check, uint64_t &capture_a_discovers_check, uint64_t &capture_h_discovers_check) const
-{
-    // advance_gives_check and captures_gives_check assumed to already be initialized, bits marked on
-    // color refers to side making moves
-    // king color is king in question
-    int one_rank_forward = (color == White ? 8 : -8);
 
-    if ((moves.pawn_move_one & pinned_pieces) & ~total_pinned_pieces) {
-        int start_pos = -1;
-        while ((start_pos = get_low_bit((moves.pawn_move_one & pinned_pieces) & ~total_pinned_pieces, start_pos + 1)) >= 0) {
-            uint64_t advance_legal_dest = pinned_piece_legal_dest(bb_pawn, start_pos, shift_right(moves.pawn_move_one, -one_rank_forward) | shift_right(moves.pawn_move_two, -2*one_rank_forward), king_color, ~0);
-            if (color != king_color) {
-                // invert
-                advance_legal_dest = ~advance_legal_dest;
-            }
-            if ((advance_legal_dest & shift_right(1ULL << start_pos, -one_rank_forward)) > 0) {
-                advance_discovers_check |= (1ULL << start_pos);
-            }
-        }
-    }
-    if ((moves.capture_award & pinned_pieces) & ~total_pinned_pieces) {
-        int start_pos = -1;
-        while ((start_pos = get_low_bit((moves.capture_award & pinned_pieces) & ~total_pinned_pieces, start_pos + 1)) >= 0) {
-            uint64_t capt_legal_dest = pinned_piece_legal_dest(bb_pawn, start_pos, shift_right(moves.capture_award, -one_rank_forward+1), king_color, ~0);
-            if (color != king_color) {
-                // invert
-                capt_legal_dest = ~capt_legal_dest;
-            }
-            if ((capt_legal_dest & shift_right(moves.capture_award, -one_rank_forward+1)) > 0) {
-                capture_a_discovers_check |= (1ULL << start_pos);
-            }
-        }
-    }
-    if ((moves.capture_hward & pinned_pieces) & ~total_pinned_pieces) {
-        int start_pos = -1;
-        while ((start_pos = get_low_bit((moves.capture_hward & pinned_pieces) & ~total_pinned_pieces, start_pos + 1)) >= 0) {
-            uint64_t capt_legal_dest = pinned_piece_legal_dest(bb_pawn, start_pos, shift_right(moves.capture_hward, -one_rank_forward-1), king_color, ~0);
-            if (color != king_color) {
-                // invert
-                capt_legal_dest = ~capt_legal_dest;
-            }
-            if ((capt_legal_dest & shift_right(moves.capture_hward, -one_rank_forward-1)) > 0) {
-                capture_h_discovers_check |= (1ULL << start_pos);
-            }
-        }
-    }
-}
-*/
 // color indicates which king would be checked
 // returns legal destination squares if any, given pseudo-legal dest_squares as candidates
 uint64_t Bitboard::pinned_piece_legal_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const

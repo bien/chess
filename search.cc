@@ -361,42 +361,6 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         } else {
             entry->type = TT_EXACT;
         }
-        /*
-        bool is_dirty = false;
-        bool is_new = (entry == NULL);
-        if (entry == NULL) {
-            entry = &transposition_table[b.get_hash()];
-            entry->depth = max_depth - depth;
-        }
-        if (best_score <= original_alpha && entry->depth == max_depth - depth) {
-            entry->upper = best_score;
-            if (entry->upper < entry->lower) {
-                entry->lower = entry->upper;
-                entry->move = best_move;
-                entry->response = best_response;
-            }
-        } else if (best_score > original_alpha && best_score < original_beta) {
-            entry->lower = best_score;
-            entry->upper = best_score;
-            entry->move = best_move;
-            entry->response = best_response;
-            is_dirty = true;
-        } else if (best_score >= original_beta) {
-            entry->lower = best_score;
-            if (entry->upper < entry->lower) {
-                entry->upper = entry->lower;
-                entry->move = best_move;
-                entry->response = best_response;
-            }
-//            std::cout << "Fail high: is_new=" << is_new << " lower=" << entry->lower << " upper=" << entry->upper << " move=" << entry->move << " depth=" << entry->depth << std::endl;
-        } else {
-            is_dirty = false;
-        }
-
-        if (is_dirty) {
-            transposition_table[b.get_hash()] = *entry;
-        }
-        */
 
     }
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);

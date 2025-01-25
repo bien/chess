@@ -260,7 +260,6 @@ private:
     void get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &move_repr, bool remove_self_captures, uint64_t exclude_pieces=0) const;
     void get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<PackedMoves> &move_repr, bool remove_self_captures) const;
     void get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const;
-//    void move_discovers_check(Color color, Color king_color, const PackedMoveIterator &moves, uint64_t pinned_pieces, uint64_t total_pinned_pieces, uint64_t &advance_discovers_check, uint64_t &capture_a_discovers_check, uint64_t &capture_h_discovers_check) const;
 
 
     const static uint64_t **rook_magic;
