@@ -103,13 +103,19 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     transposition_checks = 0;
     transposition_partial_hits = 0;
     transposition_full_hits = 0;
+    transposition_table = new uint64_t[transposition_table_size];
+    for (int i = 0; i < transposition_table_size; i++) {
+        transposition_table[i] = 0;
+    }
 }
 
 void Search::reset()
 {
     score = 0;
     nodecount = 0;
-    transposition_table.clear();
+    for (int i = 0; i < transposition_table_size; i++) {
+        transposition_table[i] = 0;
+    }
 }
 
 move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline, move_t move)
@@ -187,35 +193,38 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
     // check transposition table
     if (use_transposition_table) {
         transposition_checks += 1;
-        auto transpose = transposition_table.find(b.get_hash());
-        if (transpose != transposition_table.end() && transpose->second.is_valid()) {
-            if (transpose->second.depth >= max_depth - depth) {
+
+        move_t tt_move;
+        int16_t tt_value;
+        unsigned char tt_type, tt_depth;
+
+        if (fetch_tt_entry(b.get_hash(), tt_move, tt_value, tt_depth, tt_type)) {
+            if (tt_depth >= max_depth - depth) {
                 // found something at appropriate depth
-                TranspositionEntry *entry = &transpose->second;
                 int mate_depth_adjustment = 0;
-                if ((entry->depth > max_depth - depth) && (entry->value > 9900 || entry->value < -9900)) {
+                if ((tt_depth > max_depth - depth) && (tt_value > 9900 || tt_value < -9900)) {
                     // special adjustment for transposing into mate sequences -- need to change distance
-                    mate_depth_adjustment = (entry->depth - max_depth + depth);
+                    mate_depth_adjustment = (tt_depth - max_depth + depth);
                 }
-                if (entry->type == TT_EXACT) {
+                if (tt_type == TT_EXACT) {
                     transposition_full_hits++;
-                    beta = entry->value - mate_depth_adjustment;
+                    beta = tt_value - mate_depth_adjustment;
                     alpha = beta;
-                } else if (entry->type == TT_LOWER) {
+                } else if (tt_type == TT_LOWER) {
                     transposition_partial_hits++;
-                    if (entry->value <= 9900) {
+                    if (tt_value <= 9900) {
                         mate_depth_adjustment = 0;
                     }
-                    alpha = std::max(alpha, entry->value - mate_depth_adjustment);
-                } else if (entry->type == TT_UPPER) {
+                    alpha = std::max(alpha, tt_value - mate_depth_adjustment);
+                } else if (tt_type == TT_UPPER) {
                     transposition_partial_hits++;
-                    if (entry->value >= -9900) {
+                    if (tt_value >= -9900) {
                         mate_depth_adjustment = 0;
                     }
-                    beta = std::min(beta, entry->value + mate_depth_adjustment);
+                    beta = std::min(beta, tt_value + mate_depth_adjustment);
                 }
                 if (alpha >= beta) {
-                    return std::tuple<move_t, move_t, int>(entry->move, 0, entry->value > 0 ? entry->value - mate_depth_adjustment : entry->value + mate_depth_adjustment);
+                    return std::tuple<move_t, move_t, int>(tt_move, 0, tt_value > 0 ? tt_value - mate_depth_adjustment : tt_value + mate_depth_adjustment);
                 }
             } else {
                 transposition_insufficient_depth++;
@@ -350,17 +359,15 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
     // write to transposition table
     if (use_transposition_table) {
-        TranspositionEntry *entry = &transposition_table[b.get_hash()];
-        entry->value = best_score;
-        entry->move = best_move;
-        entry->depth = max_depth - depth;
+        unsigned char tt_type;
         if (best_score <= original_alpha) {
-            entry->type = TT_UPPER;
+            tt_type = TT_UPPER;
         } else if (best_score >= original_beta) {
-            entry->type = TT_LOWER;
+            tt_type = TT_LOWER;
         } else {
-            entry->type = TT_EXACT;
+            tt_type = TT_EXACT;
         }
+        insert_tt_entry(b.get_hash(), best_move, best_score, max_depth - depth, tt_type);
 
     }
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);

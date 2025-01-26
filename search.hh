@@ -79,7 +79,7 @@ struct TrivialHash {
     }
 };
 
-const int TT_EXACT = 0;
+const int TT_EXACT = 3;
 const int TT_UPPER = 1;
 const int TT_LOWER = 2;
 
@@ -166,11 +166,29 @@ struct Search {
     int transposition_insufficient_depth;
 
 private:
-//    SimpleHash<uint64_t, TranspositionEntry, TrivialHash, TranspositionTableSize> transposition_table;
-    std::map<uint64_t, TranspositionEntry> transposition_table;
+    uint64_t *transposition_table;
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
     move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
+
+    bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) {
+        uint64_t storage = transposition_table[hash % transposition_table_size];
+        type = storage & 0x3;
+        depth = (storage >> 2) & 0x1f;
+        value = (storage >> 16) & 0xffff;
+        move = (storage >> 32);
+        unsigned short checksum = hash & 0xff00;
+        return type > 0 && checksum == (storage & 0xff00);
+    }
+
+    void insert_tt_entry(uint64_t hash, move_t move, int16_t value, unsigned char depth, unsigned char type) {
+        uint64_t storage = (static_cast<uint64_t>(move) << 32) | (0xffff0000ULL & (static_cast<int16_t>(value) << 16));
+        storage |= (depth & 0x1f) << 2;
+        storage |= type & 0x3;
+        unsigned short checksum = hash & 0xff00;
+        storage |= checksum;
+        transposition_table[hash % transposition_table_size] = storage;
+    }
 };
 
 #endif

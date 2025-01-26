@@ -180,6 +180,7 @@ int main(int argc, char **argv)
     search.use_mtdf = true;
     search.use_quiescent_search = false;
     search.use_pruning = true;
+    search.use_transposition_table = true;
 
     Results r;
 
