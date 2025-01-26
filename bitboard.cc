@@ -675,7 +675,7 @@ uint64_t Bitboard::computed_covered_squares(Color color) const
     uint64_t squares = 0;
     int one_rank_forward = (color == White ? -8 : 8);
 
-    std::vector<PackedMoves> moves;
+    PackedMoveIterator moves;
     get_nk_pseudo_moves(color, bb_king, moves, false);
     get_nk_pseudo_moves(color, bb_knight, moves, false);
     get_slide_pseudo_moves(color, moves, false, get_bitmask(get_opposite_color(color), bb_king));
@@ -735,7 +735,7 @@ void Bitboard::get_moves(Color side_to_play, bool checks, bool captures_or_promo
     }
 
     // other moves
-    for (auto iter = packed.packed_moves.begin(); iter != packed.packed_moves.end(); iter++) {
+    for (auto iter = packed.begin(); iter != packed.end(); iter++) {
         uint64_t mask = 0;
         if (checks) {
             mask = iter->check_squares;
@@ -773,13 +773,13 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
     }
 
     // filter out illegal moves
-    get_nk_pseudo_moves(side_to_play, bb_king, moves.packed_moves, true);
-    assert(moves.packed_moves.size() <= 1);
-    if (moves.packed_moves.size() == 0) {
+    get_nk_pseudo_moves(side_to_play, bb_king, moves, true);
+    assert(moves.num_packed_moves <= 1);
+    if (moves.num_packed_moves == 0) {
         moves.king_move.dest_squares = 0;
     } else {
-        moves.king_move = moves.packed_moves.back();
-        moves.packed_moves.pop_back();
+        moves.king_move = moves.packed_moves[0];
+        moves.num_packed_moves = 0;
         // don't move into check
         moves.king_move.dest_squares &= ~opp_covered_squares;
         // castling: don't move out of check
@@ -821,8 +821,8 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
 
     if (count_bits(king_attackers) < 2) {
         // if in double-check, don't bother generating non-king moves
-        get_nk_pseudo_moves(side_to_play, bb_knight, moves.packed_moves, true);
-        get_slide_pseudo_moves(side_to_play, moves.packed_moves, true, 0);
+        get_nk_pseudo_moves(side_to_play, bb_knight, moves, true);
+        get_slide_pseudo_moves(side_to_play, moves, true, 0);
         get_pawn_pseudo_moves(side_to_play, moves.pawn_move_one, moves.pawn_move_two, moves.capture_award, moves.capture_hward);
 
         // filter non-king moves
@@ -851,7 +851,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
         uint64_t pinned_pieces = get_blocking_pieces(king_square, side_to_play, side_to_play, immobile_pinned_pieces, pawn_advance_illegal, pawn_capture_award_illegal, pawn_capture_hward_illegal);
 
         // apply filters to nbrq
-        for (auto iter = moves.packed_moves.begin(); iter != moves.packed_moves.end(); ) {
+        for (auto iter = moves.begin(); iter != moves.end(); iter++) {
             if ((1ULL << iter->source_pos) & immobile_pinned_pieces) {
                 iter->dest_squares = 0;
             }
@@ -864,12 +864,6 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
                 iter->check_squares = iter->dest_squares;
             } else if (blocking_pieces & (1ULL << moves.king_move.source_pos)) {
                 iter->check_squares |= iter->dest_squares & ~pinned_piece_legal_dest(bb_king, iter->source_pos, iter->dest_squares, get_opposite_color(side_to_play), ~0);
-            }
-
-            if (iter->dest_squares == 0) {
-                iter = moves.packed_moves.erase(iter);
-            } else {
-                iter++;
             }
         }
 
@@ -995,11 +989,16 @@ uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blo
     }
     while ((start_pos = get_low_bit(xray_lateral_attackers, start_pos + 1)) >= 0) {
         uint64_t pins = get_blocking_squares(start_pos, king_pos, all_pieces) & (blocking_pieces | ep_capturable);
+        uint64_t pawn_ep_pins = pins;
+        if (ep_capturable && start_pos / 8 == king_pos / 8 && (get_blocking_squares(start_pos, king_pos, all_pieces & ~my_pawns) & ep_capturable) > 0) {
+            // en-passant capture can remove two pieces from 4th rank
+            pawn_ep_pins |= get_blocking_squares(start_pos, king_pos, all_pieces & ~ep_capturable) & my_pawns;
+        }
         // bishops and knights are definitely immobile under pins.
         // pawns cannot capture and are immobile if on different file from pinner or king
         pinned_pieces |= pins;
-        pawn_cannot_capture_award |= pins;
-        pawn_cannot_capture_hward |= pins;
+        pawn_cannot_capture_award |= pawn_ep_pins;
+        pawn_cannot_capture_hward |= pawn_ep_pins;
         immobile_pinned_pieces |= (pins & (get_bitmask(blocked_piece_color, bb_bishop) | get_bitmask(blocked_piece_color, bb_knight)));
         if (king_pos % 8 == start_pos % 8) {
             pawn_cannot_advance |= (pins & get_bitmask(blocked_piece_color, bb_pawn)) & ~(file_a << (start_pos % 8));
@@ -1011,21 +1010,21 @@ uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blo
 }
 
 
-void Bitboard::get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &move_repr, bool remove_self_captures, uint64_t exclude_pieces) const
+void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, uint64_t exclude_pieces) const
 {
     uint64_t my_pieces = get_bitmask(color, bb_all);
     uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
     uint64_t all_pieces = (my_pieces | opp_pieces) & ~exclude_pieces;
     uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
     int opponent_king_square = get_low_bit(opponent_king_pos, 0);
-    PackedMoves pm;
 
     for (piece_t piece_type = bb_bishop; piece_type <= bb_queen; piece_type++) {
         uint64_t actors = get_bitmask(color, piece_type);
         int start_pos = -1;
-        pm.piece_type = piece_type;
 
         while ((start_pos = get_low_bit(actors, start_pos + 1)) > -1) {
+            PackedMoves &pm = move_repr.append();
+            pm.piece_type = piece_type;
             pm.source_pos = start_pos;
             pm.dest_squares = 0;
 
@@ -1040,6 +1039,7 @@ void Bitboard::get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &mov
                 pm.dest_squares &= ~my_pieces;
             }
             if (pm.dest_squares == 0) {
+                move_repr.pop();
                 continue;
             }
             pm.check_squares = 0;
@@ -1051,13 +1051,12 @@ void Bitboard::get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &mov
                 pm.check_squares |= get_bishop_moves(opponent_king_square, all_pieces & ~(1ULL << start_pos));
             }
             pm.check_squares &= pm.dest_squares;
-            move_repr.push_back(pm);
         }
     }
 
 }
 
-void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<PackedMoves> &move_repr, bool remove_self_captures) const
+void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures) const
 {
     uint64_t my_pieces = get_bitmask(color, bb_all);
     uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
@@ -1065,13 +1064,13 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<
     uint64_t actors = get_bitmask(color, piece_type);
     uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
     int opponent_king_square = get_low_bit(opponent_king_pos, 0);
-    PackedMoves pm;
     int starting_king_pos = (color == White ? 4 : 60);
 
-    pm.piece_type = piece_type;
     int start_pos = -1;
 
     while ((start_pos = get_low_bit(actors, start_pos + 1)) >= 0) {
+        PackedMoves &pm = move_repr.append();
+        pm.piece_type = piece_type;
         pm.source_pos = start_pos;
         pm.dest_squares = 0;
         pm.check_squares = 0;
@@ -1081,6 +1080,7 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<
             pm.dest_squares &= ~my_pieces;
         }
         if (pm.dest_squares == 0) {
+            move_repr.pop();
             continue;
         }
         // castling isn't possible unless Kf1/Kd1 are legal
@@ -1114,11 +1114,10 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<
         }
 
         if (piece_type == bb_knight) {
-            pm.check_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][opponent_king_square];
+            pm.check_squares = BitboardCaptures::PregeneratedMoves[piece_type][opponent_king_square];
         }
 
         pm.check_squares &= pm.dest_squares;
-        move_repr.push_back(pm);
     }
 }
 
@@ -1351,6 +1350,7 @@ void Bitboard::apply_move(move_t move)
 
     this->in_check = move & GIVES_CHECK;
     assert(this->in_check == king_in_check(side_to_play));
+    assert(!king_in_check(get_opposite_color(side_to_play)));
 
     update();
 

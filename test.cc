@@ -332,7 +332,7 @@ void test_legal_moves(std::string fischer_pgn_file)
 
     // enpassant capture checking pawn
     assert_moves("3r1r2/pp2Qp2/7p/4PPpk/R5Pp/1P3N2/P3q2P/6K1 b - g3 0 1", { "hxg3ep" });
-
+    assert_moves("8/8/6p1/6Pb/p2RpPk1/P3P1P1/6K1/8 b - f3 0 4", { "Kf5" });
     // moving pawn forward doesn't discover check here
     assert_moves("k7/8/8/8/8/Pp6/RP6/K7 w - - 0 2", { "a4", "Kb1" });
 

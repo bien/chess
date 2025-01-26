@@ -6,6 +6,7 @@
 #include <vector>
 #include <map>
 #include <cstdint>
+#include <cstdlib>
 #include <strings.h>
 
 typedef unsigned char piece_t;
@@ -121,6 +122,7 @@ struct PackedMoves {
     }
 };
 
+const int max_packed_moves = 12;
 struct PackedMoveIterator {
     uint64_t pawn_check_squares; // in dest space
     uint64_t advance_gives_check; // via discovery, in source space
@@ -130,8 +132,9 @@ struct PackedMoveIterator {
     uint64_t pawn_move_two;
     uint64_t capture_award;
     uint64_t capture_hward;
+    int num_packed_moves;
     PackedMoves king_move;
-    std::vector<PackedMoves> packed_moves;
+    PackedMoves packed_moves[max_packed_moves];
     PackedMoveIterator()
     {
         pawn_move_one = 0;
@@ -142,6 +145,29 @@ struct PackedMoveIterator {
         advance_gives_check = 0;
         capture_award_gives_check = 0;
         capture_hward_gives_check = 0;
+        num_packed_moves = 0;
+    }
+    void pop() {
+        num_packed_moves--;
+    }
+    PackedMoves &append() {
+        if (num_packed_moves >= max_packed_moves) {
+            // probably should have some overflow handling here
+            abort();
+        }
+        return packed_moves[num_packed_moves++];
+    }
+    PackedMoves *begin() {
+        return &packed_moves[0];
+    }
+    PackedMoves *end() {
+        return &packed_moves[num_packed_moves];
+    }
+    const PackedMoves *begin() const {
+        return &packed_moves[0];
+    }
+    const PackedMoves *end() const {
+        return &packed_moves[num_packed_moves];
     }
 };
 
@@ -257,8 +283,8 @@ private:
 
     uint64_t pinned_piece_legal_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const;
     uint64_t get_blocking_pieces(int king_pos, Color king_color, Color blocked_piece_color, uint64_t &immobile_pinned_pieces, uint64_t &pawn_cannot_advance, uint64_t &pawn_cannot_capture_award, uint64_t &pawn_cannot_capture_hward) const;
-    void get_slide_pseudo_moves(Color color, std::vector<PackedMoves> &move_repr, bool remove_self_captures, uint64_t exclude_pieces=0) const;
-    void get_nk_pseudo_moves(Color color, piece_t piece_type, std::vector<PackedMoves> &move_repr, bool remove_self_captures) const;
+    void get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, uint64_t exclude_pieces=0) const;
+    void get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures) const;
     void get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const;
 
 
