@@ -96,7 +96,9 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 }
 
 Search::Search(Evaluation *eval, int transposition_table_size)
-    : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true), use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true), use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
+    : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
+        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true),
+        use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
 
 {
     srandom(clock());
@@ -106,6 +108,9 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     transposition_table = new uint64_t[transposition_table_size];
     for (int i = 0; i < transposition_table_size; i++) {
         transposition_table[i] = 0;
+    }
+    for (int i = 0; i < max_depth; i++) {
+        move_sorter_pool.push_back(new MoveSorter());
     }
 }
 
@@ -235,9 +240,11 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
     if ((!use_quiescent_search && depth == max_depth) || (use_quiescent_search && depth == max_depth + quiescent_depth)) {
         best_score = eval->evaluate(b);
     } else {
-        MoveSorter iter = MoveSorter(&b, color, max_depth - depth > 2, hint);
+        MoveSorter *move_iter = get_move_sorter(depth);
+        move_iter->reset(&b, color, max_depth - depth > 2, hint);
 
-        if (!iter.has_more_moves()) {
+        if (!move_iter->has_more_moves()) {
+            release_move_sorter(move_iter);
             if (b.king_in_check(color)) {
                 return std::tuple<move_t, move_t, int>(0, 0, is_white * (VERY_BAD + depth));
             } else {
@@ -255,16 +262,16 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         int bestindex = -1;
         int first_quiescent = -1;
         bool pruned = false;
-        while (iter.has_more_moves()) {
+        while (move_iter->has_more_moves()) {
             int subtree_score;
-            move_t subresponse = 0;
+//            move_t subresponse = 0;
             move_t submove = 0;
-            move_t move = iter.next_move();
+            move_t move = move_iter->next_move();
             bool cutoff;
 
-            quiescent = get_captured_piece(move, color) == EMPTY;// && !iter.in_captures();
+            quiescent = get_captured_piece(move, color) == EMPTY;
             if (quiescent && first_quiescent == -1) {
-                first_quiescent = iter.index;
+                first_quiescent = move_iter->index;
             }
 
             if (use_quiescent_search && !quiescent) {
@@ -292,7 +299,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
                 subtree_score = std::get<2>(child);
                 submove = std::get<0>(child);
-                subresponse = std::get<1>(child);
+//                subresponse = std::get<1>(child);
                 b.undo_move(move);
             }
             if (search_debug >= depth + 1) {
@@ -318,7 +325,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 best_score = subtree_score;
                 best_move = move;
                 best_response = submove;
-                bestindex = iter.index;
+                bestindex = move_iter->index;
 //                tie_count = 1;
 
                 if (use_pruning) {
@@ -348,6 +355,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             }
 
         }
+        release_move_sorter(move_iter);
 //        std::cout << "M " << bestindex << "/" << iter.index << "/" << first_quiescent << "/" << (pruned ? "P" : "") << std::endl;
     }
 
@@ -436,14 +444,23 @@ struct MoveCmp {
 };
 
 
-MoveSorter::MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort, move_t hint)
-    : side_to_play(side_to_play), do_sort(do_sort), hint(hint)
+MoveSorter::MoveSorter()
 {
     buffer.reserve(32);
     index = 0;
     phase = 0;
-    this->b = b;
+}
 
+void MoveSorter::reset(const Fenboard *b, Color side_to_play, bool do_sort, move_t hint)
+{
+    buffer.clear();
+    move_iter.reset();
+    this->side_to_play = side_to_play;
+    this->do_sort = do_sort;
+    this->hint = hint;
+    this->b = b;
+    index = 0;
+    phase = 0;
     MoveCmp move_cmp(this);
     b->get_packed_legal_moves(side_to_play, move_iter);
 

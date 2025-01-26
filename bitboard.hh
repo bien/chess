@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <cstdlib>
+#include <cassert>
 #include <strings.h>
 
 typedef unsigned char piece_t;
@@ -122,7 +123,7 @@ struct PackedMoves {
     }
 };
 
-const int max_packed_moves = 12;
+const int max_packed_moves = 16;
 struct PackedMoveIterator {
     uint64_t pawn_check_squares; // in dest space
     uint64_t advance_gives_check; // via discovery, in source space
@@ -137,6 +138,10 @@ struct PackedMoveIterator {
     PackedMoves packed_moves[max_packed_moves];
     PackedMoveIterator()
     {
+        reset();
+    }
+
+    void reset() {
         pawn_move_one = 0;
         pawn_move_two = 0;
         capture_award = 0;
@@ -149,12 +154,10 @@ struct PackedMoveIterator {
     }
     void pop() {
         num_packed_moves--;
+        assert(num_packed_moves >= 0);
     }
     PackedMoves &append() {
-        if (num_packed_moves >= max_packed_moves) {
-            // probably should have some overflow handling here
-            abort();
-        }
+        assert(num_packed_moves + 1 <= max_packed_moves);
         return packed_moves[num_packed_moves++];
     }
     PackedMoves *begin() {

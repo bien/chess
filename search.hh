@@ -35,10 +35,14 @@ struct SearchUpdate {
 const SearchUpdate NullSearchUpdate;
 
 struct MoveSorter {
-    MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
+    MoveSorter();
+    MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0) {
+        reset(b, side_to_play, do_sort, hint);
+    }
     bool has_more_moves();
     bool next_gives_check() const;
     move_t next_move();
+    void reset(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
 
     bool operator()(move_t a, move_t b) const;
 
@@ -108,6 +112,19 @@ private:
         unsigned short checksum = hash & 0xff00;
         storage |= checksum;
         transposition_table[hash % transposition_table_size] = storage;
+    }
+
+    std::vector<MoveSorter *> move_sorter_pool;
+    MoveSorter *get_move_sorter(unsigned int depth) {
+        if (move_sorter_pool.empty()) {
+            return new MoveSorter();
+        }
+        MoveSorter *ms = move_sorter_pool.back();
+        move_sorter_pool.pop_back();
+        return ms;
+    }
+    void release_move_sorter(MoveSorter *ms) {
+        move_sorter_pool.push_back(ms);
     }
 };
 
