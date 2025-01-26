@@ -23,90 +23,10 @@ public:
     virtual ~Evaluation() {}
 };
 
-template <typename Key, typename Value, template <int Size> class Hasher, int Size>
-struct SimpleHash {
-    struct KeyPair {
-        Key first;
-        Value second;
-    };
-
-    SimpleHash() {
-        contents = new KeyPair[Size];
-        clear();
-    }
-
-    ~SimpleHash() {
-        delete [] contents;
-    }
-    void clear() {
-        memset(valid, 0, sizeof(valid));
-    }
-    Value &operator[](Key key) {
-        int hashed = Hasher<Size>::hash(key);
-        contents[hashed].first = key;
-        valid[hashed / 64] |= 1ULL << (hashed % 64);
-        return contents[hashed].second;
-    }
-    bool contains(Key key) const {
-        int hashed = Hasher<Size>::hash(key);
-        if (contents[hashed].first == key && ((valid[hashed / 64] & (1ULL << (hashed % 64))) != 0)) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-    std::pair<Key, Value> find(Key key) {
-        int hashed = Hasher<Size>::hash(key);
-        if (contents[hashed].first == key && ((valid[hashed / 64] & (1ULL << (hashed % 64))) != 0)) {
-            return std::pair<Key, Value>(key, contents[hashed].second);
-        } else {
-            return end();
-        }
-    }
-    std::pair<Key, Value> end() const {
-        return std::pair<Key, Value>(Key(), Value());
-    }
-    KeyPair *contents;
-    uint64_t valid[(Size + 63) / 64];
-};
-
-// use trivialhash because the input is already hashed
-template <int Size>
-struct TrivialHash {
-    static constexpr unsigned int hash(uint64_t key)
-    {
-      return key % Size;
-    }
-};
 
 const int TT_EXACT = 3;
 const int TT_UPPER = 1;
 const int TT_LOWER = 2;
-
-struct TranspositionEntry {
-    move_t move;
-
-    short value;
-    char depth;
-    char type;
-
-
-    TranspositionEntry()
-        : move(0), value(0), depth(0), type(0)
-    {}
-
-    TranspositionEntry(const TranspositionEntry &entry)
-        : move(entry.move), value(entry.value), depth(entry.depth), type(entry.type)
-    {}
-
-    bool operator==(const TranspositionEntry o) const {
-        return o.move == move && o.value == value && o.type == type && o.depth == depth;
-    }
-
-    bool is_valid() const {
-        return true;
-    }
-};
 
 struct SearchUpdate {
     virtual void operator()(move_t best_move, int depth, int nodecount, int score) const {}
