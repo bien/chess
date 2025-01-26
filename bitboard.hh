@@ -4,7 +4,7 @@
 #define HAS_FFSLL
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <cstdint>
 #include <cstdlib>
 #include <strings.h>
@@ -306,7 +306,7 @@ public:
     uint64_t get_hash() const { return hash; }
 
 protected:
-    std::map<uint64_t, int> seen_positions;
+    std::unordered_map<uint64_t, int> seen_positions;
 private:
     uint64_t hash;
     void update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding);
