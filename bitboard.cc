@@ -1017,6 +1017,7 @@ void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr
     uint64_t all_pieces = (my_pieces | opp_pieces) & ~exclude_pieces;
     uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
     int opponent_king_square = get_low_bit(opponent_king_pos, 0);
+    uint64_t bishop_attacking_sq = ~0ULL, rook_attacking_sq = ~0ULL;
 
     for (piece_t piece_type = bb_bishop; piece_type <= bb_queen; piece_type++) {
         uint64_t actors = get_bitmask(color, piece_type);
@@ -1045,10 +1046,16 @@ void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr
             pm.check_squares = 0;
 
             if (piece_type == bb_rook || piece_type == bb_queen) {
-                pm.check_squares |= get_rook_moves(opponent_king_square, all_pieces & ~(1ULL << start_pos));
+                if (rook_attacking_sq == ~0ULL) {
+                    rook_attacking_sq = get_rook_moves(opponent_king_square, all_pieces);
+                }
+                pm.check_squares |= rook_attacking_sq;
             }
             if (piece_type == bb_bishop || piece_type == bb_queen) {
-                pm.check_squares |= get_bishop_moves(opponent_king_square, all_pieces & ~(1ULL << start_pos));
+                if (bishop_attacking_sq == ~0ULL) {
+                    bishop_attacking_sq = get_bishop_moves(opponent_king_square, all_pieces);
+                }
+                pm.check_squares |= bishop_attacking_sq;
             }
             pm.check_squares &= pm.dest_squares;
         }
