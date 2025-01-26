@@ -676,9 +676,9 @@ uint64_t Bitboard::computed_covered_squares(Color color) const
     int one_rank_forward = (color == White ? -8 : 8);
 
     PackedMoveIterator moves;
-    get_nk_pseudo_moves(color, bb_king, moves, false);
-    get_nk_pseudo_moves(color, bb_knight, moves, false);
-    get_slide_pseudo_moves(color, moves, false, get_bitmask(get_opposite_color(color), bb_king));
+    get_nk_pseudo_moves(color, bb_king, moves, false, true);
+    get_nk_pseudo_moves(color, bb_knight, moves, false, true);
+    get_slide_pseudo_moves(color, moves, false, get_bitmask(get_opposite_color(color), bb_king), true);
     for (auto iter = moves.begin(); iter != moves.end(); iter++) {
         squares |= iter->dest_squares;
     }
@@ -1010,7 +1010,7 @@ uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blo
 }
 
 
-void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, uint64_t exclude_pieces) const
+void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const
 {
     uint64_t my_pieces = get_bitmask(color, bb_all);
     uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
@@ -1044,6 +1044,9 @@ void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr
                 continue;
             }
             pm.check_squares = 0;
+            if (omit_check_calc) {
+                continue;
+            }
 
             if (piece_type == bb_rook || piece_type == bb_queen) {
                 if (rook_attacking_sq == ~0ULL) {
@@ -1063,7 +1066,7 @@ void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr
 
 }
 
-void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures) const
+void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures, bool omit_check_calc) const
 {
     uint64_t my_pieces = get_bitmask(color, bb_all);
     uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
@@ -1080,7 +1083,6 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIt
         pm.piece_type = piece_type;
         pm.source_pos = start_pos;
         pm.dest_squares = 0;
-        pm.check_squares = 0;
 
         pm.dest_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][start_pos];
         if (remove_self_captures) {
@@ -1118,6 +1120,11 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIt
                 (required_rook_qs & my_rooks) != 0) {
                 pm.dest_squares |= (1ULL << (starting_king_pos - 2));
             }
+        }
+pm.check_squares = 0;
+
+        if (omit_check_calc) {
+            continue;
         }
 
         if (piece_type == bb_knight) {
