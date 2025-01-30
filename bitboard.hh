@@ -179,7 +179,7 @@ class Bitboard
     friend class SimpleBitboardEvaluation;
     friend class SimpleEvaluation;
     friend class NNUEEvaluation;
-    friend class MoveSorter;
+    friend struct MoveSorter;
 public:
     Bitboard();
 
