@@ -166,6 +166,7 @@ class NNUEModel:
         cp_evals = []
         myboards = []
         theirboards = []
+        poscount = 0
         while has_more:
             has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
             if has_more:
@@ -188,11 +189,14 @@ class NNUEModel:
                 if len(myboards) >= batch_size:
                     for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
                         yield x
+                        poscount += 1
                     myboards = []
                     theirboards = []
                     cp_evals = []
         for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
             yield x
+            poscount += 1
+        print(f"Read {poscount} positions from {pgn_filename}")
         self.TrainLib.delete_training_iterator(iter)
 
     PIECE_MAPPING = dict(Q=9, R=5, B=3, N=3, P=1, q=-9, r=-5, b=-3, n=-3, p=-1)
@@ -247,7 +251,7 @@ class NNUEModel:
             metrics=metrics)
         return model
 
-    def train(self, train_pgn, valid_pgn, profile=False, batch_size=128, steps_per_epoch=256, include_side_pts=False, **fit_args):
+    def train(self, train_pgn, valid_pgn, profile=False, batch_size=128, steps_per_epoch=256, include_side_pts=True, **fit_args):
         model = self.make_nnue_model_mirror(include_centipawns=True, include_side_pts=include_side_pts)
         model.summary()
         output_sig = []
@@ -261,7 +265,7 @@ class NNUEModel:
                 tuple(output_sig))
         tf_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(train_pgn, batch_size=batch_size),
             output_signature=sign)
-        validation_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(valid_pgn, batch_size=batch_size, freq=20, seed=42),
+        validation_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(valid_pgn, batch_size=batch_size),
             output_signature=sign)
         if profile:
             pr = cProfile.Profile()
