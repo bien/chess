@@ -140,7 +140,13 @@ bool TrainingIterator::process_game(TrainingPosition *tp)
             // exclude forced mates
             std::string score = side_to_play == White ? movelist[ply/2].first.eval : movelist[ply/2].second.eval;
             if (score.find('#') == std::string::npos) {
-                tp->cp_eval = std::stof(score);
+                try {
+                    tp->cp_eval = std::stof(score);
+                } catch (const std::invalid_argument& ia) {
+                    std::cerr << "Invalid score value: " << score << std::endl;
+                    return false;
+                }
+
                 for (int i = 0; i < 12; i++) {
                     tp->piece_bitmasks[i] = b.piece_bitmasks[i + 1 + (i >= 6 ? 1 : 0)];
                     tp->piece_bitmasks_mirrored[i >= 6 ? i - 6 : i + 6] = mirror_bitmap_vertical(b.piece_bitmasks[i + 1 + (i >= 6 ? 1 : 0)]);
