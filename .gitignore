@@ -1,10 +1,14 @@
 *.o
-games/*.zip
 *.stackdump
 *.pyc
 *.log
 *.dot
 *.features
 *.exe
+*.keras
+*~
 testexe
 feature
+games/
+.ipynb_checkpoints
+.DS_Store
