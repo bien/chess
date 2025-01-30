@@ -161,43 +161,44 @@ class NNUEModel:
         self.TrainLib.read_position.argtypes = (ctypes.c_void_p, ctypes.POINTER(TrainingPosition))
         self.TrainLib.delete_training_iterator.argtypes = (ctypes.c_void_p, )
 
-        iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
-        has_more = 1
-        cp_evals = []
-        myboards = []
-        theirboards = []
-        poscount = 0
-        while has_more:
-            has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
-            if has_more:
-                feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
-                myboard = self.EMPTY.copy()
-                theirboard = self.EMPTY.copy()
+        while True:
+            iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
+            has_more = 1
+            cp_evals = []
+            myboards = []
+            theirboards = []
+            poscount = 0
+            while has_more:
+                has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
+                if has_more:
+                    feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
+                    myboard = self.EMPTY.copy()
+                    theirboard = self.EMPTY.copy()
 
-                for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
-                    king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
-                    if len(self.white_piece_list) == 12:
-                        container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
-                    elif len(self.white_piece_list) == 10:
-                        container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
-                    else:
-                        raise Exception("Unsupported")
-                myboards.append(myboard)
-                theirboards.append(theirboard)
-                cp_evals.append(tp.cp_eval)
+                    for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
+                        king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
+                        if len(self.white_piece_list) == 12:
+                            container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
+                        elif len(self.white_piece_list) == 10:
+                            container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
+                        else:
+                            raise Exception("Unsupported")
+                    myboards.append(myboard)
+                    theirboards.append(theirboard)
+                    cp_evals.append(tp.cp_eval)
 
-                if len(myboards) >= batch_size:
-                    for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
-                        yield x
-                        poscount += 1
-                    myboards = []
-                    theirboards = []
-                    cp_evals = []
-        for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
-            yield x
-            poscount += 1
-        print(f"Read {poscount} positions from {pgn_filename}")
-        self.TrainLib.delete_training_iterator(iter)
+                    if len(myboards) >= batch_size:
+                        for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
+                            yield x
+                            poscount += 1
+                        myboards = []
+                        theirboards = []
+                        cp_evals = []
+            for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
+                yield x
+                poscount += 1
+            print(f"Read {poscount} positions from {pgn_filename}")
+            self.TrainLib.delete_training_iterator(iter)
 
     PIECE_MAPPING = dict(Q=9, R=5, B=3, N=3, P=1, q=-9, r=-5, b=-3, n=-3, p=-1)
     def initialize_pts(self):
