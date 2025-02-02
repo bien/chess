@@ -21,7 +21,7 @@ struct TrainingPosition {
 struct TrainingIterator {
 public:
     TrainingIterator(const char *filename, int move_freq)
-        : input_stream(filename), distrib(1, move_freq), gen(rd())
+        : input_stream(filename), ply(0), next_ply(0), distrib(1, move_freq), gen(rd())
     {
         if (input_stream.fail()) {
             std::cerr << "Couldn't open " << filename <<  std::endl;
@@ -29,7 +29,7 @@ public:
         }
     }
     TrainingIterator(const char *filename, int move_freq, unsigned int seed)
-        : input_stream(filename), distrib(1, move_freq), gen(seed)
+        : input_stream(filename), ply(0), next_ply(0), distrib(1, move_freq), gen(seed)
     {
         if (input_stream.fail()) {
             std::cerr << "Couldn't open " << filename <<  std::endl;
@@ -78,6 +78,7 @@ bool TrainingIterator::read_position(TrainingPosition *tp)
     while (1) {
         // game is too short or has no annotations: skip
         if (movelist.size() > 3 && !movelist[0].first.eval.empty()) {
+            next_ply = ply + distrib(gen);
             bool found_position = process_game(tp);
             if (found_position) {
                 return true;
