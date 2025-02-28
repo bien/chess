@@ -118,7 +118,7 @@ class NNUEModel:
             return w_king_idx, w_full, white_castling, mirror_square(b_king_idx), b_full_mirror, black_castling
         else:
             return mirror_square(b_king_idx), b_full_mirror, black_castling, w_king_idx, w_full, white_castling
-    
+
     def inference_iterator(self, positions):
         board_step_size = 64 * len(self.white_piece_list)
 
@@ -132,7 +132,7 @@ class NNUEModel:
                 container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.concatenate(present_board).copy()
 
             yield np.array([myboard]), np.array([theirboard])
-    
+
     def centipawn_result_iterator(self, positions):
         board_step_size = 64 * len(self.white_piece_list)
 
@@ -176,44 +176,43 @@ class NNUEModel:
         board_step_size = 64 * len(self.white_piece_list)
         tp = TrainingPosition()
 
-        while True:
-            iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
-            has_more = 1
-            cp_evals = []
-            myboards = []
-            theirboards = []
-            poscount = 0
-            while has_more:
-                has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
-                if has_more:
-                    feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
-                    myboard = self.EMPTY.copy()
-                    theirboard = self.EMPTY.copy()
+        iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
+        has_more = 1
+        cp_evals = []
+        myboards = []
+        theirboards = []
+        poscount = 0
+        while has_more:
+            has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
+            if has_more:
+                feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
+                myboard = self.EMPTY.copy()
+                theirboard = self.EMPTY.copy()
 
-                    for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
-                        king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
-                        if len(self.white_piece_list) == 12:
-                            container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
-                        elif len(self.white_piece_list) == 10:
-                            container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
-                        else:
-                            raise Exception("Unsupported")
-                    myboards.append(myboard)
-                    theirboards.append(theirboard)
-                    cp_evals.append(tp.cp_eval)
+                for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
+                    king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
+                    if len(self.white_piece_list) == 12:
+                        container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
+                    elif len(self.white_piece_list) == 10:
+                        container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
+                    else:
+                        raise Exception("Unsupported")
+                myboards.append(myboard)
+                theirboards.append(theirboard)
+                cp_evals.append(tp.cp_eval)
 
-                    if len(myboards) >= batch_size:
-                        for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
-                            yield x
-                        poscount += len(myboards)
-                        myboards = []
-                        theirboards = []
-                        cp_evals = []
-            for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
-                yield x
-            poscount += len(myboards)
-            print(f"Read {poscount} positions from {pgn_filename}")
-            self.TrainLib.delete_training_iterator(iter)
+                if len(myboards) >= batch_size:
+                    for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
+                        yield x
+                    poscount += len(myboards)
+                    myboards = []
+                    theirboards = []
+                    cp_evals = []
+        for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
+            yield x
+        poscount += len(myboards)
+        print(f"Read {poscount} positions from {pgn_filename}")
+        self.TrainLib.delete_training_iterator(iter)
 
     PIECE_MAPPING = dict(Q=9, R=5, B=3, N=3, P=1, q=-9, r=-5, b=-3, n=-3, p=-1)
     def initialize_pts(self):
@@ -235,7 +234,11 @@ class NNUEModel:
                 pts_layers.append(side_pts(x))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
+<<<<<<< HEAD
             x = layers.Dense(self.hidden_layers_width, name=f'hidden_{i+1}', activation=self.relu_fn, kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(x)
+=======
+            x = layers.Dense(self.hidden_layers_width, activation=self.relu_fn, name=f'hidden_{i}')(x)
+>>>>>>> de90371... training improvements
         outputs = []
         metrics = []
         losses = []
