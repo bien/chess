@@ -175,7 +175,7 @@ int main(int argc, char **argv)
       exit(1);
     }
 
-    SimpleEvaluation simple;
+    NNUEEvaluation simple;
     Search search(&simple);
     search.use_mtdf = true;
     search.use_quiescent_search = false;

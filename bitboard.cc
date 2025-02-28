@@ -1074,26 +1074,24 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIt
     uint64_t actors = get_bitmask(color, piece_type);
     uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
     int opponent_king_square = get_low_bit(opponent_king_pos, 0);
-    int starting_king_pos = (color == White ? 4 : 60);
 
     int start_pos = -1;
 
     while ((start_pos = get_low_bit(actors, start_pos + 1)) >= 0) {
-        PackedMoves &pm = move_repr.append();
-        pm.piece_type = piece_type;
-        pm.source_pos = start_pos;
-        pm.dest_squares = 0;
-
-        pm.dest_squares = BitboardCaptures::PregeneratedCaptures[color][piece_type][start_pos];
+        uint64_t dest_squares = BitboardCaptures::PregeneratedMoves[piece_type][start_pos];
         if (remove_self_captures) {
-            pm.dest_squares &= ~my_pieces;
+            dest_squares &= ~my_pieces;
         }
-        if (pm.dest_squares == 0) {
-            move_repr.pop();
+        if (dest_squares == 0) {
             continue;
         }
+        PackedMoves &pm = move_repr.append();
+        pm.dest_squares = dest_squares;
+        pm.piece_type = piece_type;
+        pm.source_pos = start_pos;
         // castling isn't possible unless Kf1/Kd1 are legal
 
+        int starting_king_pos = (color == White ? 4 : 60);
         if (piece_type == bb_king && start_pos == starting_king_pos) {
             // castle king-side
             uint64_t required_empty_ks = 0x60;
@@ -1121,7 +1119,7 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIt
                 pm.dest_squares |= (1ULL << (starting_king_pos - 2));
             }
         }
-pm.check_squares = 0;
+        pm.check_squares = 0;
 
         if (omit_check_calc) {
             continue;

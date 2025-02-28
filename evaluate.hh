@@ -22,7 +22,10 @@ const int NUM_FEATURES = 18;
 class SimpleBitboardEvaluation : public SimpleEvaluation {
 public:
     int evaluate(const Fenboard &b);
-    void get_features(const Fenboard &b, int *features) const;
+    void get_features(const Fenboard &b, int *features);
+private:
+    PackedMoveIterator move_repr;
+
 };
 
 #endif

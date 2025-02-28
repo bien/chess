@@ -271,7 +271,7 @@ int SimpleEvaluation::evaluate(const Fenboard &b) {
     return compute_scores(qct, bct, rct, nct, pct, rpct, ppawn, isopawn, dblpawn, nscore, bscore, kscore, rhopenfile, rfopenfile, qscore);
 }
 
-void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) const {
+void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) {
     int piece_counts[bb_king+1];
     int piece_scores[bb_king+1];
     int white_pawns[8];
@@ -307,30 +307,17 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) co
 
     for (int i = bb_knight; i <= bb_king; i++) {
         piece_counts[i] = count_bits(b.piece_bitmasks[i]) - count_bits(b.piece_bitmasks[i + bb_king + 1]);
-        // remove expensive features with minor impact
+        piece_scores[i] = 0;
+    }
+    for (Color color = White; color <= Black; color = static_cast<Color>(color + 1)) {
+        move_repr.reset();
+        b.get_slide_pseudo_moves(color, move_repr, true, true);
+        b.get_nk_pseudo_moves(color, bb_king, move_repr, true, true);
+        b.get_nk_pseudo_moves(color, bb_knight, move_repr, true, true);
+        int multiplier = color == White ? 1 : -1;
+        for (auto move_iter = move_repr.begin(); move_iter <= move_repr.end(); move_iter++) {
+            piece_scores[move_iter->piece_type] += multiplier * count_bits(move_iter->dest_squares);
 
-        for (int color = 0; color <= 1; color++) {
-            int multiplier = color == White ? 1 : -1;
-            int start_pos = 0;
-            piece_scores[i] = 0;
-            /*
-            uint64_t dest_squares = 0;
-            do {
-                switch(i) {
-                    case bb_king: case bb_knight:
-                        b.next_pnk_move(static_cast<Color>(color), i, start_pos, dest_squares, FL_CAPTURES | FL_EMPTY, false, false);
-                        break;
-                    case bb_queen: case bb_bishop: case bb_rook:
-                        b.next_piece_slide(static_cast<Color>(color), i, start_pos, dest_squares, FL_CAPTURES | FL_EMPTY);
-                        break;
-                }
-                if (start_pos < 0 || dest_squares == 0) {
-                    break;
-                }
-                piece_scores[i] += multiplier * count_bits(dest_squares);
-                start_pos++;
-            } while (start_pos >= 0);
-            */
         }
 
     }
