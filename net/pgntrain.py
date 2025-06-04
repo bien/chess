@@ -67,11 +67,11 @@ class NNUEModel:
     # https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md#loss-functions-and-how-to-apply-them
     CP_WDL_SCALING_FACTOR = 410
 
-    def __init__(self, num_hidden_layers=2, hidden_layers_width=32, relu_fn=relu_sat, centipawn_output=True, wdl_output=True):
+    def __init__(self, num_hidden_layers=2, half_len_concat=256, hidden_layers_width=32, relu_fn=relu_sat, centipawn_output=True, wdl_output=True):
         self.CASTLE_KING_IDX = {'k': 32, 'q': 33, 'kq': 34, 'qk': 34}
         self.num_hidden_layers = num_hidden_layers
         self.hidden_layers_width = hidden_layers_width
-        self.half_len_concat = 256
+        self.half_len_concat = half_len_concat
         self.relu_fn = relu_fn
         self.white_piece_list = self._piece_list().upper() + self._piece_list().lower()
         self.black_piece_list = self._piece_list().lower() + self._piece_list().upper()
@@ -93,8 +93,8 @@ class NNUEModel:
             king_idx = (king_idx // 8) * 4 + (king_idx % 8)
         else:
             # horizontal mirror to save effort
-            king_idx = (king_idx // 8) * 4 + 7 - (king_idx % 8)
-            present_board = [mirror_horizontal(b) for b in present_board]
+            king_idx = (king_idx & 0x38) + (7 - (king_idx % 8))
+            present_board = mirror_horizontal(present_board)
         return king_idx, present_board
 
 
