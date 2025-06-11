@@ -10,7 +10,6 @@
 #include "search.hh"
 #include "bitboard.hh"
 #include "move.hh"
-#include "nnue.hh"
 int search_debug = 0;
 
 move_t Search::minimax(Fenboard &b, Color color)
@@ -259,9 +258,9 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         int currentnodescore;
         bool evaluated_nodescore = false;
         bool quiescent = true;
-        int bestindex = -1;
+        // int bestindex = -1;
         int first_quiescent = -1;
-        bool pruned = false;
+        // bool pruned = false;
         while (move_iter->has_more_moves()) {
             int subtree_score;
 //            move_t subresponse = 0;
@@ -325,7 +324,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                 best_score = subtree_score;
                 best_move = move;
                 best_response = submove;
-                bestindex = move_iter->index;
+                // bestindex = move_iter->index;
 //                tie_count = 1;
 
                 if (use_pruning) {
@@ -340,7 +339,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
                         if (search_debug >= depth + 1) {
                             std::cout << "!" << std::endl;
                         }
-                        pruned = true;
+                        // pruned = true;
                         break;
                     }
                 }

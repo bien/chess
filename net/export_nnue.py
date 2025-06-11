@@ -37,8 +37,8 @@ def get_dense_layer_names(model):
 
 def preamble(MODEL_DENSE_LAYERS, MODEL_HIDDEN_LAYER_WIDTH, MODEL_FIRST_LAYER_WIDTH):
     model_input_bias = print_biases('int8_t', get_layer(model, 'hidden_0'))
-    model_psqt = print_weights('int8_t', get_layer(model, 'pts'), flatten=True)
-    model_psqt_bias = print_bias('int8_t', get_layer(model, 'pts'))
+    model_psqt = print_weights('int16_t', get_layer(model, 'pts'), flatten=True)
+    model_psqt_bias = print_bias('int16_t', get_layer(model, 'pts'))
     model_input_weights = print_weights('int8_t', get_layer(model, 'hidden_0'))
 
     dense_layer_names = get_dense_layer_names(model)
@@ -46,7 +46,7 @@ def preamble(MODEL_DENSE_LAYERS, MODEL_HIDDEN_LAYER_WIDTH, MODEL_FIRST_LAYER_WID
     model_dense_1_weights = '{%s}' % print_weights('int8_t', get_layer(model, dense_layer_names[0]))
     model_dense_weights = ',\n'.join(['{%s}' % print_weights('int8_t', get_layer(model, dense_layer)) for dense_layer in dense_layer_names[1:]])
 
-    model_cp_bias = print_bias('int8_t', get_layer(model, 'centipawns'))
+    model_cp_bias = print_bias('int16_t', get_layer(model, 'centipawns'))
     model_cp_weights = print_weights('int8_t', get_layer(model, 'centipawns'), flatten=True)
     return f"""
 #include <stdint.h>

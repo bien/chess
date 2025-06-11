@@ -1,10 +1,10 @@
 CXX = g++
 INCLUDES = -Inet -I.  -I/opt/homebrew/include
-CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES) -fsanitize=address
+CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES)
 ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc nnueeval.cc nnue-2-layer-16.cc
 ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o)
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
-LDFLAGS = -fsanitize=address
+LDFLAGS =
 
 all: uciinterface test
 

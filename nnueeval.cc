@@ -24,10 +24,22 @@ void dump_matrix(const mmatrix<m, n, atype> &x)
             if (n > 16 && k % 16 == 0) {
                 std::cout << std::endl << k << ": ";
             }
-            std::cout << static_cast<int>(x.data[i][k]) << ", ";
+            std::cout << static_cast<int>(x.mdata[i][k]) << ", ";
         }
         std::cout << std::endl;
     }
+}
+
+template<int n, typename atype>
+void dump_matrix(const mvector<n, atype> &x)
+{
+    for (int k = 0; k < n; k++) {
+        if (n > 16 && k % 16 == 0) {
+            std::cout << std::endl << k << ": ";
+        }
+        std::cout << static_cast<int>(x.mdata[k]) << ", ";
+    }
+    std::cout << std::endl;
 }
 
 // feature set dependent variables
@@ -171,23 +183,37 @@ int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16
     dump_matrix(input_layer);
 #endif
     input_layer.clamp(dense_layer, static_cast<int16_t>(0), static_cast<int16_t>(UNITY));
-#ifdef DEBUG
-    std::cout << "relu concat layer" << std::endl;
-    dump_matrix(dense_layer);
-#endif
+
+    // std::cout << "relu concat layer" << std::endl;
+    // dump_matrix(dense_layer);
+
     if (side_to_play == White) {
         dense_layer.matrix_multiply_add_div_relu(m_dense_1_weights_forward, model_dense_bias_promoted.data[0], dense_n_layer, UNITY, 0, UNITY);
     } else {
         dense_layer.matrix_multiply_add_div_relu(m_dense_1_weights_flipped, model_dense_bias_promoted.data[0], dense_n_layer, UNITY, 0, UNITY);
     }
+
+
+    // std::cout << "dense layer" << std::endl;
+    // dump_matrix(dense_n_layer);
+
     last_layer = &dense_n_layer;
     next_layer = &scratch_layer;
 
     for (int i = 0; i < MODEL_DENSE_LAYERS - 1; i++) {
+        /*
+        std::cout << "bias" << std::endl;
+        dump_matrix(model_dense_bias_promoted.data[i+1]);
+        std::cout << "weights" << std::endl;
+        dump_matrix(model_dense_weights_promoted.data[i]);
+        */
         last_layer->matrix_multiply_add_div_relu(model_dense_weights_promoted.data[i], model_dense_bias_promoted.data[i+1], *next_layer, UNITY, 0, UNITY);
+        std::cout << "last layer" << std::endl;
+        dump_matrix(*next_layer);
         std::swap(next_layer, last_layer);
     }
-    float score = (last_layer->dot_product(model_cp_weights_promoted) + model->model_cp_bias + psqt) * 1.0 / UNITY;
+    // std::cout << "SCORE: " << last_layer->dot_product(model_cp_weights_promoted) << " + " << model->model_cp_bias <<  " PTS: " << psqt << std::endl;
+    float score = (last_layer->dot_product(model_cp_weights_promoted) / UNITY + model->model_cp_bias + psqt / 2) * 100.0 / UNITY;
 
     // don't output scores that are more extreme than forced mate
     if (score > VERY_GOOD) {
@@ -195,12 +221,12 @@ int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16
     } else if (score < VERY_BAD) {
         score = -VERY_BAD;
     }
-    /*
+
     // nnue calculated with respect to side-to-play but engine wants respect to white
     if (side_to_play == Black) {
         score = -score;
     }
-    */
+
     return score;
 }
 
@@ -212,7 +238,7 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, mvector<MODEL_F
         layer.mdata[i + MODEL_FIRST_LAYER_WIDTH/2] = model->model_input_bias[i];
     }
     psqt = 0;
-    // psqt = model->model_psqt_bias;
+    //psqt = model->model_psqt_bias;
 
     // always put white on the first half of the nnue, black on second half
     for (int king_color = 0; king_color <= 1; king_color++) {
@@ -241,9 +267,9 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, mvector<MODEL_F
                         layer.mdata[k + half_adj] += model->model_input_weights[dense_index][k];
                     }
                     if (king_color >= 1) {
-                        psqt += model->model_psqt[dense_index];
-                    } else {
                         psqt -= model->model_psqt[dense_index];
+                    } else {
+                        psqt += model->model_psqt[dense_index];
                     }
                  }
              }

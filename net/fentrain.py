@@ -2,18 +2,13 @@ import math
 import random
 import pandas as pd
 import numpy as np
-import matplotlib
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, auc
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
 import chessdecode
 import keras
 from keras import layers
-import tensorflow as tf
 import keras.utils
-import functools
-import scipy.sparse
 import glob
 import subprocess
 from subprocess import Popen, PIPE
@@ -85,7 +80,7 @@ class PositionSequence(keras.utils.Sequence):
             self.seq = FenSequence(self.file_df, yval, self.batch_size, self.mirror)
         return self.seq[idx - lineno]
 
-    
+
 class FenSequence(keras.utils.Sequence):
     num_classes = 3
 

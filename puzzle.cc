@@ -5,7 +5,6 @@
 #include "evaluate.hh"
 #include "pgn.hh"
 #include "bitboard.hh"
-#include "nnue.hh"
 
 bool expect_move(Search &search, Fenboard &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
 {

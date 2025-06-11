@@ -18,8 +18,8 @@ const int MODEL_FIRST_LAYER_WIDTH = 32;
 
 struct nnue_model {
     const int8_t model_input_bias[MODEL_FIRST_LAYER_WIDTH/2];
-    const int8_t model_psqt[INPUT_WIDTH];
-    const int8_t model_psqt_bias;
+    const int16_t model_psqt[INPUT_WIDTH];
+    const int16_t model_psqt_bias;
     const int8_t model_input_weights[INPUT_WIDTH][MODEL_FIRST_LAYER_WIDTH/2];
 
 
@@ -36,7 +36,7 @@ extern nnue_model *load_nnue_model();
 
 template <int m, int n, typename atype>
 struct WeightsFlip : public mmatrix<m, n, atype> {
-    WeightsFlip(const atype dense_1_weights[m][n]) {
+    WeightsFlip(const atype dense_1_weights[n][m]) {
         static_assert(m % 2 == 0, "size must be multiple of 2");
         int half = n / 2;
         for (int i = 0; i < m; i++) {
@@ -47,7 +47,7 @@ struct WeightsFlip : public mmatrix<m, n, atype> {
                 } else {
                     jflip = j + half;
                 }
-                this->mdata[i][j] = dense_1_weights[i][jflip];
+                this->mdata[i][j] = dense_1_weights[jflip][i];
             }
         }
     }
@@ -80,7 +80,7 @@ template <int k, int m, int n, typename t>
 struct weight_promotion {
     weight_promotion(const t weights[k][m][n]) {
         for (int i = 0; i < k; i++) {
-            data[i] = mmatrix<m, n, t>(weights[i]);
+            data[i] = MatrixTranspose<m, n, t>(weights[i]);
         }
     }
     mmatrix<m, n, t> data[k];

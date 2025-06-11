@@ -12,6 +12,7 @@ import random
 import cProfile, pstats, io
 from pstats import SortKey
 import os.path
+from keras.constraints import MinMaxNorm
 
 class TrainingPosition(ctypes.Structure):
     # PNBRQKpnbrqk
@@ -234,7 +235,7 @@ class NNUEModel:
                 pts_layers.append(side_pts(x))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
-            x = layers.Dense(self.hidden_layers_width, name=f'hidden_{i+1}', activation=self.relu_fn)(x)
+            x = layers.Dense(self.hidden_layers_width, name=f'hidden_{i+1}', activation=self.relu_fn, kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(x)
         outputs = []
         metrics = []
         losses = []
@@ -243,14 +244,14 @@ class NNUEModel:
             piece_delta = layers.Subtract()([pts_layers[0], pts_layers[1]]) * 0.5
         if self.wdl_output:
             if include_side_pts:
-                x = layers.Add(name="pre_wdl")([piece_delta, x])
-            result = layers.Dense(num_classes, activation="softmax", name="wdl")(x)
+                x2 = layers.Add(name="pre_wdl")([piece_delta, x])
+            result = layers.Dense(num_classes, activation="softmax", name="wdl")(x2)
             outputs.append(result)
             metrics.append("categorical_accuracy")
             losses.append("categorical_crossentropy")
             loss_weights.append(1)
         if self.centipawn_output:
-            centipawns = layers.Dense(1, name="centipawns")(x)
+            centipawns = layers.Dense(1, name="centipawns", kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(x)
             if include_side_pts:
                 centipawns = layers.Add(name="cp_final")([piece_delta, centipawns])
             outputs.append(centipawns)
