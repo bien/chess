@@ -83,13 +83,13 @@ void clean_line(std::vector<move_annot> &moveline) {
     }
 }
 
-void read_pgn_options(std::istream &input, std::map<std::string, std::string> &metadata, movelist_tree &movelist)
+void read_pgn_options(pgn_input_stream *input, std::map<std::string, std::string> &metadata, movelist_tree &movelist)
 {
     std::string line;
     int pos = 0;
-    while (!input.eof() && !input.fail()) {
+    while (input->is_readable()) {
         std::string buf;
-        std::getline(input, buf, '\n');
+        input->read_line(buf);
         line.append(buf);
         if (line[line.length() - 1] == '\r') {
             line = line.substr(0, line.length() - 1);
@@ -158,37 +158,46 @@ void read_pgn_options(std::istream &input, std::map<std::string, std::string> &m
 
 bool is_result(const std::string &candidate_move)
 {
-    return candidate_move == "1-0" || candidate_move == "0-1" || candidate_move == "1/2-1/2";
+    return (candidate_move[0] == '1' && (candidate_move == "1-0" || candidate_move == "1/2-1/2")) ||
+        (candidate_move[0] == '0' && candidate_move == "0-1");
 }
 
 void read_annotation(const std::string &buf, int start_pos, int end_pos, std::string &eval, std::string &clock)
 {
     while (start_pos < end_pos) {
         int open_bracket = buf.find('[', start_pos);
-        int close_bracket = buf.find(']', open_bracket);
-        int space = buf.find(' ', open_bracket);
-        if (open_bracket < 0 || close_bracket < 0 || space < open_bracket || space >= close_bracket) {
+        if (open_bracket == std::string::npos || open_bracket >= end_pos) {
             break;
         }
-        std::string key = buf.substr(open_bracket + 1, space - open_bracket - 1);
-        std::string val = buf.substr(space + 1, close_bracket - space - 1);
-        if (key == "%clk") {
+        int space = buf.find(' ', open_bracket);
+        if (space == std::string::npos) {
+            break;
+        }
+        int close_bracket = buf.find(']', space);
+        if (close_bracket == std::string::npos) {
+            break;
+        }
+//        std::string key = buf.substr(open_bracket + 1, space - open_bracket - 1);
+        if (buf.compare(open_bracket + 1, space - open_bracket - 1, "%clk") == 0) {
+            std::string val = buf.substr(space + 1, close_bracket - space - 1);
             clock = val;
         }
-        else if (key == "%eval") {
+        else if (buf.compare(open_bracket + 1, space - open_bracket - 1, "%eval") == 0) {
+            std::string val = buf.substr(space + 1, close_bracket - space - 1);
             eval = val;
         }
         start_pos = close_bracket;
     }
 }
 
-void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata, std::vector<std::pair<move_annot, move_annot> > &movelist)
+void read_pgn(pgn_input_stream *input, std::map<std::string, std::string> &metadata, std::vector<std::pair<move_annot, move_annot> > &movelist, bool want_metadata)
 {
     std::string line;
     int pos = 0;
-    while (!input.eof() && !input.fail()) {
+    bool has_metadata = false;
+    while (input->is_readable()) {
         std::string buf;
-        std::getline(input, buf, '\n');
+        input->read_line(buf);
         line.append(buf);
         while (line[0] == '\xef' || line[0] == '\xbb' || line[0] == '\xbf') {
             // skip unicode bom
@@ -201,9 +210,12 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
             if (!movelist.empty()) {
                 break;
             }
-            int spacepos = line.find(' ');
-            int lastquote = line.rfind('"');
-            metadata[line.substr(1, spacepos-1)] = line.substr(spacepos+2, lastquote-spacepos-2);
+            if (want_metadata) {
+                int spacepos = line.find(' ');
+                int lastquote = line.rfind('"');
+                metadata[line.substr(1, spacepos-1)] = line.substr(spacepos+2, lastquote-spacepos-2);
+            }
+            has_metadata = true;
             // don't need this content anymore
             line.clear();
         }
@@ -216,7 +228,7 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
             line.append(" ");
         }
     }
-    if (metadata.empty() && line.size() > 2) {
+    if (!has_metadata && line.size() > 2) {
         std::cerr << "Error: no pgn header, are you sure this is pgn? " << std::endl;
         abort();
     }
@@ -257,11 +269,20 @@ void read_pgn(std::istream &input, std::map<std::string, std::string> &metadata,
         // check for restatement of move number, eg. "1..." but don't get tripped by 1/2-1/2
         int move_pos = pos;
         bool found_dot = false;
-        while (line[move_pos] == '.' || line[move_pos] == ' ' || (line[move_pos] >= '0' && line[move_pos] <= '9')) {
-            if (line[move_pos] == '.') {
-                found_dot = true;
+        bool done = false;
+        while (!done) {
+            char c = line[move_pos];
+            switch(c) {
+                case '.':
+                    found_dot = true;
+                    /* fall through */
+                case ' ': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+                    move_pos++;
+                    break;
+                default:
+                    done = true;
+                    break;
             }
-            move_pos++;
         }
         if (found_dot) {
             pos = move_pos;

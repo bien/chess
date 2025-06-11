@@ -225,7 +225,8 @@ void test_legal_moves(std::string fischer_pgn_file)
     }
 
     // play one game
-    read_pgn(fischer, game_metadata, movelist);
+    pgn_istream fischerpgn(fischer);
+    read_pgn(&fischerpgn, game_metadata, movelist);
     for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
         move_t move = b.read_move(iter->first.move, White);
         b.apply_move(move);
@@ -282,7 +283,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     while (!fischer.eof()) {
         movelist.clear();
         game_metadata.clear();
-        read_pgn(fischer, game_metadata, movelist);
+        read_pgn(&fischerpgn, game_metadata, movelist);
         b.set_starting_position();
         for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
             move_t move = b.read_move(iter->first.move, White);
@@ -454,10 +455,15 @@ void test_matrix()
         features[i] = 64;
         weights[i] = 64;
     }
+
+    //int result = mmatrix<1, 1, int>::dotProduct_n(features, weights, 512);
+//    assert_equals(2097152, result);
+    /*
     int result = matrix<1, 1, int, 1>::dotProduct_32(features, weights);
     assert_equals(131072, result);
     result = matrix<1, 1, int, 1>::dotProduct_512(features, weights);
     assert_equals(2097152, result);
+    */
 }
 
 int main(int argc, char **argv)

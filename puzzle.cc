@@ -120,13 +120,14 @@ void read_pgn_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, Resul
     movelist_tree move_choices;
     std::vector<std::string> first_move;
     double elapsed = 0;
+    pgn_istream puzzle_pgn(puzzles);
 
     while (!puzzles.eof()) {
         move_choices.clear();
         game_metadata.clear();
         first_move.clear();
         search.reset();
-        read_pgn_options(puzzles, game_metadata, move_choices);
+        read_pgn_options(&puzzle_pgn, game_metadata, move_choices);
         if (game_metadata["FEN"] != "") {
             b.set_fen(game_metadata["FEN"]);
             bool result = false;

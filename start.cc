@@ -2,7 +2,7 @@
 #include <time.h>
 #include "search.hh"
 #include "evaluate.hh"
-#include "nnue.hh"
+#include "nnueeval.hh"
 #include "pgn.hh"
 #include "bitboard.hh"
 

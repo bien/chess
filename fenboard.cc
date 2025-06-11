@@ -261,7 +261,7 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
             }
         }
     } else {
-        MoveSorter ms(this, color);
+        MoveSorter ms(this, color, false);
         while (ms.has_more_moves()) {
             move_t move = ms.next_move();
             unsigned char mdestfile, mdestrank, msourcefile, msourcerank;
@@ -280,8 +280,8 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
             unsigned char mdestfile, mdestrank, msourcefile, msourcerank;
             get_source(move, msourcerank, msourcefile);
             get_dest(move, mdestrank, mdestfile);
-            unsigned int msourcepiece = this->get_piece(msourcerank, msourcefile) & PIECE_MASK;
-            unsigned int mpromote = get_promotion(move);
+            // unsigned int msourcepiece = this->get_piece(msourcerank, msourcefile) & PIECE_MASK;
+            // unsigned int mpromote = get_promotion(move);
             print_move(move, std::cout);
             std::cout << std::endl;
         }

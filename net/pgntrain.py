@@ -79,6 +79,10 @@ class NNUEModel:
         self.EMPTY = np.zeros(self.INPUT_LENGTH, dtype=np.ubyte)
         self.centipawn_output = centipawn_output
         self.wdl_output = wdl_output
+        self.TrainLib.create_training_iterator.restype = ctypes.c_void_p
+        self.TrainLib.create_training_iterator.argtypes = (ctypes.c_char_p, ctypes.c_int)
+        self.TrainLib.read_position.argtypes = (ctypes.c_void_p, ctypes.POINTER(TrainingPosition))
+        self.TrainLib.delete_training_iterator.argtypes = (ctypes.c_void_p, )
 
     def _num_king_buckets(self):
         return 35
@@ -113,7 +117,21 @@ class NNUEModel:
             return w_king_idx, w_full, white_castling, mirror_square(b_king_idx), b_full_mirror, black_castling
         else:
             return mirror_square(b_king_idx), b_full_mirror, black_castling, w_king_idx, w_full, white_castling
+    
+    def inference_iterator(self, positions):
+        board_step_size = 64 * len(self.white_piece_list)
 
+        for fen in positions:
+            w_king_idx, w_full, w_castle, b_king_idx, b_full, b_castle = self.read_fen(fen)
+            input_bits = []
+            myboard = self.EMPTY.copy()
+            theirboard = self.EMPTY.copy()
+            for king_idx, present_board, castle_rights, container in ((w_king_idx, w_full, w_castle, myboard), (b_king_idx, b_full, b_castle, theirboard)):
+                king_idx, present_board = self._king_idx_map(present_board, castle_rights, king_idx)
+                container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.concatenate(present_board).copy()
+
+            yield np.array([myboard]), np.array([theirboard])
+    
     def centipawn_result_iterator(self, positions):
         board_step_size = 64 * len(self.white_piece_list)
 
@@ -153,13 +171,9 @@ class NNUEModel:
         elif self.centipawn_output:
             yield xfeat, (np.array(cp_evals).astype(np.int16),)
 
-    def fast_result_iterator(self, pgn_filename, batch_size, freq=10, seed=0):
+    def fast_result_iterator(self, pgn_filename, batch_size, freq=7, seed=0):
         board_step_size = 64 * len(self.white_piece_list)
         tp = TrainingPosition()
-        self.TrainLib.create_training_iterator.restype = ctypes.c_void_p
-        self.TrainLib.create_training_iterator.argtypes = (ctypes.c_char_p, ctypes.c_int)
-        self.TrainLib.read_position.argtypes = (ctypes.c_void_p, ctypes.POINTER(TrainingPosition))
-        self.TrainLib.delete_training_iterator.argtypes = (ctypes.c_void_p, )
 
         while True:
             iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
@@ -190,13 +204,13 @@ class NNUEModel:
                     if len(myboards) >= batch_size:
                         for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
                             yield x
-                            poscount += 1
+                        poscount += len(myboards)
                         myboards = []
                         theirboards = []
                         cp_evals = []
             for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
                 yield x
-                poscount += 1
+            poscount += len(myboards)
             print(f"Read {poscount} positions from {pgn_filename}")
             self.TrainLib.delete_training_iterator(iter)
 
@@ -209,7 +223,7 @@ class NNUEModel:
     def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False):
         inputs = []
         hidden = []
-        l1hidden = layers.Dense(self.half_len_concat, activation=self.relu_fn)
+        l1hidden = layers.Dense(self.half_len_concat, name='hidden_0', activation=self.relu_fn)
         side_pts = layers.Dense(1, activation='relu', name='pts', kernel_initializer=pts_initializer(self))
         pts_layers = []
         for color in range(2):
@@ -220,13 +234,13 @@ class NNUEModel:
                 pts_layers.append(side_pts(x))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
-            x = layers.Dense(self.hidden_layers_width, activation=self.relu_fn)(x)
+            x = layers.Dense(self.hidden_layers_width, name=f'hidden_{i+1}', activation=self.relu_fn)(x)
         outputs = []
         metrics = []
         losses = []
         loss_weights = []
         if include_side_pts:
-            piece_delta = layers.Average()([pts_layers[0], pts_layers[1]])
+            piece_delta = layers.Subtract()([pts_layers[0], pts_layers[1]]) * 0.5
         if self.wdl_output:
             if include_side_pts:
                 x = layers.Add(name="pre_wdl")([piece_delta, x])

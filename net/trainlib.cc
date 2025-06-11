@@ -5,8 +5,7 @@
 #include "pgn.hh"
 #include <stdlib.h>
 #include <random>
-
-const int RANDOM = 0;
+#include <zstd.h>
 
 struct TrainingPosition {
     uint64_t piece_bitmasks[12];
@@ -17,30 +16,108 @@ struct TrainingPosition {
     float padding;
 };
 
+struct zstd_pgn_input : pgn_input_stream {
+    zstd_pgn_input(std::ifstream *input) : input(input) {
+        read_line_position = 0;
+        buffer_in_length = ZSTD_DStreamInSize();
+        buffer_in = (char*) malloc(buffer_in_length);
+        zstd_input.src = buffer_in;
+        buffer_out_length = ZSTD_DStreamOutSize();
+        buffer_out = (char*) malloc(buffer_out_length);
+        zstd_output.dst = buffer_out;
+        dctx = ZSTD_createDCtx();
+    }
+    ~zstd_pgn_input() {
+        ZSTD_freeDCtx(dctx);
+        free(buffer_in);
+        free(buffer_out);
+    }
+    bool is_readable() const {
+        return input->good() && !input->eof();
+    }
+    virtual void read_line(std::string &line) {
+        while (is_readable()) {
+            // If we have something waiting in the buffer, use that
+            // zstd_output: anything between [read_line_position, zstd_output.pos) is consumable
+            if (read_line_position < zstd_output.pos) {
+                char *next_newline = (char*)memchr((char*)zstd_output.dst + read_line_position, '\n', zstd_output.pos - read_line_position);
+                if (next_newline != NULL) {
+                    line.append((char*)zstd_output.dst + read_line_position, (next_newline - (char*)zstd_output.dst) - read_line_position);
+                    read_line_position = (next_newline - (char*)zstd_output.dst) + 1;
+                    break;
+                } else {
+                    line.append((char*)zstd_output.dst + read_line_position, zstd_output.pos - read_line_position);
+                    read_line_position = zstd_output.pos;
+                    // still no newline, just consume the buffer so we can continue
+                }
+            }
+            // if there's data in the input buffer waiting to be compressed, do that now
+            else if (zstd_input.pos < zstd_input.size) {
+                zstd_output.size = buffer_out_length;
+                zstd_output.pos = 0;
+                size_t ret = ZSTD_decompressStream(dctx, &zstd_output, &zstd_input);
+                if (ret < 0) {
+                    std::cerr << ZSTD_getErrorName(ret) << std::endl;
+                    abort();
+                }
+                read_line_position = 0;
+            }
+
+            // read more data into the input buffer
+            else {
+                input->read(buffer_in, buffer_in_length);
+                zstd_input.pos = 0;
+                zstd_input.size = input->gcount();
+            }
+        }
+    }
+
+    std::ifstream *input;
+    ZSTD_inBuffer zstd_input;
+    ZSTD_outBuffer zstd_output;
+
+    char * buffer_in;
+    size_t buffer_in_length;
+    char * buffer_out;
+    size_t buffer_out_length;
+    ZSTD_DCtx* dctx;
+
+    int read_line_position;
+};
+
 
 struct TrainingIterator {
 public:
     TrainingIterator(const char *filename, int move_freq)
-        : input_stream(filename), ply(0), next_ply(0), distrib(1, move_freq), gen(rd())
+        : fs(filename), ply(0), next_ply(0), distrib(1, move_freq), gen(rd())
     {
-        if (input_stream.fail()) {
-            std::cerr << "Couldn't open " << filename <<  std::endl;
-            abort();
-        }
+        open_stream(filename);
     }
     TrainingIterator(const char *filename, int move_freq, unsigned int seed)
-        : input_stream(filename), ply(0), next_ply(0), distrib(1, move_freq), gen(seed)
+        : fs(filename), ply(0), next_ply(0), distrib(1, move_freq), gen(seed)
     {
-        if (input_stream.fail()) {
-            std::cerr << "Couldn't open " << filename <<  std::endl;
-            abort();
-        }
+        open_stream(filename);
+    }
+    ~TrainingIterator() {
+        delete input_stream;
     }
     bool read_position(TrainingPosition *tp);
 private:
     bool process_game(TrainingPosition *tp);
+    void open_stream(const std::string &filename) {
+        if (fs.fail()) {
+            std::cerr << "Couldn't open " << filename <<  std::endl;
+            abort();
+        }
+        if (filename.find(".zst") != std::string::npos) {
+            input_stream = new zstd_pgn_input(&fs);
+        } else {
+            input_stream = new pgn_istream(fs);
+        }
+    }
 
-    std::ifstream input_stream;
+    std::ifstream fs;
+    pgn_input_stream *input_stream;
     std::map<std::string, std::string> game_metadata;
     std::vector<std::pair<move_annot, move_annot> > movelist;
 
@@ -89,10 +166,11 @@ bool TrainingIterator::read_position(TrainingPosition *tp)
         game_metadata.clear();
         movelist.clear();
 
-        if (input_stream.eof()) {
+        if (!input_stream->is_readable()) {
             return false;
         }
-        read_pgn(input_stream, game_metadata, movelist);
+        read_pgn(input_stream, game_metadata, movelist, false);
+//        std::cout << "Read " << game_metadata["Site"] << std::endl;
         ply = 0;
         b.set_starting_position();
     }
@@ -164,9 +242,27 @@ bool TrainingIterator::process_game(TrainingPosition *tp)
     return false;
 }
 
-int main()
+int main(int argc, char **argv)
 {
     TrainingPosition tp;
     std::cout << sizeof(tp) << std::endl;
+    if (argc > 1) {
+        int count = 0;
+        int maxcount = 1000;
+        if (argc > 2) {
+            maxcount = std::atoi(argv[2]);
+        }
+        TrainingIterator *ti = create_training_iterator(argv[1], 5, 0);
+        TrainingPosition tp;
+        bool has_more = true;
+        while (has_more) {
+            has_more = read_position(ti, &tp);
+            count += 1;
+            if (count > maxcount) {
+                break;
+            }
+        }
+        printf("Read %d positions\n", count);
+    }
     return 0;
 }
