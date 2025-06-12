@@ -4,7 +4,7 @@
 const int UNITY = 64;
 const int MODEL_DENSE_LAYERS = 2; // excluding cp output layer
 const int MODEL_HIDDEN_LAYER_WIDTH = 32;
-const int MODEL_FIRST_LAYER_WIDTH = 32;
+const int MODEL_FIRST_LAYER_WIDTH = 512;
 #define HALFKASINGLE
 
 #ifdef HALFKP
@@ -55,7 +55,7 @@ struct WeightsFlip : public mmatrix<m, n, atype> {
 };
 
 template <int m, int n, typename atype>
-struct MatrixTranspose : public mmatrix<n, m, atype> {
+struct MatrixTranspose : public mmatrix<m, n, atype> {
     MatrixTranspose(const atype matrix[n][m]) {
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {

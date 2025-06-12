@@ -8,7 +8,6 @@
 #include <string.h>
 
 
-
 static int mirror_square(int sq) {
     return (sq % 8) + 8 * (7 - (sq / 8));
 }
@@ -173,7 +172,7 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 
 int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16_t> &input_layer, int psqt, Color side_to_play) const
 {
-    mvector<MODEL_FIRST_LAYER_WIDTH, int16_t> dense_layer;
+    mvector<MODEL_FIRST_LAYER_WIDTH, int8_t> dense_layer;
     mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> dense_n_layer;
     mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> scratch_layer;
     mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> *last_layer;
@@ -182,7 +181,7 @@ int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16
     std::cout << "concat layer" << std::endl;
     dump_matrix(input_layer);
 #endif
-    input_layer.clamp(dense_layer, static_cast<int16_t>(0), static_cast<int16_t>(UNITY));
+    input_layer.clamp(dense_layer, 0, UNITY);
 
     // std::cout << "relu concat layer" << std::endl;
     // dump_matrix(dense_layer);
@@ -208,23 +207,25 @@ int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16
         dump_matrix(model_dense_weights_promoted.data[i]);
         */
         last_layer->matrix_multiply_add_div_relu(model_dense_weights_promoted.data[i], model_dense_bias_promoted.data[i+1], *next_layer, UNITY, 0, UNITY);
-        std::cout << "last layer" << std::endl;
-        dump_matrix(*next_layer);
+        // std::cout << "last layer" << std::endl;
+        // dump_matrix(*next_layer);
         std::swap(next_layer, last_layer);
     }
     // std::cout << "SCORE: " << last_layer->dot_product(model_cp_weights_promoted) << " + " << model->model_cp_bias <<  " PTS: " << psqt << std::endl;
-    float score = (last_layer->dot_product(model_cp_weights_promoted) / UNITY + model->model_cp_bias + psqt / 2) * 100.0 / UNITY;
+    float score = last_layer->dot_product(model_cp_weights_promoted) / UNITY + model->model_cp_bias;
+
+    // nnue calculated with respect to side-to-play but engine wants respect to white
+    if (side_to_play == Black) {
+        score = -score;
+    }
+    // meanwhile psqt is calculated with respect to white
+    score = (score + psqt / 2) * 100.0 / UNITY;
 
     // don't output scores that are more extreme than forced mate
     if (score > VERY_GOOD) {
         score = VERY_GOOD;
     } else if (score < VERY_BAD) {
         score = -VERY_BAD;
-    }
-
-    // nnue calculated with respect to side-to-play but engine wants respect to white
-    if (side_to_play == Black) {
-        score = -score;
     }
 
     return score;

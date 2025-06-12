@@ -42,7 +42,7 @@ struct mvector {
     alignas(32) ntype mdata[n];
 
     template <typename outtype>
-    void clamp(mvector<n, outtype> &out, outtype min, outtype max) const {
+    void clamp(mvector<n, outtype> &out, ntype min, ntype max) const {
         for (int i = 0; i < n ; i++) {
             out.mdata[i] = std::clamp(mdata[i], min, max);
         }

@@ -1,7 +1,7 @@
 CXX = g++
 INCLUDES = -Inet -I.  -I/opt/homebrew/include
-CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES)
-ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc nnueeval.cc nnue-2-layer-16.cc
+CXXFLAGS = -Wall -O3 -g -std=c++20 $(INCLUDES)
+ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc nnueeval.cc nnue-2-layer-256.cc
 ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o)
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 LDFLAGS =
@@ -21,12 +21,12 @@ moves: moves.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 
 neteval: neteval.o $(ENGINE_OBJS)
-	$(CXX) $^ -o $@
+	$(CXX) $(LDFLAGS) $^ -o $@
 
 magicsquares: magicsquares.o bitboard.o
 	$(CXX) $^ -o $@
 
-start: start.o libengine.a
+start: start.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@ $(LDFLAGS)
 
 test: testexe puzzle
@@ -43,7 +43,7 @@ puzzle: puzzle.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 
 clean:
-	rm -f *.o $(ENGINE_OBJS) chess
+	rm -f *.o *.a $(ENGINE_OBJS) chess
 
 Makefile.deps: Makefile $(ENGINE_SRCS) $(OTHER_SRCS)
 	$(CXX) -MM $(ENGINE_SRCS) $(INCLUDES) $(OTHER_SRCS) > $@
