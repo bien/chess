@@ -4,7 +4,7 @@
 const int UNITY = 64;
 const int MODEL_DENSE_LAYERS = 2; // excluding cp output layer
 const int MODEL_HIDDEN_LAYER_WIDTH = 32;
-const int MODEL_FIRST_LAYER_WIDTH = 512;
+const int MODEL_FIRST_LAYER_WIDTH = 128;
 #define HALFKASINGLE
 
 #ifdef HALFKP
@@ -20,10 +20,10 @@ struct nnue_model {
     const int8_t model_input_bias[MODEL_FIRST_LAYER_WIDTH/2];
     const int16_t model_psqt[INPUT_WIDTH];
     const int16_t model_psqt_bias;
-    const int8_t model_input_weights[INPUT_WIDTH][MODEL_FIRST_LAYER_WIDTH/2];
+    const int16_t model_input_weights[INPUT_WIDTH][MODEL_FIRST_LAYER_WIDTH/2];
 
 
-    const int16_t model_dense_bias[MODEL_DENSE_LAYERS][MODEL_HIDDEN_LAYER_WIDTH];
+    const int8_t model_dense_bias[MODEL_DENSE_LAYERS][MODEL_HIDDEN_LAYER_WIDTH];
     const int8_t model_dense_1_weights[MODEL_FIRST_LAYER_WIDTH][MODEL_HIDDEN_LAYER_WIDTH];
     // NB: omits first layer!
     const int8_t model_dense_weights[MODEL_DENSE_LAYERS-1][MODEL_HIDDEN_LAYER_WIDTH][MODEL_HIDDEN_LAYER_WIDTH];
@@ -100,7 +100,7 @@ private:
     int psqt_cached;
     nnue_model *model;
 
-    const bias_promotion<MODEL_DENSE_LAYERS, MODEL_HIDDEN_LAYER_WIDTH, int16_t> model_dense_bias_promoted;
+    const bias_promotion<MODEL_DENSE_LAYERS, MODEL_HIDDEN_LAYER_WIDTH, int8_t> model_dense_bias_promoted;
     const weight_promotion<MODEL_DENSE_LAYERS-1, MODEL_HIDDEN_LAYER_WIDTH, MODEL_HIDDEN_LAYER_WIDTH, int8_t> model_dense_weights_promoted;
     const mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> model_cp_weights_promoted;
 

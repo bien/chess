@@ -2,7 +2,7 @@ CXX=g++
 CC=gcc
 CFLAGS = -Wall -g -march=native -I.. -fPIC -I/opt/homebrew/include -O3
 CXXFLAGS = $(CFLAGS) -std=c++20 -DDEBUG
-SRCS = test.cc nnue.cc
+SRCS = trainlib.cc
 OBJS = ../bitboard.o ../fenboard.o ../evaluate.o ../pgn.o ../search.o  ../move.o
 LDFLAGS = -L/opt/homebrew/lib -lzstd
 

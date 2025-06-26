@@ -9,8 +9,7 @@ import keras.utils
 import tensorflow as tf
 from keras import layers
 import random
-import cProfile, pstats, io
-from pstats import SortKey
+import cProfile
 import os.path
 from keras.constraints import MinMaxNorm
 
@@ -172,47 +171,54 @@ class NNUEModel:
         elif self.centipawn_output:
             yield xfeat, (np.array(cp_evals).astype(np.int16),)
 
-    def fast_result_iterator(self, pgn_filename, batch_size, freq=7, seed=0):
+    def fast_result_iterator(self, pgn_filenames, batch_size, freq=7, seed=0):
         board_step_size = 64 * len(self.white_piece_list)
         tp = TrainingPosition()
 
-        iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
-        has_more = 1
-        cp_evals = []
-        myboards = []
-        theirboards = []
-        poscount = 0
-        while has_more:
-            has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
-            if has_more:
-                feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
-                myboard = self.EMPTY.copy()
-                theirboard = self.EMPTY.copy()
+        if not isinstance(pgn_filenames, list):
+            pgn_filenames = [pgn_filenames]
 
-                for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
-                    king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
-                    if len(self.white_piece_list) == 12:
-                        container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
-                    elif len(self.white_piece_list) == 10:
-                        container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
-                    else:
-                        raise Exception("Unsupported")
-                myboards.append(myboard)
-                theirboards.append(theirboard)
-                cp_evals.append(tp.cp_eval)
 
-                if len(myboards) >= batch_size:
-                    for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
-                        yield x
-                    poscount += len(myboards)
-                    myboards = []
-                    theirboards = []
-                    cp_evals = []
-        for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
-            yield x
-        poscount += len(myboards)
-        print(f"Read {poscount} positions from {pgn_filename}")
-        self.TrainLib.delete_training_iterator(iter)
+        for pgn_filename in pgn_filenames:
+            if not os.path.exists(pgn_filename):
+                raise OSError(f"Can't open {pgn_filename}")
+            iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
+            has_more = 1
+            cp_evals = []
+            myboards = []
+            theirboards = []
+            poscount = 0
+            while has_more:
+                has_more = self.TrainLib.read_position(iter, ctypes.byref(tp))
+                if has_more:
+                    feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
+                    myboard = self.EMPTY.copy()
+                    theirboard = self.EMPTY.copy()
+
+                    for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
+                        king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
+                        if len(self.white_piece_list) == 12:
+                            container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
+                        elif len(self.white_piece_list) == 10:
+                            container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in itertools.chain(range(5*8), range(6*8, 11*8))], dtype=np.ubyte))
+                        else:
+                            raise Exception("Unsupported")
+                    myboards.append(myboard)
+                    theirboards.append(theirboard)
+                    cp_evals.append(tp.cp_eval)
+
+                    if len(myboards) >= batch_size:
+                        for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
+                            yield x
+                        poscount += len(myboards)
+                        myboards = []
+                        theirboards = []
+                        cp_evals = []
+            for x in self.to_instance_batch_format(myboards, theirboards, cp_evals):
+                yield x
+            poscount += len(myboards)
+            print(f"Read {poscount} positions from {pgn_filename}")
+            self.TrainLib.delete_training_iterator(iter)
 
     PIECE_MAPPING = dict(Q=9, R=5, B=3, N=3, P=1, q=-9, r=-5, b=-3, n=-3, p=-1)
     def initialize_pts(self):
@@ -234,11 +240,7 @@ class NNUEModel:
                 pts_layers.append(side_pts(x))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
-<<<<<<< HEAD
             x = layers.Dense(self.hidden_layers_width, name=f'hidden_{i+1}', activation=self.relu_fn, kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(x)
-=======
-            x = layers.Dense(self.hidden_layers_width, activation=self.relu_fn, name=f'hidden_{i}')(x)
->>>>>>> de90371... training improvements
         outputs = []
         metrics = []
         losses = []
@@ -283,7 +285,7 @@ class NNUEModel:
                 tf.TensorSpec(shape=(None, self.INPUT_LENGTH), dtype=tf.uint8, name='side_1')),
                 tuple(output_sig))
         tf_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(train_pgn, batch_size=batch_size),
-            output_signature=sign)
+             output_signature=sign)
         validation_data_generator = tf.data.Dataset.from_generator(lambda: self.fast_result_iterator(valid_pgn, batch_size=batch_size),
             output_signature=sign)
         if profile:
@@ -338,8 +340,9 @@ def main(pgnfile, validation_pgn):
     model = n.train(pgnfile, validation_pgn, profile=False, epochs=10, batch_size=256)
     return model
 
+
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
-    # n = BasicNNUE(centipawn_output=False)
-    # for i in n.fast_result_iterator(sys.argv[1]):
-    #     print(i)
+    # main(sys.argv[1], sys.argv[2])
+    n = BasicNNUE()
+    for i in n.fast_result_iterator(sys.argv[1], batch_size=1024):
+        pass

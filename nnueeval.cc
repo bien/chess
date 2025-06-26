@@ -152,13 +152,15 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
         int dense_index = get_dense_index(king_square, piece_type, piece_pos, piece_color, king_color);
 
         if (remove) {
-            for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
-                layer.mdata[k + half_adj] -= model->model_input_weights[dense_index][k];
-            }
+            layer.sub_vector(half_adj, model->model_input_weights[dense_index], MODEL_FIRST_LAYER_WIDTH/2);
+            // for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
+            //     layer.mdata[k + half_adj] -= model->model_input_weights[dense_index][k];
+            // }
         } else {
-            for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
-                layer.mdata[k + half_adj] += model->model_input_weights[dense_index][k];
-            }
+            layer.add_vector(half_adj, model->model_input_weights[dense_index], MODEL_FIRST_LAYER_WIDTH/2);
+            // for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
+            //     layer.mdata[k + half_adj] += model->model_input_weights[dense_index][k];
+            // }
         }
         if (remove ^ (king_color == Black)) {
             psqt -= model->model_psqt[dense_index];
@@ -173,15 +175,15 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16_t> &input_layer, int psqt, Color side_to_play) const
 {
     mvector<MODEL_FIRST_LAYER_WIDTH, int8_t> dense_layer;
-    mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> dense_n_layer;
-    mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> scratch_layer;
-    mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> *last_layer;
-    mvector<MODEL_HIDDEN_LAYER_WIDTH, uint8_t> *next_layer;
+    mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> dense_n_layer;
+    mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> scratch_layer;
+    mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> *last_layer;
+    mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> *next_layer;
 #ifdef DEBUG
     std::cout << "concat layer" << std::endl;
     dump_matrix(input_layer);
 #endif
-    input_layer.clamp(dense_layer, 0, UNITY);
+    dense_layer.copy_from(input_layer, 0, UNITY);
 
     // std::cout << "relu concat layer" << std::endl;
     // dump_matrix(dense_layer);

@@ -1,7 +1,7 @@
 CXX = g++
-INCLUDES = -Inet -I.
+INCLUDES = -Inet -I. -I/usr/local/include
 CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES) -O3
-ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc nnueeval.cc nnue-2-layer-256.cc
+ENGINE_SRCS = bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc nnueeval.cc nnue-2-layer-64.cc
 ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o)
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 LDFLAGS =
@@ -31,7 +31,6 @@ start: start.o $(ENGINE_OBJS)
 
 test: testexe puzzle
 	./testexe games/Fischer.pgn
-	./puzzle "polgar - fixed.pgn"
 	./puzzle lichess_db_puzzle.csv.head
 
 playover: $(ENGINE_OBJS) playover.o
