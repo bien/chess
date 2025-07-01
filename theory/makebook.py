@@ -71,7 +71,7 @@ def _tree_search_node(fenpos, mydb, genpopdb, white_to_move:bool, as_white=True,
             raw_score = (w - b) / num_games
             mcts_bound_term = math.sqrt(math.log(node.white_wins + node.draws + node.black_wins) / num_games)
             choices.append((move, dest, raw_score, mcts_bound_term, num_games))
-            if verbose > 0:
+            if verbose_depth > 0:
                 print(" " * (10 - depth), move, f"{w}-{d}-{b}", mcts_bound_term)
 
         if as_white:
@@ -105,7 +105,7 @@ def _tree_search_node(fenpos, mydb, genpopdb, white_to_move:bool, as_white=True,
             black += b
             if (w+d+b) > mode_move[0]:
                 mode_move = (w + d + b, move)
-            if verbose > 0:
+            if verbose_depth > 0:
                 print(" " * (10 - depth), move, f"{w}-{d}-{b}")
         return white, draw, black, mode_move[1]
 
