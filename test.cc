@@ -322,6 +322,9 @@ void test_legal_moves(std::string fischer_pgn_file)
     assert_moves("7K/8/8/8/8/5B1R/6p1/7k b - - 0 1", { "Kg1" });
     assert_moves("8/8/8/6R1/8/4K2Q/6p1/6k1 b - - 0 1", { "Kf1" });
 
+    // don't castle through a knight
+    assert_moves("rn2kbnr/5ppp/8/3p4/p1pP4/P1P5/P5q1/RN2K3 w Qkq - 3 8", { "Kd1", "Nb1d2" });
+
     // pinned pawn
     assert_moves("r4k2/8/5b2/8/1p6/1pP5/P7/K7 w - - 0 2", { "Kb1", "Kb2", "a3", "a4" });
 

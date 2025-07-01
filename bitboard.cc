@@ -1096,7 +1096,7 @@ void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIt
             // castle king-side
             uint64_t required_empty_ks = 0x60;
             uint64_t required_rook_ks = 0x80;
-            uint64_t required_empty_qs = 0x0c;
+            uint64_t required_empty_qs = 0x0e;
             uint64_t required_rook_qs = 0x01;
             uint64_t my_rooks = get_bitmask(color, bb_rook);
 
