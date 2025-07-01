@@ -7,11 +7,6 @@
 #include <iostream>
 #include <math.h>
 #include <algorithm>
-#ifdef __SSSE3__
-#include <x86intrin.h>
-#endif
-
-#define GLMM
 
 #define MAX_RELU 64
 
