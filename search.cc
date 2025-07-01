@@ -268,7 +268,7 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             move_t move = move_iter->next_move();
             bool cutoff;
 
-            quiescent = get_captured_piece(move, color) == EMPTY;
+            quiescent = get_captured_piece(move, color) == EMPTY && (move & GIVES_CHECK);
             if (quiescent && first_quiescent == -1) {
                 first_quiescent = move_iter->index;
             }

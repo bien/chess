@@ -139,6 +139,17 @@ struct mvector<n, int8_t> : mvector_base<n, int8_t, mvector<n, int8_t> > {
         return result;
     }
 
+
+    void add_vector(int myoffset, const int8_t *addend, int len) {
+        int i = 0;
+        for (; i < len; i += 16) {
+            vst1q_s8(&this->mdata[i + myoffset], vaddq_s8(vld1q_s8(&this->mdata[i + myoffset]), vld1q_s8(&addend[i])));
+        }
+        for (; i < len; i++) {
+            this->mdata[i + myoffset] += addend[i];
+        }
+    }
+
     void copy_from(const mvector<n, short> &in, short min, short max) {
         int i = 0;
         int16x8_t zero = vdupq_n_s16(min);

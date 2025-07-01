@@ -153,14 +153,8 @@ void NNUEEvaluation::add_remove_piece(const Fenboard &b, int colored_piece_type,
 
         if (remove) {
             layer.sub_vector(half_adj, model->model_input_weights[dense_index], MODEL_FIRST_LAYER_WIDTH/2);
-            // for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
-            //     layer.mdata[k + half_adj] -= model->model_input_weights[dense_index][k];
-            // }
         } else {
             layer.add_vector(half_adj, model->model_input_weights[dense_index], MODEL_FIRST_LAYER_WIDTH/2);
-            // for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
-            //     layer.mdata[k + half_adj] += model->model_input_weights[dense_index][k];
-            // }
         }
         if (remove ^ (king_color == Black)) {
             psqt -= model->model_psqt[dense_index];
@@ -179,10 +173,7 @@ int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16
     mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> scratch_layer;
     mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> *last_layer;
     mvector<MODEL_HIDDEN_LAYER_WIDTH, int8_t> *next_layer;
-#ifdef DEBUG
-    std::cout << "concat layer" << std::endl;
-    dump_matrix(input_layer);
-#endif
+
     dense_layer.copy_from(input_layer, 0, UNITY);
 
     // std::cout << "relu concat layer" << std::endl;
@@ -202,15 +193,7 @@ int NNUEEvaluation::calculate_score(const mvector<MODEL_FIRST_LAYER_WIDTH, int16
     next_layer = &scratch_layer;
 
     for (int i = 0; i < MODEL_DENSE_LAYERS - 1; i++) {
-        /*
-        std::cout << "bias" << std::endl;
-        dump_matrix(model_dense_bias_promoted.data[i+1]);
-        std::cout << "weights" << std::endl;
-        dump_matrix(model_dense_weights_promoted.data[i]);
-        */
         last_layer->matrix_multiply_add_div_relu(model_dense_weights_promoted.data[i], model_dense_bias_promoted.data[i+1], *next_layer, UNITY, 0, UNITY);
-        // std::cout << "last layer" << std::endl;
-        // dump_matrix(*next_layer);
         std::swap(next_layer, last_layer);
     }
     // std::cout << "SCORE: " << last_layer->dot_product(model_cp_weights_promoted) << " + " << model->model_cp_bias <<  " PTS: " << psqt << std::endl;
@@ -263,12 +246,9 @@ void NNUEEvaluation::recalculate_dense1_layer(const Fenboard &b, mvector<MODEL_F
                 while ((start = get_low_bit(b.piece_bitmasks[piece_color * (bb_king + 1) + piece_type], start + 1)) >= 0) {
 
                     int dense_index = get_dense_index(king_square, piece_type, start, piece_color, king_color);
-//                     std::cout << "place adj=" << half_adj << " piece=" << (int) piece_type << " color=" << piece_color << " kc=" << king_color << " at " << (int) start << " idx=" << dense_index << std::endl;
-//                     matrix<1, 512, int16_t, UNITY>::vector_add(&layer.data[0][half_adj], &dense_weights[dense_index][0], 256);
 
-                    for (int k = 0; k < MODEL_FIRST_LAYER_WIDTH/2; k++) {
-                        layer.mdata[k + half_adj] += model->model_input_weights[dense_index][k];
-                    }
+                    layer.add_vector(half_adj, model->model_input_weights[dense_index], MODEL_FIRST_LAYER_WIDTH/2);
+
                     if (king_color >= 1) {
                         psqt -= model->model_psqt[dense_index];
                     } else {

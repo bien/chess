@@ -41,7 +41,7 @@ int main(int argc, char **argv)
     Fenboard b;
     b.set_starting_position();
     UciSearchUpdate searchUpdate;
-    search_debug = 1;
+    search_debug = 0;
     std::string line;
     std::ofstream logging("server.log", std::ofstream::out | std::ofstream::ate);
     std::istream *input = &std::cin;
@@ -51,13 +51,13 @@ int main(int argc, char **argv)
 
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_transposition_table = true;
+    search.use_transposition_table = false;
     search.use_mtdf = true;
     search.use_quiescent_search = true;
     search.use_iterative_deepening = true;
     search.use_pruning = true;
     search.quiescent_depth = 4;
-    search.max_depth = 10;
+    search.max_depth = 12;
 
     while (true) {
         std::getline(*input, line);

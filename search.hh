@@ -13,7 +13,7 @@ const int SCORE_MAX = VERY_GOOD + 1000;
 const int SCORE_MIN = VERY_BAD - 1000;
 
 extern int search_debug;
-const int TranspositionTableSize = 1000001;
+const int TranspositionTableSize = 1000000001;
 
 class Evaluation {
 public:
