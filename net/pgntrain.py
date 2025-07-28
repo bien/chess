@@ -20,6 +20,10 @@ class TrainingPosition(ctypes.Structure):
         ('piece_bitmasks_mirrored', ctypes.c_uint8 * (12 * 8)),
         ('white_king_index', ctypes.c_int),
         ('black_king_index_mirrored', ctypes.c_int),
+        ('white_k_castle', ctypes.c_int8),
+        ('white_q_castle', ctypes.c_int8),
+        ('black_k_castle', ctypes.c_int8),
+        ('black_q_castle', ctypes.c_int8),
         ('cp_eval', ctypes.c_float),
         ('padding', ctypes.c_float),
     ]
@@ -55,12 +59,27 @@ def get_positions(pgnfile):
             game = game_next
 
 
+def copy_layer(model, layer_name, which='kernel'):
+    if model is None or layer_name not in model.layers:
+        print(f"Skip copy_layer for {layer_name}")
+        return None
+    layer = model.get_layer(layer_name)
+    if which == 'kernel':
+        result = layer.kernel
+    elif which == 'bias':
+        result = layer.bias
+    else:
+        raise Exception("Not supported")
+    def fixed_initializer(shape, dtype):
+        return result.astype(dtype)
+    return fixed_initializer
+
 def pts_initializer(nnue_model):
     content = nnue_model.initialize_pts()
     def fixed_initializer(shape, dtype):
         return content.astype(dtype)
+    return fixed_initializer
 
-kernel_initializer=lambda shape, dtype: self.initialize_pts(shape, dtype)
 class NNUEModel:
 
     TrainLib = ctypes.cdll.LoadLibrary('trainlib.dylib' if os.path.exists('trainlib.dylib') else './trainlib.so')
@@ -85,21 +104,24 @@ class NNUEModel:
         self.TrainLib.delete_training_iterator.argtypes = (ctypes.c_void_p, )
 
     def _num_king_buckets(self):
-        return 35
+        return 64
 
     def _piece_list(self):
         return 'PNBRQ'
 
     def _king_idx_map(self, present_board, castle_rights, king_idx):
-        if castle_rights:
-            king_idx = self.CASTLE_KING_IDX[castle_rights]
-        elif king_idx % 8 < 4:
-            king_idx = (king_idx // 8) * 4 + (king_idx % 8)
-        else:
-            # horizontal mirror to save effort
-            king_idx = (king_idx & 0x38) + (7 - (king_idx % 8))
-            present_board = mirror_horizontal(present_board)
         return king_idx, present_board
+
+    # def _king_idx_map(self, present_board, castle_rights, king_idx):
+    #     if castle_rights:
+    #         king_idx = self.CASTLE_KING_IDX[castle_rights]
+    #     elif king_idx % 8 < 4:
+    #         king_idx = (king_idx // 8) * 4 + (king_idx % 8)
+    #     else:
+    #         # horizontal mirror to save effort
+    #         king_idx = (king_idx & 0x38) + (7 - (king_idx % 8))
+    #         present_board = mirror_horizontal(present_board)
+    #     return king_idx, present_board
 
 
     def read_fen(self, fen):
@@ -171,6 +193,20 @@ class NNUEModel:
         elif self.centipawn_output:
             yield xfeat, (np.array(cp_evals).astype(np.int16),)
 
+    def get_castle_rights(self, tp, color_is_white):
+        result = ''
+        if color_is_white:
+            if tp.white_k_castle:
+                result += 'k'
+            if tp.white_q_castle:
+                result += 'q'
+        else:
+            if tp.black_k_castle:
+                result += 'k'
+            if tp.black_q_castle:
+                result += 'q'
+        return result
+
     def fast_result_iterator(self, pgn_filenames, batch_size, freq=7, seed=0):
         board_step_size = 64 * len(self.white_piece_list)
         tp = TrainingPosition()
@@ -180,8 +216,6 @@ class NNUEModel:
 
 
         for pgn_filename in pgn_filenames:
-            if not os.path.exists(pgn_filename):
-                raise OSError(f"Can't open {pgn_filename}")
             iter = self.TrainLib.create_training_iterator(pgn_filename.encode('utf-8'), freq, seed)
             has_more = 1
             cp_evals = []
@@ -194,9 +228,12 @@ class NNUEModel:
                     feat = np.unpackbits(np.array(tp.piece_bitmasks, dtype=np.ubyte))
                     myboard = self.EMPTY.copy()
                     theirboard = self.EMPTY.copy()
+                    white_castle_rights = self.get_castle_rights(tp, True)
+                    black_castle_rights = self.get_castle_rights(tp, False)
 
-                    for king_idx, present_board, container in ((tp.white_king_index, tp.piece_bitmasks, myboard), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard)):
-                        king_idx, present_board = self._king_idx_map(present_board, '', king_idx)
+                    for king_idx, present_board, container, castle_rights in ((tp.white_king_index, tp.piece_bitmasks, myboard, white_castle_rights), (tp.black_king_index_mirrored, tp.piece_bitmasks_mirrored, theirboard, black_castle_rights)):
+                        old_present_board = present_board
+                        king_idx, present_board = self._king_idx_map(present_board, castle_rights, king_idx)
                         if len(self.white_piece_list) == 12:
                             container[king_idx * board_step_size:(king_idx + 1) * board_step_size] = np.unpackbits(np.array([present_board[i] for i in range(12*8)], dtype=np.ubyte))
                         elif len(self.white_piece_list) == 10:
@@ -226,11 +263,11 @@ class NNUEModel:
         init = [np.array(self.PIECE_MAPPING.get(p, 0) * np.ones((64, ))) for p in self.white_piece_list]
         return np.tile(np.concatenate(init), self._num_king_buckets()).reshape(-1, 1)
 
-    def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False):
+    def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False, copy_model=None):
         inputs = []
         hidden = []
         l1hidden = layers.Dense(self.half_len_concat, name='hidden_0', activation=self.relu_fn)
-        side_pts = layers.Dense(1, activation='relu', name='pts', kernel_initializer=pts_initializer(self))
+        side_pts = layers.Dense(1, activation='relu', name='pts', bias_initializer='zero', kernel_initializer=pts_initializer(self))
         pts_layers = []
         for color in range(2):
             x = keras.Input(shape=(self.INPUT_LENGTH,), name='side_{}'.format(color))
@@ -240,7 +277,8 @@ class NNUEModel:
                 pts_layers.append(side_pts(x))
         x = layers.concatenate(hidden)
         for i in range(self.num_hidden_layers):
-            x = layers.Dense(self.hidden_layers_width, name=f'hidden_{i+1}', activation=self.relu_fn, kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(x)
+            layer_name = f'hidden_{i+1}'
+            x = layers.Dense(self.hidden_layers_width, name=layer_name, bias_initializer=copy_layer(copy_model, layer_name, 'bias'), kernel_initializer=copy_layer(copy_model, layer_name, 'kernel'), activation=self.relu_fn, kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(x)
         outputs = []
         metrics = []
         losses = []
@@ -272,8 +310,8 @@ class NNUEModel:
             metrics=metrics)
         return model
 
-    def train(self, train_pgn, valid_pgn, profile=False, batch_size=128, steps_per_epoch=256, include_side_pts=True, **fit_args):
-        model = self.make_nnue_model_mirror(include_centipawns=True, include_side_pts=include_side_pts)
+    def train(self, train_pgn, valid_pgn, profile=False, batch_size=128, steps_per_epoch=256, include_side_pts=True, copy_model=None, **fit_args):
+        model = self.make_nnue_model_mirror(include_centipawns=True, include_side_pts=include_side_pts, copy_model=copy_model)
         model.summary()
         output_sig = []
         if self.wdl_output:
@@ -321,11 +359,13 @@ class LimitedKP(NNUEModel):
         self.half_len_concat = half_len_concat
 
     def _num_king_buckets(self):
-        return 7
+        return 8
 
     KING_MAP_ROW1 = [0, 0, 0, 1, 2, 3, 4, 4]
 
     def _king_idx_map(self, present_board, castle_rights, king_idx):
+        if castle_rights:
+            new_idx = 7
         if king_idx < 8:
             new_idx = self.KING_MAP_ROW1[king_idx]
         elif king_idx < 16:
@@ -343,6 +383,6 @@ def main(pgnfile, validation_pgn):
 
 if __name__ == '__main__':
     # main(sys.argv[1], sys.argv[2])
-    n = BasicNNUE()
+    n = NNUEModel()
     for i in n.fast_result_iterator(sys.argv[1], batch_size=1024):
         pass

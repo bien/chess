@@ -12,6 +12,10 @@ struct TrainingPosition {
     uint64_t piece_bitmasks_mirrored[12];
     int white_king_index;
     int black_king_index_mirrored;
+    char white_k_castle;
+    char white_q_castle;
+    char black_k_castle;
+    char black_q_castle;
     float cp_eval;
     float padding;
 };
@@ -232,6 +236,10 @@ bool TrainingIterator::process_game(TrainingPosition *tp)
                 }
                 tp->white_king_index = get_low_bit(b.piece_bitmasks[bb_king], 0);
                 tp->black_king_index_mirrored = mirror_idx_vertical(get_low_bit(b.piece_bitmasks[bb_king + bb_king + 1], 0));
+                tp->white_k_castle = b.can_castle(White, true);
+                tp->white_q_castle = b.can_castle(White, false);
+                tp->black_k_castle = b.can_castle(Black, true);
+                tp->black_q_castle = b.can_castle(Black, false);
                 ply++;
                 return true;
             }
