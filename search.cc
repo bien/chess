@@ -40,7 +40,7 @@ move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchU
     int guess = eval->evaluate(b);
     int old_max_depth = max_depth;
     int depth = 2;
-    while (time(NULL) < deadline && depth < old_max_depth) {
+    do {
         max_depth = depth;
         int new_score = 0;
         int mtdf_deadline = deadline;
@@ -61,7 +61,7 @@ move_t Search::timed_iterative_deepening(Fenboard &b, Color color, const SearchU
             guess = score;
         }
         depth += 1;
-    }
+    } while (time(NULL) < deadline && depth < old_max_depth);
     max_depth = old_max_depth;
     return result;
 }
