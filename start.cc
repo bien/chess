@@ -19,13 +19,14 @@ int main(int argc, char **argv)
     Fenboard b;
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_mtdf = true;
-    search.use_quiescent_search = true;
+    search.use_mtdf = false;
+    search.use_pv = true;
+    search.use_quiescent_search = false;
     search.use_iterative_deepening = true;
     search.use_pruning = true;
     search.max_depth = depth;
     search.use_transposition_table = true;
-    search.quiescent_depth = 6;
+    search.quiescent_depth = 4;
     /*
     search.use_mtdf = false;
     search.use_quiescent_search = false;

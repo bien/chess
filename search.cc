@@ -70,6 +70,15 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 {
     nodecount = 0;
     move_t result;
+    if (use_pv) {
+        // std::deque<move_t> principal_line;
+        move_t best_move;
+        score = principal_variation(b, max_depth, SCORE_MIN, SCORE_MAX, best_move);
+        // if (b.get_side_to_play() == Black) {
+        //     score = -score;
+        // }
+        return best_move;
+    }
     if (use_mtdf && use_iterative_deepening && time_available > 0) {
         return timed_iterative_deepening(b, color, s);
     }
@@ -96,7 +105,7 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
-        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_iterative_deepening(true),
+        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
         use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
 
 {
@@ -104,6 +113,7 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     transposition_checks = 0;
     transposition_partial_hits = 0;
     transposition_full_hits = 0;
+    transposition_insufficient_depth = 0;
     transposition_table = new uint64_t[transposition_table_size];
     for (int i = 0; i < transposition_table_size; i++) {
         transposition_table[i] = 0;
@@ -121,6 +131,155 @@ void Search::reset()
         transposition_table[i] = 0;
     }
 }
+
+int Search::principal_variation(Fenboard &b, int depth, int alpha, int beta, move_t &best_move, move_t hint) {
+
+    nodecount++;
+    move_t tt_hint = 0;
+    int myscore = VERY_BAD;
+    int original_alpha = alpha;
+    int original_beta = beta;
+    int exact_value;
+
+    assert(alpha <= beta);
+
+
+    // check for endgames
+    int endgame_eval;
+    if (eval->endgame(b, endgame_eval)) {
+        if (b.get_side_to_play() == Black) {
+            return -endgame_eval;
+        } else {
+            return endgame_eval;
+        }
+    }
+
+    // check for repetition
+    if (b.times_seen() >= 3) {
+        return 0;
+    }
+
+
+    if (use_transposition_table) {
+        bool found = read_transposition(b.get_hash(), best_move, depth, alpha, beta, exact_value);
+        if (found && alpha >= beta) {
+            return exact_value;
+        } else if (found) {
+            hint = best_move;
+        }
+    }
+
+    if (depth == 0) {
+        myscore = eval->evaluate(b);
+        if (b.get_side_to_play() == Black) {
+            return -myscore;
+        } else {
+            return myscore;
+        }
+    }
+// https://www.chessprogramming.org/Principal_Variation_Search: PVS + Aspiration
+
+    MoveSorter *move_iter = get_move_sorter(depth);
+    move_iter->reset(&b, b.get_side_to_play(), max_depth - depth > 2, hint);
+
+    bool first = true;
+    best_move = 0;
+    int depth_so_far = max_depth - depth;
+
+    if (!move_iter->has_more_moves()) {
+        release_move_sorter(move_iter);
+        if (b.king_in_check(b.get_side_to_play())) {
+            // std::cout << board_to_fen(&b) << " " << b.get_side_to_play() << " checkmate " << (b.get_side_to_play() == White) * (VERY_BAD + depth) << std::endl;
+            return VERY_BAD + depth_so_far;
+        } else {
+            // std::cout << board_to_fen(&b) << " " << b.get_side_to_play() << " stalemate" << std::endl;
+            return 0;
+        }
+    }
+
+    move_t move = 0;
+    int bestscore = VERY_BAD;
+    move_t submove = 0;
+
+    while (move_iter->has_more_moves()) {
+        move = move_iter->next_move();
+        Color stp = b.get_side_to_play();
+        if (search_debug >= depth_so_far + 1) {
+            print_debug_move_header(stp, depth_so_far, move)
+                 << " principal (" << alpha << ", " << beta << ") " << std::endl;
+        }
+
+        b.apply_move(move);
+        if (first) {
+            first = false;
+            // fail soft with negamax
+            best_move = move;
+            bestscore = -principal_variation(b, depth - 1, -beta, -alpha, submove, tt_hint);
+            myscore = bestscore;
+            if (search_debug >= depth_so_far + 1) {
+                print_debug_move_header(stp, depth_so_far, move)
+                 << " principal (" << alpha << ", " << beta << ") " << myscore << " best " << bestscore;
+            }
+
+            if (bestscore > alpha) {
+                if (bestscore >= beta) {
+                    b.undo_move(move);
+                    if (search_debug >= depth_so_far + 1) {
+                        std::cout << "**" << std::endl;
+                    }
+                    break;
+                }
+                alpha = bestscore;
+            }
+            if (search_debug >= depth_so_far + 1) {
+                std::cout << std::endl;
+            }
+            b.undo_move(move);
+        } else {
+            myscore = -principal_variation(b, depth - 1, -alpha - 1, -alpha, submove, tt_hint);
+            int original_score = myscore;
+            if (myscore > alpha && myscore < beta) {
+                // research with window [alpha, beta]
+                myscore = -principal_variation(b, depth - 1, -beta, -alpha, submove, tt_hint);
+                if (myscore > alpha) {
+                    alpha = myscore;
+                }
+                if (search_debug >= depth_so_far + 1) {
+                    print_debug_move_header(stp, depth_so_far, move)
+                        << ": " << myscore << " (best " << bestscore << "; original " << original_score << ")";
+                }
+
+            }
+            else if (search_debug >= depth_so_far + 1) {
+                print_debug_move_header(stp, depth_so_far, move)
+                    << ": " << myscore << " cutoff from (" << alpha << ", " << beta << ") ";
+            }
+            b.undo_move(move);
+            if (myscore > bestscore) {
+                bestscore = myscore;
+                best_move = move;
+                if (search_debug >= depth_so_far + 1) {
+                    std::cout << " now " << bestscore << "*";
+                }
+                if (myscore >= beta) {
+                    if (search_debug >= depth_so_far + 1) {
+                        std::cout << "*" << std::endl;
+                    }
+                    break;
+                }
+            }
+            if (search_debug >= depth_so_far + 1) {
+                std::cout << std::endl;
+            }
+        }
+    }
+    release_move_sorter(move_iter);
+    if (use_transposition_table && bestscore >= original_alpha && bestscore <= original_beta) {
+        write_transposition(b.get_hash(), move, alpha, depth, original_alpha, original_beta);
+    }
+    return bestscore;
+}
+
 
 move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline, move_t move)
 {
@@ -196,44 +355,15 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
     // check transposition table
     if (use_transposition_table) {
-        transposition_checks += 1;
 
         move_t tt_move;
-        int16_t tt_value;
-        unsigned char tt_type, tt_depth;
+        int exact_value = 0;
 
-        if (fetch_tt_entry(b.get_hash(), tt_move, tt_value, tt_depth, tt_type)) {
-            if (tt_depth >= max_depth - depth) {
-                // found something at appropriate depth
-                int mate_depth_adjustment = 0;
-                if ((tt_depth > max_depth - depth) && (tt_value > 9900 || tt_value < -9900)) {
-                    // special adjustment for transposing into mate sequences -- need to change distance
-                    mate_depth_adjustment = (tt_depth - max_depth + depth);
-                }
-                if (tt_type == TT_EXACT) {
-                    transposition_full_hits++;
-                    beta = tt_value - mate_depth_adjustment;
-                    alpha = beta;
-                } else if (tt_type == TT_LOWER) {
-                    transposition_partial_hits++;
-                    if (tt_value <= 9900) {
-                        mate_depth_adjustment = 0;
-                    }
-                    alpha = std::max(alpha, tt_value - mate_depth_adjustment);
-                } else if (tt_type == TT_UPPER) {
-                    transposition_partial_hits++;
-                    if (tt_value >= -9900) {
-                        mate_depth_adjustment = 0;
-                    }
-                    beta = std::min(beta, tt_value + mate_depth_adjustment);
-                }
-                if (alpha >= beta) {
-                    return std::tuple<move_t, move_t, int>(tt_move, 0, tt_value > 0 ? tt_value - mate_depth_adjustment : tt_value + mate_depth_adjustment);
-                }
-            } else {
-                transposition_insufficient_depth++;
-            }
+        bool found = read_transposition(b.get_hash(), tt_move, max_depth - depth, alpha, beta, exact_value);
+        if (found && alpha >= beta) {
+            return std::tuple<move_t, move_t, int>(tt_move, 0, exact_value);
         }
+
     }
 
     if ((!use_quiescent_search && depth == max_depth) || (use_quiescent_search && depth == max_depth + quiescent_depth)) {
@@ -366,20 +496,71 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
 
     // write to transposition table
     if (use_transposition_table) {
-        unsigned char tt_type;
-        if (best_score <= original_alpha) {
-            tt_type = TT_UPPER;
-        } else if (best_score >= original_beta) {
-            tt_type = TT_LOWER;
-        } else {
-            tt_type = TT_EXACT;
-        }
-        insert_tt_entry(b.get_hash(), best_move, best_score, max_depth - depth, tt_type);
-
+       write_transposition(b.get_hash(), best_move, best_score, max_depth - depth, original_alpha, original_beta);
     }
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);
 }
 
+void Search::write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta)
+{
+    unsigned char tt_type;
+    if (best_score <= original_alpha) {
+        tt_type = TT_UPPER;
+    } else if (best_score >= original_beta) {
+        tt_type = TT_LOWER;
+    } else {
+        tt_type = TT_EXACT;
+    }
+    // std::cout << "write " << board_hash << " " << tt_type << " " << best_score << " " << depth << std::endl;
+    insert_tt_entry(board_hash, move, best_score, depth, tt_type);
+}
+
+bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth, int &alpha, int &beta, int &exact_value)
+{
+    transposition_checks += 1;
+
+    int16_t tt_value = 0;
+    unsigned char tt_type, tt_depth;
+
+    if (fetch_tt_entry(board_hash, tt_move, tt_value, tt_depth, tt_type)) {
+        // std::cout << "found " << board_hash << " " << tt_type << " " << tt_value << " " tt_depth << std::endl;
+        if (tt_depth >= depth) {
+            // found something at appropriate depth
+            int mate_depth_adjustment = 0;
+            if ((tt_depth > depth) && (tt_value > 9900 || tt_value < -9900)) {
+                // special adjustment for transposing into mate sequences -- need to change distance
+                mate_depth_adjustment = (tt_depth - depth);
+            }
+            if (tt_type == TT_EXACT) {
+                transposition_full_hits++;
+                beta = tt_value - mate_depth_adjustment;
+                alpha = beta;
+            } else if (tt_type == TT_LOWER) {
+                transposition_partial_hits++;
+                if (tt_value <= 9900) {
+                    mate_depth_adjustment = 0;
+                }
+                alpha = std::max(alpha, tt_value - mate_depth_adjustment);
+            } else if (tt_type == TT_UPPER) {
+                transposition_partial_hits++;
+                if (tt_value >= -9900) {
+                    mate_depth_adjustment = 0;
+                }
+                beta = std::min(beta, tt_value + mate_depth_adjustment);
+            }
+            if (alpha >= beta) {
+                exact_value = tt_value > 0 ? tt_value - mate_depth_adjustment : tt_value + mate_depth_adjustment;
+            } else {
+                exact_value = tt_value;
+            }
+            return true;
+        } else {
+            transposition_insufficient_depth++;
+        }
+    }
+    return false;
+
+}
 const int piece_points[] = { 0, 1, 3, 3, 5, 9, 10000 };
 
 const int centralization[64] = {

@@ -1,6 +1,7 @@
 #ifndef SEARCH_HH_
 #define SEARCH_HH_
 
+#include <iostream>
 #include <cstring>
 #include "fenboard.hh"
 #include <tuple>
@@ -22,6 +23,12 @@ public:
     virtual bool endgame(const Fenboard &b, int &eval) const = 0;
     virtual ~Evaluation() {}
 };
+
+typedef struct LINE {
+    int cmove;              // Number of moves in the line.
+    move_t argmove[64];  // The line.
+}   LINE;
+
 
 
 const int TT_EXACT = 3;
@@ -62,6 +69,7 @@ struct Search {
     Search(Evaluation *eval, int transposition_table_size=1000 * 500 + 1);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, Color color, const SearchUpdate &s = NullSearchUpdate);
+    int principal_variation(Fenboard &b, int depth, int alpha, int beta, move_t &best_move, move_t hint=0);
 
     void reset();
 
@@ -75,6 +83,7 @@ struct Search {
     Evaluation *eval;
     int min_score_prune_sorting;
     bool use_mtdf;
+    bool use_pv;
     bool use_iterative_deepening;
     bool use_quiescent_search;
     int quiescent_depth;
@@ -94,6 +103,9 @@ private:
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
     move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
+
+    void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);
+    bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 
     bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) {
         uint64_t storage = transposition_table[hash % transposition_table_size];
@@ -126,6 +138,17 @@ private:
     void release_move_sorter(MoveSorter *ms) {
         move_sorter_pool.push_back(ms);
     }
+    std::ostream &print_debug_move_header(Color side_to_play, int depth_so_far, move_t move) const {
+        for (int i = 0; i < depth_so_far * 2; i++) {
+            std::cout << " ";
+        }
+        std::cout << ((depth_so_far+1) / 2 + 1) << ".";
+        if (side_to_play == Black) {
+            std::cout << "..";
+        }
+        return print_move_uci(move, std::cout);
+
+    };
 };
 
 #endif

@@ -54,7 +54,7 @@ struct Results {
     {}
 };
 
-void read_csv_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, Results &r)
+void read_csv_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, int depth, Results &r)
 {
     //lichess puzzles format
     //header: PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
@@ -96,7 +96,7 @@ void read_csv_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, Resul
         b.set_fen(parts[1]);
         b.apply_move(b.read_move(zero_move, b.get_side_to_play()));
         clock_t starttime = clock();
-        bool result = expect_move(search, b, 8, first_move_choices, puzzle_nodecount);
+        bool result = expect_move(search, b, depth, first_move_choices, puzzle_nodecount);
         r.elapsed += (clock() - starttime) *1.0 / CLOCKS_PER_SEC;
         r.attempts++;
         r.nodes += puzzle_nodecount;
@@ -178,9 +178,10 @@ int main(int argc, char **argv)
 
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_mtdf = true;
+    search.use_pv = true;
+    search.use_mtdf = false;
     search.use_quiescent_search = false;
-    // search.quiescent_depth = 2;
+    search.quiescent_depth = 4;
     search.use_pruning = true;
     search.use_transposition_table = true;
 
@@ -189,7 +190,7 @@ int main(int argc, char **argv)
     if (std::string(argv[1]).find(".pgn") != std::string::npos) {
         read_pgn_puzzles(b, search, puzzles, r);
     } else {
-        read_csv_puzzles(b, search, puzzles, r);
+        read_csv_puzzles(b, search, puzzles, 8, r);
 
     }
 
