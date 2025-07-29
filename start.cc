@@ -19,8 +19,8 @@ int main(int argc, char **argv)
     Fenboard b;
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_mtdf = false;
-    search.use_pv = true;
+    search.use_mtdf = true;
+    search.use_pv = false;
     search.use_quiescent_search = false;
     search.use_iterative_deepening = true;
     search.use_pruning = true;

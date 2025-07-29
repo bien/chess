@@ -105,7 +105,7 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
-        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
+        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_pv(false), use_iterative_deepening(true),
         use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
 
 {
@@ -364,6 +364,111 @@ move_t Search::mtdf(Fenboard &b, Color color, int &score, int guess, time_t dead
     return move;
 }
 
+const int futility_margin = 150;
+
+// principal move, principal reply, cp score
+int Search::do_alphabeta_search(Fenboard &b, MoveSorter *move_iter, int depth, Color color, int &alpha, int &beta, move_t &best_move, move_t &best_response)
+{
+
+    int currentnodescore;
+    bool evaluated_nodescore = false;
+    bool first = true;
+    int best_score = 31415;
+    int depth_to_go = max_depth - depth;
+
+    while (move_iter->has_more_moves()) {
+        int subtree_score;
+        move_t submove = 0;
+        bool is_check_or_capture = move_iter->next_gives_check_or_capture();
+        bool checked_futility = false;
+        move_t move = move_iter->next_move();
+        bool cutoff = (depth >= max_depth - 1);
+
+        if (cutoff) {
+            if (!evaluated_nodescore) {
+                currentnodescore = eval->evaluate(b);
+                evaluated_nodescore = true;
+            }
+
+            subtree_score = eval->delta_evaluate(b, move, currentnodescore);
+
+        } else {
+            b.apply_move(move);
+            move_t killer_move = 0;
+
+            if (use_killer_move && submove != 0) {
+                killer_move = submove;
+            }
+
+            std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
+            subtree_score = std::get<2>(child);
+            submove = std::get<0>(child);
+            b.undo_move(move);
+        }
+        if (search_debug >= depth + 1) {
+            for (int i = 0; i < depth * 2; i++) {
+                std::cout << " ";
+            }
+            std::cout << (depth / 2 + 1) << ".";
+            if (depth % 2 == 1) {
+                std::cout << "..";
+            }
+            print_move_uci(move, std::cout) << " -> ";
+            print_move_uci(submove, std::cout) << " = " << subtree_score;
+            if (cutoff) {
+                std::cout << "Q";
+            }
+            if (!first) {
+                std::cout << " best was ";
+                print_move_uci(best_move, std::cout) << " = " << best_score;
+            }
+        }
+
+        if (first || (color == White && subtree_score > best_score) || (color == Black && subtree_score < best_score)) {
+            best_score = subtree_score;
+            best_move = move;
+            best_response = submove;
+
+            if (use_pruning) {
+                if (color == White) {
+                    alpha = std::max(alpha, best_score);
+                }
+                else {
+                    beta = std::min(beta, best_score);
+                }
+                if (alpha > beta) {
+                    // prune this branch
+                    if (search_debug >= depth + 1) {
+                        std::cout << "!" << std::endl;
+                    }
+                    // pruned = true;
+                    break;
+                }
+
+                if (is_check_or_capture && !checked_futility && beta < 9000 && alpha > -9000) {
+                    checked_futility = true;
+                    int null_move_eval = eval->evaluate(b);
+                    if (std::max(best_score, null_move_eval) + futility_margin * depth_to_go < alpha ||
+                           std::min(best_score, null_move_eval) - futility_margin * depth_to_go > beta) {
+                        // fail high/low
+                        break;
+                    }
+                }
+            }
+
+
+            if (search_debug >= depth + 1) {
+                std::cout << "*";
+            }
+        }
+        first = false;
+        if (search_debug >= depth + 1) {
+            std::cout << std::endl;
+        }
+    }
+    return best_score;
+}
+
 // principal move, principal reply, cp score
 std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint)
 {
@@ -415,92 +520,9 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
             }
         }
 
+        best_score = do_alphabeta_search(b, move_iter.access, depth, color, alpha, beta, best_move, best_response);
 
-        bool first = true;
 
-
-        int currentnodescore;
-        bool evaluated_nodescore = false;
-        while (move_iter->has_more_moves()) {
-            int subtree_score;
-            move_t submove = 0;
-            move_t move = move_iter->next_move();
-            bool cutoff = (depth >= max_depth - 1);
-
-            if (cutoff) {
-                if (!evaluated_nodescore) {
-                    currentnodescore = eval->evaluate(b);
-                    evaluated_nodescore = true;
-                }
-
-                subtree_score = eval->delta_evaluate(b, move, currentnodescore);
-
-            } else {
-                b.apply_move(move);
-                move_t killer_move = 0;
-
-                if (use_killer_move && submove != 0) {
-                    killer_move = submove;
-                }
-
-                std::tuple<move_t, move_t, int> child = alphabeta_with_memory(b, depth + 1, get_opposite_color(color), alpha, beta, killer_move);
-                subtree_score = std::get<2>(child);
-                submove = std::get<0>(child);
-                b.undo_move(move);
-            }
-            if (search_debug >= depth + 1) {
-                for (int i = 0; i < depth * 2; i++) {
-                    std::cout << " ";
-                }
-                std::cout << (depth / 2 + 1) << ".";
-                if (depth % 2 == 1) {
-                    std::cout << "..";
-                }
-                print_move_uci(move, std::cout) << " -> ";
-                print_move_uci(submove, std::cout) << " = " << subtree_score;
-                if (cutoff) {
-                    std::cout << "Q";
-                }
-                if (!first) {
-                    std::cout << " best was ";
-                    print_move_uci(best_move, std::cout) << " = " << best_score;
-                }
-            }
-
-            if (first || (color == White && subtree_score > best_score) || (color == Black && subtree_score < best_score)) {
-                best_score = subtree_score;
-                best_move = move;
-                best_response = submove;
-                // bestindex = move_iter->index;
-//                tie_count = 1;
-
-                if (use_pruning) {
-                    if (color == White) {
-                        alpha = std::max(alpha, best_score);
-                    }
-                    else {
-                        beta = std::min(beta, best_score);
-                    }
-                    if (alpha > beta) {
-                        // prune this branch
-                        if (search_debug >= depth + 1) {
-                            std::cout << "!" << std::endl;
-                        }
-                        // pruned = true;
-                        break;
-                    }
-                }
-
-                if (search_debug >= depth + 1) {
-                    std::cout << "*";
-                }
-            }
-            first = false;
-            if (search_debug >= depth + 1) {
-                std::cout << std::endl;
-            }
-
-        }
 //        std::cout << "M " << bestindex << "/" << iter.index << "/" << first_quiescent << "/" << (pruned ? "P" : "") << std::endl;
     }
 

@@ -104,6 +104,9 @@ struct Search {
 private:
     uint64_t *transposition_table;
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
+
+    int do_alphabeta_search(Fenboard &b, MoveSorter *move_iter, int depth, Color color, int &alpha, int &beta, move_t &best_move, move_t &best_response);
+
     move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
     int quiescent_evaluation(Fenboard &b, int alpha, int beta, int depth_so_far);

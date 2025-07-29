@@ -178,8 +178,8 @@ int main(int argc, char **argv)
 
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_pv = true;
-    search.use_mtdf = false;
+    search.use_pv = false;
+    search.use_mtdf = true;
     search.use_quiescent_search = false;
     search.quiescent_depth = 4;
     search.use_pruning = true;
