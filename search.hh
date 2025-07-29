@@ -48,6 +48,9 @@ struct MoveSorter {
     }
     bool has_more_moves();
     bool next_gives_check() const;
+    bool next_gives_check_or_capture() const {
+        return phase < 3;
+    }
     move_t next_move();
     void reset(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
 
@@ -103,6 +106,7 @@ private:
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
     move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
+    int quiescent_evaluation(Fenboard &b, int alpha, int beta, int depth_so_far);
 
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
@@ -127,6 +131,7 @@ private:
     }
 
     std::vector<MoveSorter *> move_sorter_pool;
+public:
     MoveSorter *get_move_sorter(unsigned int depth) {
         if (move_sorter_pool.empty()) {
             return new MoveSorter();
@@ -138,6 +143,7 @@ private:
     void release_move_sorter(MoveSorter *ms) {
         move_sorter_pool.push_back(ms);
     }
+private:
     std::ostream &print_debug_move_header(Color side_to_play, int depth_so_far, move_t move) const {
         for (int i = 0; i < depth_so_far * 2; i++) {
             std::cout << " ";
@@ -149,6 +155,23 @@ private:
         return print_move_uci(move, std::cout);
 
     };
+};
+
+template <class T>
+struct Acquisition {
+public:
+    Acquisition(Search *search) : search(search) {
+        access = search->get_move_sorter(0);
+    }
+    T *access;
+    ~Acquisition() {
+        search->release_move_sorter(access);
+    }
+    T *operator->() {
+        return access;
+    }
+private:
+    Search *search;
 };
 
 #endif
