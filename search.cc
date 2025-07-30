@@ -555,6 +555,7 @@ void Search::write_transposition(uint64_t board_hash, move_t move, int best_scor
 
 int Search::quiescent_evaluation(Fenboard &b, int alpha, int beta, int depth_so_far)
 {
+    nodecount++;
     MoveSorter *move_iter = get_move_sorter(quiescent_depth);
     move_iter->reset(&b, b.get_side_to_play(), false, 0);
     Color side_to_play = b.get_side_to_play();
