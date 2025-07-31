@@ -10,6 +10,8 @@
 #include "search.hh"
 #include "bitboard.hh"
 #include "move.hh"
+#include "net/psqt.h"
+
 int search_debug = 0;
 
 move_t Search::minimax(Fenboard &b, Color color)
@@ -83,10 +85,8 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
         return timed_iterative_deepening(b, color, s);
     }
     if (use_mtdf) {
-        int guess = 0;
-        if (!use_iterative_deepening || max_depth < 2) {
-            guess = eval->evaluate(b);
-        } else {
+        int guess = eval->evaluate(b);
+        if (max_depth > 2) {
             int subscore = 0;
             max_depth -= 2;
             result = mtdf(b, color, subscore, guess);
@@ -521,9 +521,6 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         }
 
         best_score = do_alphabeta_search(b, move_iter.access, depth, color, alpha, beta, best_move, best_response);
-
-
-//        std::cout << "M " << bestindex << "/" << iter.index << "/" << first_quiescent << "/" << (pruned ? "P" : "") << std::endl;
     }
 
     if (search_debug >= depth + 1) {
@@ -678,12 +675,6 @@ int MoveSorter::get_score(move_t move) const
 
     int src_sq = (src_rank * 8 + src_file);
     int dest_sq = (dest_rank * 8 + dest_file);
-    /*
-    uint64_t attacked = opp_covered & ~stp_covered;
-
-    bool src_attacked = (1ULL << src_sq) & attacked;
-    bool dest_attacked = (1ULL << dest_sq) & attacked;
-*/
     int invalidate_castle_penalty = 0;
     if (actor == bb_king) {
         if (dest_file - src_file == 2 || dest_file - src_file == -2) {
@@ -695,15 +686,28 @@ int MoveSorter::get_score(move_t move) const
         if (get_invalidates_queenside_castle(move)) {
             invalidate_castle_penalty--;
         }
+
+        int score = piece_points[capture] * 64 + invalidate_castle_penalty;
+        int central = centralization[dest_sq] - centralization[src_sq];
+        // want best score first
+        return score * 10 + central;
+    } else {
+        int king_square = get_low_bit(b->piece_bitmasks[bb_king], 0);
+        int dense_index_actor = king_square * (64 * 10) + (actor - 1) * 64 + get_source_pos(move);
+        int dense_index_dest = king_square * (64 * 10) + (actor - 1) * 64 + get_dest_pos(move);
+
+        int score = 0;
+        score -= psqt_weights[dense_index_actor];
+        score += psqt_weights[dense_index_dest];
+        if (capture > 0) {
+            score -= psqt_weights[king_square * (64 * 10) + (capture - 1 + 5) * 64 + get_dest_pos(move)];
+        }
+        if (promo > 0) {
+            score += psqt_weights[king_square * (64 * 10) + (promo - 1) * 64 + get_dest_pos(move)];
+        }
+        return score;
     }
-
-    int score = (capture != 0 ? piece_points[capture] + piece_points[promo] - piece_points[actor]: 0) + invalidate_castle_penalty;
-    int central = centralization[dest_sq] - centralization[src_sq];
-    // want best score first
-    return score * 10 + central;
-
 }
-
 
 struct MoveCmp {
     MoveCmp(const MoveSorter *ms)

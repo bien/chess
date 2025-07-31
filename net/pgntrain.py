@@ -374,6 +374,50 @@ class LimitedKP(NNUEModel):
             new_idx = 6
         return new_idx, present_board
 
+class PTSOnly(NNUEModel):
+    def make_nnue_model_mirror(self, num_classes=3, include_centipawns=False, include_side_pts=False, copy_model=None):
+        inputs = []
+        hidden = []
+        side_pts = layers.Dense(1, activation='relu', name='pts', bias_initializer='zero', kernel_initializer=pts_initializer(self))
+        pts_layers = []
+        hiddens = []
+        for i in range(self.num_hidden_layers):
+            layer_name = f'inter_{i+1}'
+            hiddens.append(layers.Dense(self.hidden_layers_width, name=layer_name, activation=self.relu_fn, kernel_constraint=MinMaxNorm(min_value=-1, max_value=1)))
+
+        for color in range(2):
+            x = keras.Input(shape=(self.INPUT_LENGTH,), name='side_{}'.format(color))
+            inputs.append(x)
+            for hidden in hiddens:
+                x = hidden(x)
+            pts_layers.append(side_pts(x))
+        outputs = []
+        metrics = []
+        losses = []
+        loss_weights = []
+        piece_delta = layers.Subtract()([pts_layers[0], pts_layers[1]]) * 0.5
+
+        if self.wdl_output:
+            result = layers.Dense(num_classes, activation="softmax", name="wdl")(piece_delta)
+            outputs.append(result)
+            metrics.append("categorical_accuracy")
+            losses.append("categorical_crossentropy")
+            loss_weights.append(1)
+        if self.centipawn_output:
+            centipawns = layers.Dense(1, name="centipawns", kernel_constraint=MinMaxNorm(min_value=-1, max_value=1))(piece_delta)
+            outputs.append(centipawns)
+            metrics.append("mean_squared_error")
+            losses.append("mean_squared_error")
+            loss_weights.append(.2)
+
+        model = keras.Model(inputs=tuple(inputs), outputs=tuple(outputs), name="lobsternet_nnue")
+        model.compile(
+            loss=losses,
+            loss_weights=loss_weights,
+            optimizer="adam",
+            metrics=metrics)
+        return model
+
 def main(pgnfile, validation_pgn):
     print("Loading model")
     n = BasicNNUE(centipawn_output=False)

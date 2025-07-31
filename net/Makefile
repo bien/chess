@@ -11,6 +11,9 @@ all: test
 clean:
 	rm -f *.o test
 
+psqt.cc: pts-16.keras
+	python export_pts.py $< > $@
+
 test: $(OBJS) trainlib.o
 	$(CXX) $^ -o $@
 
