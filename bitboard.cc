@@ -382,15 +382,6 @@ Bitboard::Bitboard()
 {
     memset(piece_bitmasks, 0, sizeof(piece_bitmasks));
     enpassant_file = -1;
-    for (int i = 0; i < 64; i++) {
-        attack_squares[i] = 0;
-        attack_squares[i] |= BitboardCaptures::PregeneratedCaptures[White][bb_pawn][i];
-        attack_squares[i] |= BitboardCaptures::PregeneratedCaptures[Black][bb_pawn][i];
-        attack_squares[i] |= BitArrays::knight_moves::data[i];
-        attack_squares[i] |= BitArrays::king_moves::data[i];
-        attack_squares[i] |= rook_slide_moves(i, 0);
-        attack_squares[i] |= bishop_slide_moves(i, 0);
-    }
 }
 
 piece_t Bitboard::get_piece(unsigned char rank, unsigned char file) const

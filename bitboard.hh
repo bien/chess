@@ -271,7 +271,6 @@ public:
 
 
 private:
-    uint64_t attack_squares[64];
     char castle;
     uint64_t get_captures(Color color, piece_t piece_type, int start_pos) const;
     bool removes_check(piece_t piece_type, int start_pos, int dest_pos, Color color, uint64_t covered_squares) const;
