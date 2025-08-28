@@ -94,7 +94,7 @@ int main(int argc, char **argv)
                 search_debug = stoi(tokens[4]);
                 std::cout << "set debug = " << search_debug << std::endl;
             }
-            else if (tokens[2] == "check" && tokens.size() > 4) {
+            else if (tokens[2] == "use_nega" && tokens.size() > 4) {
                 if (tokens[4] == "true") {
                     search.use_nega = true;
                 }
