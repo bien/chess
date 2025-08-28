@@ -74,6 +74,7 @@ int main(int argc, char **argv)
             std::cout << "option name Hash type spin default 1 min 1 max 1024" << std::endl;
             std::cout << "option name depth type spin default 7 min 1 max 1024" << std::endl;
             std::cout << "option name quiescentlimit type spin default 4 min 0 max 1024" << std::endl;
+            std::cout << "option name use_nega type check default false" << std::endl;
             std::cout << "option name debug type spin default 0 min 0 max 8" << std::endl;
             std::cout << "uciok" << std::endl;
         }
@@ -92,6 +93,12 @@ int main(int argc, char **argv)
             else if (tokens[2] == "debug" && tokens.size() > 4) {
                 search_debug = stoi(tokens[4]);
                 std::cout << "set debug = " << search_debug << std::endl;
+            }
+            else if (tokens[2] == "check" && tokens.size() > 4) {
+                if (tokens[4] == "true") {
+                    search.use_nega = true;
+                }
+                std::cout << "set use_nega" << std::endl;
             }
         }
         else if (line.rfind("position", 0) == 0) {

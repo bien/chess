@@ -96,6 +96,8 @@ struct Search {
     int max_depth;
     bool soft_deadline;
 
+    bool use_nega;
+
     int transposition_checks;
     int transposition_partial_hits;
     int transposition_full_hits;
@@ -104,6 +106,7 @@ struct Search {
 private:
     uint64_t *transposition_table;
     std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
+    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint=0);
 
     int do_alphabeta_search(Fenboard &b, MoveSorter *move_iter, int depth, Color color, int &alpha, int &beta, move_t &best_move, move_t &best_response);
 

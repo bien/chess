@@ -96,8 +96,17 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
         }
         result = mtdf(b, color, score, guess);
     } else {
-        std::tuple<move_t, move_t, int> sub = alphabeta_with_memory(b, 0, color, SCORE_MIN, SCORE_MAX);
-        score = std::get<2>(sub);
+        std::tuple<move_t, move_t, int> sub;
+        if (use_nega) {
+            sub = negamax_with_memory(b, 0, SCORE_MIN, SCORE_MAX);
+            score = std::get<2>(sub);
+            if (b.get_side_to_play() == Black){
+                score = -score;
+            }
+        } else {
+            sub = alphabeta_with_memory(b, 0, color, SCORE_MIN, SCORE_MAX);
+            score = std::get<2>(sub);
+        }
         result = std::get<0>(sub);
     }
     return result;
@@ -106,7 +115,7 @@ move_t Search::alphabeta(Fenboard &b, Color color, const SearchUpdate &s)
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_pv(false), use_iterative_deepening(true),
-        use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true)
+        use_quiescent_search(false), quiescent_depth(2), use_killer_move(true), time_available(0), soft_deadline(true), use_nega(true)
 
 {
     srandom(clock());
@@ -521,6 +530,136 @@ std::tuple<move_t, move_t, int> Search::alphabeta_with_memory(Fenboard &b, int d
         }
 
         best_score = do_alphabeta_search(b, move_iter.access, depth, color, alpha, beta, best_move, best_response);
+    }
+
+    if (search_debug >= depth + 1) {
+        std::cout << "depth=" << depth << " move=";
+        print_move_uci(best_move, std::cout) << " score=" << best_score << std::endl;
+    }
+
+
+    // write to transposition table
+    if (use_transposition_table) {
+       write_transposition(b.get_hash(), best_move, best_score, max_depth - depth, original_alpha, original_beta);
+    }
+    return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);
+}
+
+// principal move, principal reply, cp score
+std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint)
+{
+    nodecount++;
+
+    int best_score = 31415;
+    move_t best_response = -1;
+    move_t best_move = -1;
+    int original_alpha = alpha;
+    int original_beta = beta;
+
+    // check for endgames
+    int endgame_eval;
+    if (eval->endgame(b, endgame_eval)) {
+        if (b.get_side_to_play() != White) {
+            endgame_eval = -endgame_eval;
+        }
+        return std::tuple<move_t, move_t, int>(-1, -1, endgame_eval);
+    }
+
+    // check for repetition
+    if (b.times_seen() >= 3) {
+        return std::tuple<move_t, move_t, int>(-1, -1, 0);
+    }
+
+    // check transposition table
+    if (use_transposition_table) {
+
+        move_t tt_move;
+        int exact_value = 0;
+
+        bool found = read_transposition(b.get_hash(), tt_move, max_depth - depth, alpha, beta, exact_value);
+        if (found && alpha >= beta) {
+            return std::tuple<move_t, move_t, int>(tt_move, 0, exact_value);
+        }
+
+    }
+
+    if (depth == max_depth) {
+        best_score = quiescent_evaluation(b, alpha, beta, depth);
+    } else {
+        Acquisition<MoveSorter> move_iter(this);
+        move_iter->reset(&b, b.get_side_to_play(), max_depth - depth > 2, hint);
+
+        if (!move_iter->has_more_moves()) {
+            if (b.king_in_check(b.get_side_to_play())) {
+                return std::tuple<move_t, move_t, int>(0, 0, VERY_BAD + depth);
+            } else {
+                return std::tuple<move_t, move_t, int>(0, 0, 0);
+            }
+        }
+        bool evaluated_nodescore = false;
+        int currentnodescore = 0;
+        bool first = true;
+        int depth_to_go = max_depth - depth;
+
+        while (move_iter->has_more_moves()) {
+            int subtree_score;
+            move_t submove = 0;
+            bool is_check_or_capture = move_iter->next_gives_check_or_capture();
+            bool checked_futility = false;
+            move_t move = move_iter->next_move();
+            b.apply_move(move);
+            move_t killer_move = 0;
+
+            if (use_killer_move && submove != 0) {
+                killer_move = submove;
+            }
+
+            std::tuple<move_t, move_t, int> child = negamax_with_memory(b, depth + 1, -beta, -alpha, killer_move);
+            subtree_score = -std::get<2>(child);
+            submove = std::get<0>(child);
+            b.undo_move(move);
+
+
+            if (first || subtree_score > best_score) {
+                best_score = subtree_score;
+                best_move = move;
+                best_response = submove;
+
+                if (use_pruning) {
+                    if (best_score > alpha) {
+                        alpha = best_score;
+                    }
+                    if (alpha > beta) {
+                        // prune this branch
+                        if (search_debug >= depth + 1) {
+                            std::cout << "!" << std::endl;
+                        }
+                        // pruned = true;
+                        break;
+                    }
+
+                    if (is_check_or_capture && !checked_futility && beta < 9000 && alpha > -9000) {
+                        checked_futility = true;
+                        int null_move_eval = eval->evaluate(b);
+                        if (std::max(best_score, null_move_eval) + futility_margin * depth_to_go < alpha ||
+                            std::min(best_score, null_move_eval) - futility_margin * depth_to_go > beta) {
+                            // fail high/low
+                            break;
+                        }
+                    }
+                }
+
+
+                if (search_debug >= depth + 1) {
+                    std::cout << "*";
+                }
+            }
+            first = false;
+            if (search_debug >= depth + 1) {
+                std::cout << std::endl;
+            }
+        }
+
     }
 
     if (search_debug >= depth + 1) {
