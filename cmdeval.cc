@@ -50,7 +50,7 @@ int main(int argc, char **argv)
         if (vm.count("depth")) {
             depth = vm["depth"].as<int>();
         }
-        if (vm.count("no-tt")) {
+        if (vm["no-tt"].as<bool>()) {
             s.use_transposition_table = false;
         }
         if (vm.count("debug")) {
