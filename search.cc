@@ -243,6 +243,8 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         return std::tuple<move_t, move_t, int>(-1, -1, 0);
     }
 
+    bool tt_hint = false;
+
     // check transposition table
     if (use_transposition_table) {
 
@@ -252,6 +254,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         bool found = read_transposition(b.get_hash(), tt_move, max_depth - depth, alpha, beta, exact_value);
         if (found && alpha >= beta) {
             return std::tuple<move_t, move_t, int>(tt_move, 0, exact_value);
+        }
+        else if (tt_move != 0 && hint == 0) {
+            hint = tt_move;
+            tt_hint = true;
         }
     }
 
@@ -310,9 +316,9 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             }
         }
 
+        move_t submove = 0;
         while (move_iter->has_more_moves() && ((first && !initialized_null_move_eval) || !is_quiescent || move_iter->next_gives_check_or_capture())) {
             int subtree_score;
-            move_t submove = 0;
             bool checked_futility = false;
             move_t move = move_iter->next_move();
 
@@ -326,7 +332,6 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 && PIECE_VALUE[b.get_piece(sourcerank, sourcefile)] > PIECE_VALUE[get_captured_piece(move)]) {
                 break;
             }
-
 
             b.apply_move(move);
             move_t killer_move = 0;
@@ -427,12 +432,22 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         }
 
     }
-/*
+
     if (search_debug >= depth + 1) {
         std::cout << "depth=" << depth << " move=";
-        print_move_uci(best_move, std::cout) << " score=" << best_score << std::endl;
+        print_move_uci(best_move, std::cout) << " score=" << best_score;
+        if (hint) {
+            std::cout << "(hint=";
+            print_move_uci(hint, std::cout);
+            if (tt_hint) {
+                std::cout << "t";
+            }
+            std::cout << ") ";
+        }
+
+        std::cout << std::endl;
     }
-*/
+
     // write to transposition table
 
     if (use_transposition_table) {
