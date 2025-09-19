@@ -50,7 +50,7 @@ struct MoveSorter {
         return index <= last_capture;
     }
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, Color side_to_play, bool do_sort=true, move_t hint=0, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, Color side_to_play, int depth=0, bool do_sort=true, move_t hint=0, bool verbose=false);
 
     bool operator()(move_t a, move_t b) const;
 

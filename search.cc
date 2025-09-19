@@ -26,10 +26,8 @@ move_t Search::minimax(Fenboard &b, Color color)
     nodecount = 0;
     bool old_pruning = use_pruning;
     bool old_mtdf = use_mtdf;
-    bool old_trans_table = use_transposition_table;
     use_pruning = false;
     use_mtdf = false;
-    use_transposition_table = false;
     std::tuple<move_t, move_t, int> result = negamax_with_memory(b, 0, SCORE_MIN, SCORE_MAX);
     score = std::get<2>(result);
     if (color == Black) {
@@ -37,7 +35,6 @@ move_t Search::minimax(Fenboard &b, Color color)
     }
     use_pruning = old_pruning;
     use_mtdf = old_mtdf;
-    use_transposition_table = old_trans_table;
     return std::get<0>(result);
 }
 
@@ -209,7 +206,7 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     return move;
 }
 
-const int futility_margin = 150;
+const int futility_margin = 50;
 
 // principal move, principal reply, cp score
 std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint, const std::string &line)
@@ -272,7 +269,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         }
     } else {
         Acquisition<MoveSorter> move_iter(this);
-        move_iter->reset(&b, this, b.get_side_to_play(), max_depth - depth > 2, hint);
+        move_iter->reset(&b, this, b.get_side_to_play(), std::max(0, max_depth - depth), max_depth - depth > 2, hint);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -402,21 +399,13 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                         break;
                     }
 
-                    // if (!move_iter->next_gives_check_or_capture() && !checked_futility && beta < 9000 && alpha > -9000) {
-                    //     checked_futility = true;
-                    //     if (!initialized_null_move_eval) {
-                    //         null_move_eval = eval->evaluate(b);
-                    //         initialized_null_move_eval = true;
-                    //     }
-                    //     if (std::max(best_score, null_move_eval) + futility_margin * depth_to_go < alpha ||
-                    //         std::min(best_score, null_move_eval) - futility_margin * depth_to_go > beta) {
-                    //         // fail high/low
-                    //         if (search_debug >= depth + 1) {
-                    //             std::cout << "F" << std::endl;
-                    //         }
-                    //         break;
-                    //     }
-                    // }
+                    if (!is_quiescent && !move_iter->next_gives_check_or_capture() && !checked_futility && beta < 9000 && alpha > -9000) {
+                        checked_futility = true;
+                        if (!initialized_null_move_eval) {
+                            null_move_eval = eval->evaluate(b);
+                            initialized_null_move_eval = true;
+                        }
+                    }
 
                 }
 
@@ -616,7 +605,7 @@ MoveSorter::MoveSorter()
     index = 0;
 }
 
-void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, bool do_sort, move_t hint, bool verbose)
+void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int depth, bool do_sort, move_t hint, bool verbose)
 {
     buffer.clear();
     move_iter.reset();
@@ -672,6 +661,25 @@ void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, bool do
         }
         std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
     }
+
+    // move tranposition entries to front
+    if (s != NULL) {
+        for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
+            move_t ignore;
+            int16_t tt_value;
+            unsigned char tt_depth, tt_type;
+            if (s->fetch_tt_entry(b->get_zobrist_with_move(*iter), ignore, tt_value, tt_depth, tt_type) && tt_type == TT_EXACT && tt_depth >= depth) {
+                if (iter > (last_check + buffer.begin()) && last_check >= 0) {
+                    last_check++;
+                }
+                if (iter > (last_capture + buffer.begin()) && last_capture >= 0) {
+                    last_capture++;
+                }
+                std::rotate(buffer.begin(), iter, iter + 1);
+            }
+        }
+    }
+
     if (hint != 0) {
         auto match = std::find(buffer.begin(), buffer.end(), hint);
         if (match != buffer.end()) {
