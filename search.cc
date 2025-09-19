@@ -154,7 +154,7 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     if (search_debug) {
         std::cout << "mtdf guess=" << guess << " depth=" << max_depth << std::endl;
     }
-    const int window_size = 100;
+    const int window_size = 10;
     bool last_search = false;
 
     do {
@@ -246,7 +246,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     // check transposition table
     if (use_transposition_table) {
 
-        move_t tt_move;
+        move_t tt_move = 0;
         int exact_value = 0;
 
         bool found = read_transposition(b.get_hash(), tt_move, max_depth - depth, alpha, beta, exact_value);
