@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     }
     move_t move;
 
-    move = search.alphabeta(b, b.get_side_to_play());
+    move = search.alphabeta(b);
     b.print_move(move, std::cout);
     std::cout << " " << std::endl;
     b.apply_move(move);

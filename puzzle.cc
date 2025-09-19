@@ -7,17 +7,18 @@
 #include "bitboard.hh"
 #include "nnueeval.hh"
 
-bool expect_move(Search &search, Fenboard &b, int depth, const std::vector<std::string> &expected_move, int &nodecount)
+bool expect_move(Search &search, Fenboard &b, int depth, const std::string &puzzle_name, const std::vector<std::string> &expected_move, uint64_t &nodecount)
 {
     if (depth != 0) {
         search.max_depth = depth;
     }
     Color side_to_play = b.get_side_to_play();
-    move_t move = search.alphabeta(b, side_to_play);
+    move_t move = search.alphabeta(b);
     nodecount = search.nodecount;
     for (std::vector<std::string>::const_iterator iter = expected_move.begin(); iter != expected_move.end(); iter++) {
         move_t expected_move_parsed = b.read_move(*iter, side_to_play);
         if (expected_move_parsed == move) {
+            std::cout << "Puzzle " << puzzle_name << " passed with " << nodecount << " nodes" << std::endl;
             return true;
         }
     }
@@ -92,11 +93,11 @@ void read_csv_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, int d
         std::string first_move = parts[2].substr(first_move_space + 1, second_move_space - first_move_space - 1);
         std::vector<std::string> first_move_choices;
         first_move_choices.push_back(first_move);
-        int puzzle_nodecount = 0;
+        uint64_t puzzle_nodecount = 0;
         b.set_fen(parts[1]);
         b.apply_move(b.read_move(zero_move, b.get_side_to_play()));
         clock_t starttime = clock();
-        bool result = expect_move(search, b, depth, first_move_choices, puzzle_nodecount);
+        bool result = expect_move(search, b, depth, parts[0], first_move_choices, puzzle_nodecount);
         r.elapsed += (clock() - starttime) *1.0 / CLOCKS_PER_SEC;
         r.attempts++;
         r.nodes += puzzle_nodecount;
@@ -131,7 +132,7 @@ void read_pgn_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, Resul
         if (game_metadata["FEN"] != "") {
             b.set_fen(game_metadata["FEN"]);
             bool result = false;
-            int puzzle_nodecount = 0;
+            uint64_t puzzle_nodecount = 0;
             clock_t start = clock();
             int depth = 8;
             if (game_metadata["White"] == "Mate in one") {
@@ -144,7 +145,7 @@ void read_pgn_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, Resul
                 depth = 10;
             }
             get_first_move_choices(b.get_side_to_play(), move_choices, first_move);
-            result = expect_move(search, b, depth, first_move, puzzle_nodecount);
+            result = expect_move(search, b, depth,  game_metadata["Event"], first_move, puzzle_nodecount);
             elapsed += (clock() - start) *1.0 / CLOCKS_PER_SEC;
             r.attempts++;
             r.nodes += puzzle_nodecount;
@@ -178,19 +179,13 @@ int main(int argc, char **argv)
 
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_pv = false;
-    search.use_mtdf = true;
-    search.use_quiescent_search = false;
-    search.quiescent_depth = 4;
-    search.use_pruning = true;
-    search.use_transposition_table = true;
 
     Results r;
 
     if (std::string(argv[1]).find(".pgn") != std::string::npos) {
         read_pgn_puzzles(b, search, puzzles, r);
     } else {
-        read_csv_puzzles(b, search, puzzles, 8, r);
+        read_csv_puzzles(b, search, puzzles, 6, r);
 
     }
 

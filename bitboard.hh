@@ -201,12 +201,13 @@ public:
     }
     void set_can_castle(Color color, bool kingside, bool enabled) {
         int bit = get_castle_bit(color, kingside);
+        char old_castle = castle;
         if (enabled) {
             castle |= (1 << bit);
         } else {
             castle &= ~(1 << bit);
         }
-        if (can_castle(color, kingside) != enabled) {
+        if (old_castle != castle) {
             update_zobrist_hashing_castle(color, kingside, enabled);
         }
     }
@@ -307,10 +308,18 @@ public:
     }
     uint64_t get_hash() const { return hash; }
 
+    uint64_t get_zobrist_with_move(move_t) const;
+
 protected:
     std::unordered_map<uint64_t, int> seen_positions;
 private:
     uint64_t hash;
+
+    uint64_t zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece) const;
+    uint64_t zobrist_hashing_castle(Color, bool kingside) const;
+    uint64_t zobrist_hashing_move() const;
+    uint64_t zobrist_hashing_enpassant(int file) const;
+
     void update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding);
     void update_zobrist_hashing_castle(Color, bool kingside, bool enabling);
     void update_zobrist_hashing_move();

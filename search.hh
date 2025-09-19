@@ -40,44 +40,45 @@ struct SearchUpdate {
 };
 
 const SearchUpdate NullSearchUpdate;
+struct Search;
 
 struct MoveSorter {
     MoveSorter();
-    MoveSorter(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0) {
-        reset(b, side_to_play, do_sort, hint);
-    }
     bool has_more_moves();
     bool next_gives_check() const;
     bool next_gives_check_or_capture() const {
-        return phase < 3;
+        return index <= last_capture;
     }
     move_t next_move();
-    void reset(const Fenboard *b, Color side_to_play, bool do_sort=true, move_t hint=0);
+    void reset(const Fenboard *b, Search *s, Color side_to_play, bool do_sort=true, move_t hint=0, bool verbose=false);
 
     bool operator()(move_t a, move_t b) const;
 
-    int get_score(move_t) const;
-    unsigned int index;
-    unsigned int last_check;
-    const Fenboard *b;
+    int get_score(const Fenboard *b, int current_score,  move_t) const;
+    int index;
+    int last_check;
+    int last_capture;
     std::vector<move_t> buffer;
     PackedMoveIterator move_iter;
-    int phase;
     Color side_to_play;
     bool do_sort;
     move_t hint;
+    Search *s;
+    int current_score;
+    bool verbose;
 };
 
 struct Search {
-    Search(Evaluation *eval, int transposition_table_size=1000 * 500 + 1);
+    Search(Evaluation *eval, int transposition_table_size=1000 * 5000 + 1);
     move_t minimax(Fenboard &b, Color color);
-    move_t alphabeta(Fenboard &b, Color color, const SearchUpdate &s = NullSearchUpdate);
-    int principal_variation(Fenboard &b, int depth, int alpha, int beta, move_t &best_move, move_t hint=0);
+    move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
+    // int principal_variation(Fenboard &b, int depth, int alpha, int beta, move_t &best_move, move_t hint=0);
 
     void reset();
 
     int score;
-    int nodecount;
+    uint64_t nodecount;
+    uint64_t qnodecount;
     // hash -> depth, (max, min)
     int transposition_table_size;
     bool use_transposition_table;
@@ -89,7 +90,6 @@ struct Search {
     bool use_pv;
     bool use_iterative_deepening;
     bool use_quiescent_search;
-    int quiescent_depth;
     bool use_killer_move;
 
     int time_available;
@@ -105,19 +105,19 @@ struct Search {
 
 private:
     uint64_t *transposition_table;
-    std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
-    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint=0);
+    // std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
+    public:
+    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint=0, const std::string &line="");
 
-    int do_alphabeta_search(Fenboard &b, MoveSorter *move_iter, int depth, Color color, int &alpha, int &beta, move_t &best_move, move_t &best_response);
-
-    move_t mtdf(Fenboard &b, Color color, int &score, int guess, time_t deadline=0, move_t hint=0);
-    move_t timed_iterative_deepening(Fenboard &b, Color color, const SearchUpdate &s);
-    int quiescent_evaluation(Fenboard &b, int alpha, int beta, int depth_so_far);
-
+public:
+    move_t mtdf(Fenboard &b, int &score, int guess, time_t deadline=0, move_t hint=0);
+    move_t timed_iterative_deepening(Fenboard &b, const SearchUpdate &s);
+//    int quiescent_evaluation(Fenboard &b, int alpha, int beta, int depth_so_far);
+private:
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 
-    bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) {
+    bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) const {
         uint64_t storage = transposition_table[hash % transposition_table_size];
         type = storage & 0x3;
         depth = (storage >> 2) & 0x1f;
@@ -161,6 +161,7 @@ private:
         return print_move_uci(move, std::cout);
 
     };
+    friend struct MoveSorter;
 };
 
 template <class T>

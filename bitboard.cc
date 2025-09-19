@@ -683,27 +683,44 @@ uint64_t Bitboard::computed_covered_squares(Color color) const
 void Bitboard::get_moves(Color side_to_play, bool checks, bool captures_or_promo, const PackedMoveIterator &packed, std::vector<move_t> &moves) const
 {
     int one_rank_forward = (side_to_play == White ? 8 : -8);
+    uint64_t promo_rank = (side_to_play == White ? rank_7 : rank_2);
+    uint64_t check_mask_src = packed.advance_gives_check;
+    uint64_t check_mask_src_move_one = check_mask_src | shift_right(packed.pawn_check_squares, one_rank_forward);
+    uint64_t check_mask_src_move_two = check_mask_src | shift_right(packed.pawn_check_squares, 2*one_rank_forward);
+    uint64_t promo_pawns = packed.pawn_move_one & promo_rank;
 
     // pawn moves
     if (captures_or_promo) {
         uint64_t check_mask_src_award = packed.capture_award_gives_check | shift_right(packed.pawn_check_squares, one_rank_forward - 1);
         uint64_t check_mask_src_hward = packed.capture_hward_gives_check | shift_right(packed.pawn_check_squares, one_rank_forward + 1);
+
         if (checks) {
             make_pawn_moves(moves, packed.capture_award & check_mask_src_award, one_rank_forward - 1, true);
             make_pawn_moves(moves, packed.capture_hward & check_mask_src_hward, one_rank_forward + 1, true);
+            make_pawn_moves(moves, promo_pawns & check_mask_src_move_one, one_rank_forward, true);
         } else {
             make_pawn_moves(moves, packed.capture_award & ~check_mask_src_award, one_rank_forward - 1, false);
             make_pawn_moves(moves, packed.capture_hward & ~check_mask_src_hward, one_rank_forward + 1, false);
         }
+
+        if (promo_pawns != 0) {
+            std::vector<move_t> promo_moves;
+            // we don't know if it's actually check yet so just guess that it might be
+            make_pawn_moves(promo_moves, promo_pawns & ~check_mask_src_move_one, one_rank_forward, false);
+            for (auto iter = promo_moves.begin(); iter != promo_moves.end(); iter++) {
+                if (((*iter & GIVES_CHECK) && checks)
+                        || (!(*iter & GIVES_CHECK) && !checks)) {
+                    moves.push_back(*iter);
+                }
+            }
+        }
+
     } else {
-        uint64_t check_mask_src = packed.advance_gives_check;
-        uint64_t check_mask_src_move_one = check_mask_src | shift_right(packed.pawn_check_squares, one_rank_forward);
-        uint64_t check_mask_src_move_two = check_mask_src | shift_right(packed.pawn_check_squares, 2*one_rank_forward);
         if (checks) {
-            make_pawn_moves(moves, packed.pawn_move_one & check_mask_src_move_one, one_rank_forward, true);
+            make_pawn_moves(moves, packed.pawn_move_one & ~promo_rank & check_mask_src_move_one, one_rank_forward, true);
             make_pawn_moves(moves, packed.pawn_move_two & check_mask_src_move_two, one_rank_forward * 2, true);
         } else {
-            make_pawn_moves(moves, packed.pawn_move_one & ~check_mask_src_move_one, one_rank_forward, false);
+            make_pawn_moves(moves, packed.pawn_move_one & ~promo_rank & ~check_mask_src_move_one, one_rank_forward, false);
             make_pawn_moves(moves, packed.pawn_move_two & ~check_mask_src_move_two, one_rank_forward * 2, false);
         }
     }
@@ -1054,7 +1071,6 @@ void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr
             pm.check_squares &= pm.dest_squares;
         }
     }
-
 }
 
 void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures, bool omit_check_calc) const
@@ -1277,16 +1293,7 @@ void Bitboard::apply_move(move_t move)
     piece_t resultpiece = sourcepiece;
     Color color = get_color(sourcepiece);
 
-    /*
-    //#ifdef DEBUG
-//    std::ostringstream debugging;
-//    ((Fenboard*)this)->get_fen(std::cout);
-    std::cout << " apply ";
-    ((Fenboard*)this)->print_move(move, std::cout);
-    std::cout << std::endl;
-    //#endif
-//    std::cout << std::endl << "new hash: " << hash << " - ";
-*/
+
     set_piece(destrank, destfile, sourcepiece);
     set_piece(sourcerank, sourcefile, EMPTY);
 
@@ -1370,8 +1377,94 @@ void Bitboard::apply_move(move_t move)
         found_count += old_count->second;
     }
     seen_positions[hash] = found_count;
-//    std::cout << " -> " << hash << std::endl;
 }
+
+uint64_t Bitboard::get_zobrist_with_move(move_t move) const {
+    uint64_t current_hash = get_hash();
+    unsigned char destrank, destfile, sourcerank, sourcefile;
+    get_source(move, sourcerank, sourcefile);
+    get_dest(move, destrank, destfile);
+    piece_t destpiece = get_piece(destrank, destfile);
+    piece_t sourcepiece = get_piece(sourcerank, sourcefile);
+    piece_t resultpiece = sourcepiece;
+    Color color = get_color(sourcepiece);
+    int newfile = -1;
+
+
+    if (destpiece != 0) {
+        current_hash ^= zobrist_hashing_piece(destrank, destfile, destpiece);
+    }
+    current_hash ^= zobrist_hashing_piece(destrank, destfile, sourcepiece);
+    current_hash ^= zobrist_hashing_piece(sourcerank, sourcefile, sourcepiece);
+
+    if ((sourcepiece & PIECE_MASK) == bb_king) {
+        if (can_castle(color, true)) {
+            current_hash ^= zobrist_hashing_castle(color, true);
+        }
+        if (can_castle(color, false)) {
+            current_hash ^= zobrist_hashing_castle(color, false);
+        }
+        // castling
+        if (sourcefile == 4 && (destfile == 2 || destfile == 6)) {
+            unsigned char rooksourcefile = 8, rookdestfile = 8;
+            piece_t castlerook = bb_rook | (color == Black ? BlackMask : 0);
+
+            switch (destfile) {
+            case 2:
+                rooksourcefile = 0;
+                rookdestfile = 3;
+                break;
+            case 6:
+                rooksourcefile = 7;
+                rookdestfile = 5;
+                break;
+            }
+            if (rooksourcefile != 8) {
+                current_hash ^= zobrist_hashing_piece(destrank, rookdestfile, castlerook);
+                current_hash ^= zobrist_hashing_piece(sourcerank, rooksourcefile, castlerook);
+            }
+        }
+    }
+    else if ((sourcepiece & PIECE_MASK) == bb_rook) {
+        switch (sourcefile) {
+        case 0:
+            if (can_castle(color, false)) {
+                current_hash ^= zobrist_hashing_castle(color, false);
+            }
+            break;
+        case 7:
+            if (can_castle(color, true)) {
+                current_hash ^= zobrist_hashing_castle(color, true);
+            }
+            break;
+        }
+    }
+    else if ((sourcepiece & PIECE_MASK) == bb_pawn) {
+        // set enpassant capability
+        if (abs(destrank - sourcerank) == 2) {
+            newfile = destfile;
+        }
+        // pawn promote
+        else if (destrank == 0 || destrank == 7) {
+            resultpiece = (get_promotion(move) & PIECE_MASK) | (color == Black ? BlackMask : 0);
+            current_hash ^= zobrist_hashing_piece(destrank, destfile, sourcepiece);
+            current_hash ^= zobrist_hashing_piece(destrank, destfile, resultpiece);
+        }
+        // enpassant capture
+        else if (sourcefile != destfile && destpiece == EMPTY) {
+            current_hash ^= zobrist_hashing_piece(sourcerank, destfile, get_piece(sourcerank, destfile));
+        }
+    }
+
+    if (newfile != enpassant_file) {
+        current_hash ^= zobrist_hashing_enpassant(enpassant_file);
+        current_hash ^= zobrist_hashing_enpassant(newfile);
+    }
+    current_hash ^= zobrist_hashing_move();
+
+    return current_hash;
+}
+
 
 void Bitboard::undo_move(move_t move)
 {
@@ -1383,15 +1476,15 @@ void Bitboard::undo_move(move_t move)
 //    std::cout << "old hash: " << hash << " - ";
     auto iter = seen_positions.find(hash);
 //    bool fail = (iter == seen_positions.end());
-    assert(iter != seen_positions.end());
-//    if (!fail) {
+    // assert(iter != seen_positions.end());
+    if (iter != seen_positions.end()) {
         if (iter->second <= 1) {
             seen_positions.erase(iter);
         } else {
             seen_positions[hash]--;
         }
 
-//    }
+    }
 
 
     piece_t moved_piece = get_piece(destrank, destfile);
@@ -1451,16 +1544,13 @@ void Bitboard::undo_move(move_t move)
     if (color == Black) {
         move_count--;
     }
-    /*
-    std::cout << " -> " << hash << std::endl;
-    if (fail) {
-        assert(false);
-    }
 
-    std::cout << " undo ";
-    ((Fenboard*)this)->print_move(move, std::cout);
-    std::cout << " capt " << static_cast<int>(captured_piece) << std::endl;
-    */
+    // std::cout << " -> " << hash << std::endl;
+
+    // std::cout << " undo ";
+    // ((Fenboard*)this)->print_move(move, std::cout);
+    // std::cout << " capt " << static_cast<int>(captured_piece) << std::endl;
+
 }
 
 char fen_repr(unsigned char p)
@@ -1483,24 +1573,24 @@ char fen_repr(unsigned char p)
     }
 }
 
-void Bitboard::update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding)
+uint64_t Bitboard::zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece) const
 {
     Color color = get_color(piece);
-    //std::cout << "z +" << fen_repr(piece) << static_cast<char>(file + 'a') << static_cast<char>(rank + '1') << std::endl;
     int pt = (piece & PIECE_MASK) - 1;
     if (pt >= 0) {
         int posindex = file + rank * 8;
-        hash ^= zobrist_hashes[posindex + pt * 64 + color * (64 * 6)];
+        return zobrist_hashes[posindex + pt * 64 + color * (64 * 6)];
+    } else {
+        return 0;
     }
 }
 
-void Bitboard::update_zobrist_hashing_move()
+uint64_t Bitboard::zobrist_hashing_move() const
 {
-    //std::cout << "z move" << std::endl;
-    hash ^= zobrist_hashes[64*6*2];
+    return zobrist_hashes[64*6*2];
 }
 
-void Bitboard::update_zobrist_hashing_castle(Color color, bool kingside, bool enabling)
+uint64_t Bitboard::zobrist_hashing_castle(Color color, bool kingside) const
 {
     int index = 0;
     if (color == Black) {
@@ -1509,17 +1599,49 @@ void Bitboard::update_zobrist_hashing_castle(Color color, bool kingside, bool en
     if (kingside) {
         index += 1;
     }
-    //std::cout << "z c" << index << std::endl;
 
-    hash ^= zobrist_hashes[64*6*2 + 1 + index];
+    return zobrist_hashes[64*6*2 + 1 + index];
+}
+
+uint64_t Bitboard::zobrist_hashing_enpassant(int file) const
+{
+    if (file != -1) {
+        assert(file >= 0 && file < 8);
+        return zobrist_hashes[64*6*2 + 1 + 4 + file];
+    } else {
+        return 0;
+    }
+}
+
+char named_piece(piece_t piece) {
+    switch (piece & PIECE_MASK) {
+        case bb_pawn: return ' ';
+        case bb_knight: return 'N';
+        case bb_bishop: return 'B';
+        case bb_rook: return 'R';
+        case bb_queen: return 'Q';
+        case bb_king: return 'K';
+        default:
+            return '?';
+    }
+}
+void Bitboard::update_zobrist_hashing_piece(unsigned char rank, unsigned char file, piece_t piece, bool adding)
+{
+    hash ^= zobrist_hashing_piece(rank, file, piece);
+}
+
+void Bitboard::update_zobrist_hashing_move()
+{
+    hash ^= zobrist_hashing_move();
+}
+
+void Bitboard::update_zobrist_hashing_castle(Color color, bool kingside, bool enabling)
+{
+    hash ^= zobrist_hashing_castle(color, kingside);
 }
 
 void Bitboard::update_zobrist_hashing_enpassant(int file, bool enabling)
 {
-    if (file != -1) {
-        assert(file >= 0 && file < 8);
-        hash ^= zobrist_hashes[64*6*2 + 1 + 4 + file];
-        //std::cout << "z ep=" << static_cast<char>('a' + file) << std::endl;
-    }
+    hash ^= zobrist_hashing_enpassant(file);
 }
 
