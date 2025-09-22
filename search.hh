@@ -50,7 +50,7 @@ struct MoveSorter {
         return index <= last_capture;
     }
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, Color side_to_play, int depth=0, bool do_sort=true, move_t hint=0, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, Color side_to_play, int depth=0, bool do_sort=true, int score=0, move_t hint=0, bool verbose=false);
 
     bool operator()(move_t a, move_t b) const;
 
@@ -107,7 +107,7 @@ private:
     uint64_t *transposition_table;
     // std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
     public:
-    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint=0, const std::string &line="");
+    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint=0, int static_score=0, const std::string &line="");
 
 public:
     move_t mtdf(Fenboard &b, int &score, int guess, time_t deadline=0, move_t hint=0);
@@ -119,12 +119,15 @@ private:
 
     bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) const {
         uint64_t storage = transposition_table[hash % transposition_table_size];
+        unsigned short checksum = hash & 0xff00;
+        if (type <= 0 || checksum != (storage & 0xff00)) {
+            return false;
+        }
         type = storage & 0x3;
         depth = (storage >> 2) & 0x1f;
         value = (storage >> 16) & 0xffff;
         move = (storage >> 32);
-        unsigned short checksum = hash & 0xff00;
-        return type > 0 && checksum == (storage & 0xff00);
+        return true;
     }
 
     void insert_tt_entry(uint64_t hash, move_t move, int16_t value, unsigned char depth, unsigned char type) {

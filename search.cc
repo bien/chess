@@ -209,7 +209,7 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
 const int futility_margin = 50;
 
 // principal move, principal reply, cp score
-std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint, const std::string &line)
+std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint, int static_score, const std::string &line)
 {
     nodecount++;
 
@@ -263,13 +263,18 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     }
 
     if (depth >= max_depth && !is_quiescent) {
-        best_score = eval->evaluate(b);
+        if (static_score >= VERY_BAD && static_score <= VERY_GOOD) {
+            best_score = static_score;
+        } else {
+            best_score = eval->evaluate(b);
+        }
         if (b.get_side_to_play() == Black) {
             best_score = -best_score;
         }
     } else {
         Acquisition<MoveSorter> move_iter(this);
-        move_iter->reset(&b, this, b.get_side_to_play(), std::max(0, max_depth - depth), max_depth - depth > 2, hint);
+        int depth_to_go = max_depth - depth;
+        move_iter->reset(&b, this, b.get_side_to_play(), std::max(0, max_depth - depth), depth_to_go > 2, alpha, hint);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -279,7 +284,6 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             }
         }
         bool first = true;
-        int depth_to_go = max_depth - depth;
 
         // null move
         int null_move_eval = 0;
@@ -314,6 +318,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         }
 
         move_t submove = 0;
+        int static_eval = VERY_BAD - 1;
+        if (depth_to_go == 1) {
+            static_eval = eval->evaluate(b);
+        }
         while (move_iter->has_more_moves() && ((first && !initialized_null_move_eval) || !is_quiescent || move_iter->next_gives_check_or_capture())) {
             int subtree_score;
             bool checked_futility = false;
@@ -328,6 +336,11 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 && (depth - max_depth > LIMITED_QUIESCENT_DEPTH)
                 && PIECE_VALUE[b.get_piece(sourcerank, sourcefile)] > PIECE_VALUE[get_captured_piece(move)]) {
                 break;
+            }
+
+            int child_static_eval = VERY_BAD - 1;
+            if (depth_to_go == 1) {
+                child_static_eval = eval->delta_evaluate(b, move, static_eval);
             }
 
             b.apply_move(move);
@@ -347,7 +360,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
 
             uint64_t start_nodecount = nodecount;
             uint64_t start_qnodecount = qnodecount;
-            std::tuple<move_t, move_t, int> child = negamax_with_memory(b, depth + 1, -beta, -alpha, killer_move, subline);
+            std::tuple<move_t, move_t, int> child = negamax_with_memory(b, depth + 1, -beta, -alpha, killer_move, child_static_eval, subline);
             subtree_score = -std::get<2>(child);
             submove = std::get<0>(child);
             b.undo_move(move);
@@ -605,7 +618,7 @@ MoveSorter::MoveSorter()
     index = 0;
 }
 
-void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int depth, bool do_sort, move_t hint, bool verbose)
+void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int depth, bool do_sort, int score, move_t hint, bool verbose)
 {
     buffer.clear();
     move_iter.reset();
@@ -616,10 +629,7 @@ void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int dep
     this->verbose = verbose;
     index = 0;
     if (s != NULL) {
-        current_score = s->eval->evaluate(*b);
-        if (side_to_play == Black) {
-            current_score = -current_score;
-        }
+        current_score = score;
     } else {
         s = 0;
     }
