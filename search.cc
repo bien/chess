@@ -82,20 +82,15 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
     }
     if (use_mtdf) {
         int old_max_depth = max_depth;
-        max_depth = 0;
-        auto null_guess = negamax_with_memory(b, 0, SCORE_MIN, SCORE_MAX);
-        max_depth = old_max_depth;
-        int guess_score = std::get<2>(null_guess);
+        int guess_score = 0;
 
-        if (max_depth > 2) {
-            int subscore = 0;
-            max_depth -= 2;
-            result = mtdf(b, subscore, guess_score);
-            s(result, max_depth, nodecount, subscore);
-            max_depth += 2;
-            guess_score = subscore;
+        for (int iter_depth = (old_max_depth % 2 == 1 ? 1 : 0); iter_depth <= old_max_depth; iter_depth += 2) {
+            max_depth = iter_depth;
+            result = mtdf(b, score, guess_score);
+            s(result, max_depth, nodecount, score);
+            guess_score = score;
         }
-        result = mtdf(b, score, guess_score, 0, result);
+        max_depth = old_max_depth;
     } else {
         std::tuple<move_t, move_t, int> sub;
         // if (use_nega) {
@@ -151,8 +146,10 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     if (search_debug) {
         std::cout << "mtdf guess=" << guess << " depth=" << max_depth << std::endl;
     }
-    const int window_size = 10;
+    const int window_size = 50;
     bool last_search = false;
+    bool first = true;
+    uint64_t mtdf_node_start = nodecount;
 
     do {
         int beta;
@@ -163,13 +160,15 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
         beta = std::min(upperbound, alpha + window_size);
 
         // if we know there's a checkmate then don't bother being cute
-        if (beta < -9900 + window_size) {
-            alpha = SCORE_MIN;
-            last_search = true;
-        }
-        else if (alpha > 9900 - window_size) {
-            beta = SCORE_MAX;
-            last_search = true;
+        if (!first) {
+            if (beta < -9900 + window_size) {
+                alpha = SCORE_MIN;
+                last_search = true;
+            }
+            else if (alpha > 9900 - window_size) {
+                beta = SCORE_MAX;
+                last_search = true;
+            }
         }
         uint64_t start_nodecount = nodecount;
         if (search_debug) {
@@ -189,24 +188,25 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
         if (std::get<0>(result) != -1 && std::get<0>(result) != 0) {
             move = std::get<0>(result);
         }
-        if (score < beta) {
-            upperbound = score;
-        } else {
-            lowerbound = score;
-        }
         if (search_debug) {
             std::cout << "  mtdf a=" << alpha << " b=" << beta << " score=" << score << " lower=" << lowerbound << " upper=" << upperbound << " move=";
             b.print_move(move, std::cout);
             std::cout << " nodes=" << (nodecount - start_nodecount) << std::endl;
         }
+        if (score < beta && score >= alpha) {
+            break;
+        } else if (score < beta) {
+            upperbound = score;
+        } else {
+            lowerbound = score;
+        }
+        first = false;
     } while (lowerbound < upperbound && !last_search);
     if (search_debug) {
-        std::cout << "done mtdf" << std::endl;
+        std::cout << "done mtdf nodes=" << (nodecount - mtdf_node_start) << std::endl;
     }
     return move;
 }
-
-const int futility_margin = 50;
 
 // principal move, principal reply, cp score
 std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint, int static_score, const std::string &line)

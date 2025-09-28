@@ -88,7 +88,20 @@ int main(int argc, char **argv)
 
             }
             std::cout << "Move = " << move_to_uci(result_move) << " score = " << result_score << std::endl;
-            std::cout << "Node count = " << s.nodecount << std::endl;
+            std::cout << "Line = " << move_to_uci(result_move);
+            move_t next_move = result_move;
+            while (1) {
+                b.apply_move(next_move);
+                int ignore;
+                int alpha = VERY_BAD;
+                int beta = VERY_GOOD;
+                if (s.read_transposition(b.get_hash(), next_move, 0, alpha, beta, ignore)) {
+                    std::cout << " " << move_to_uci(next_move);
+                } else {
+                    break;
+                }
+            }
+            std::cout << std::endl << "Node count = " << s.nodecount << " quiescent count = " << s.qnodecount << std::endl;
         }
     }
     catch(std::exception& e) {

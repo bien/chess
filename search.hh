@@ -69,7 +69,7 @@ struct MoveSorter {
 };
 
 struct Search {
-    Search(Evaluation *eval, int transposition_table_size=1000 * 5000 + 1);
+    Search(Evaluation *eval, int transposition_table_size=10000 * 5000 + 1);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
     // int principal_variation(Fenboard &b, int depth, int alpha, int beta, move_t &best_move, move_t hint=0);
@@ -112,11 +112,9 @@ private:
 public:
     move_t mtdf(Fenboard &b, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, const SearchUpdate &s);
-//    int quiescent_evaluation(Fenboard &b, int alpha, int beta, int depth_so_far);
+    bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 private:
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);
-    bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
-
     bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) const {
         uint64_t storage = transposition_table[hash % transposition_table_size];
         unsigned short checksum = hash & 0xff00;
@@ -129,7 +127,6 @@ private:
         move = (storage >> 32);
         return true;
     }
-
     void insert_tt_entry(uint64_t hash, move_t move, int16_t value, unsigned char depth, unsigned char type) {
         uint64_t storage = (static_cast<uint64_t>(move) << 32) | (0xffff0000ULL & (static_cast<int16_t>(value) << 16));
         storage |= (depth & 0x1f) << 2;
