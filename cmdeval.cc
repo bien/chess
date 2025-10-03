@@ -1,5 +1,6 @@
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <set>
 #include "fenboard.hh"
 #include "evaluate.hh"
 #include "search.hh"
@@ -17,6 +18,7 @@ int main(int argc, char **argv)
             ("depth", po::value<int>(), "set depth")
             ("alpha", po::value<int>(), "set alpha")
             ("beta", po::value<int>(), "set beta")
+            ("window", po::value<int>(), "set mtdf window sie")
             ("debug", po::value<int>(), "set debug level")
             ("quiescent", po::bool_switch(), "get quiescent eval")
             ("no-tt", po::bool_switch(), "turn off transposition table")
@@ -63,6 +65,10 @@ int main(int argc, char **argv)
             beta = vm["beta"].as<int>();
         }
 
+        if (vm.count("window")) {
+            s.mtdf_window_size = vm["window"].as<int>();
+        }
+
         if (vm.count("fen")) {
             b.set_fen(vm["fen"].as<std::string>());
         } else {
@@ -71,7 +77,11 @@ int main(int argc, char **argv)
 
         if (vm["moves"].as<bool>()) {
             Acquisition<MoveSorter> move_iter(&s);
-            move_iter->reset(&b, &s, b.get_side_to_play(), true, 0, true);
+            move_iter->reset(&b, &s, b.get_side_to_play(), 0, true, 0, 0, true);
+            while (move_iter->has_more_moves()) {
+                move_t move = move_iter->next_move();
+                std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, 0, move) << std::endl;
+            }
         }
         if (depth > 0 || vm["quiescent"].as<bool>()) {
             int result_score;
@@ -90,7 +100,9 @@ int main(int argc, char **argv)
             std::cout << "Move = " << move_to_uci(result_move) << " score = " << result_score << std::endl;
             std::cout << "Line = " << move_to_uci(result_move);
             move_t next_move = result_move;
-            while (1) {
+            // avoid loops
+            std::set<move_t> seen_moves;
+            while (next_move != 0 && next_move != -1 && seen_moves.find(next_move) == seen_moves.end()) {
                 b.apply_move(next_move);
                 int ignore;
                 int alpha = VERY_BAD;
@@ -100,6 +112,7 @@ int main(int argc, char **argv)
                 } else {
                     break;
                 }
+                seen_moves.insert(next_move);
             }
             std::cout << std::endl << "Node count = " << s.nodecount << " quiescent count = " << s.qnodecount << std::endl;
         }

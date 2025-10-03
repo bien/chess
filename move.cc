@@ -3,12 +3,17 @@
 
 piece_t get_captured_piece(move_t move, Color color)
 {
-    return make_piece((move >> 16) & PIECE_MASK, color);
+    return make_piece((move >> CAPTURE_PIECE_POS) & PIECE_MASK, color);
 }
 
 piece_t get_promotion(move_t move, Color color)
 {
-    return make_piece((move >> 24) & PIECE_MASK, color);
+    piece_t piece = (move >> PROMO_PIECE_POS) & PIECE_MASK;
+    if (piece > 0 && piece < bb_king) {
+        return make_piece(piece, color);
+    } else {
+        return 0;
+    }
 }
 
 void get_source(move_t move, unsigned char &rank, unsigned char &file)
@@ -38,5 +43,5 @@ bool get_invalidates_queenside_castle(move_t move)
 }
 bool get_invalidates_kingside_castle(move_t move)
 {
-    return move & INVALIDATES_CASTLE_K;    
+    return move & INVALIDATES_CASTLE_K;
 }

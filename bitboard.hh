@@ -34,12 +34,17 @@ const int PIECE_MASK = 7;
 const int WhiteMask = 0;
 const int BlackMask = 8;
 
-const int MOVE_FROM_CHECK = 0x80000;
-const int ENPASSANT_STATE_MASK = 0xf00000;
-const int ENPASSANT_FLAG = 0x8000000;
-const int INVALIDATES_CASTLE_K = 0x10000000;
-const int INVALIDATES_CASTLE_Q = 0x20000000;
-const int GIVES_CHECK = 0x40000000;
+const int CAPTURE_PIECE_POS = 12;
+const int PROMO_PIECE_POS = 15;
+const int ENPASSANT_FLAG = 0x38000;
+const int MOVE_FROM_CHECK = 0x40000;
+const int MOVES_MASK_OFFSET = 19;
+const int MOVES_MASK = 0x01f80000;
+const int ENPASSANT_POS = 25;
+const int ENPASSANT_STATE_MASK = 0xf << ENPASSANT_POS;
+const int INVALIDATES_CASTLE_K = 0x20000000;
+const int INVALIDATES_CASTLE_Q = 0x40000000;
+const int GIVES_CHECK = 0x80000000;
 
 const int FL_ALL = 4;
 const int FL_CAPTURES = 2;
@@ -251,6 +256,7 @@ protected:
     void update() {}
 
     short move_count;
+    short moves_since_progress;
     bool in_check;
 
 private:

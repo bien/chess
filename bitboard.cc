@@ -444,7 +444,7 @@ void Bitboard::make_moves(std::vector<move_t> &dest,
         move |= MOVE_FROM_CHECK;
     }
     if (enpassant_file != -1) {
-        move |= (0xf & enpassant_file) << 20;
+        move |= (0xf & enpassant_file) << ENPASSANT_POS;
     } else {
         move |= ENPASSANT_STATE_MASK;
     }
@@ -477,7 +477,7 @@ void Bitboard::make_moves(std::vector<move_t> &dest,
             std::cout << board_to_fen((const Fenboard *)this) << std::endl;
         }
         assert((captured_piece & PIECE_MASK) != bb_king);
-        copied |= (captured_piece & PIECE_MASK) << 16;
+        copied |= (captured_piece & PIECE_MASK) << CAPTURE_PIECE_POS;
         dest.push_back(copied);
     }
 }
@@ -500,7 +500,7 @@ void Bitboard::make_pawn_moves(std::vector<move_t> &dest,
         move |= MOVE_FROM_CHECK;
     }
     if (enpassant_file != -1) {
-        move |= (0xf & enpassant_file) << 20;
+        move |= (0xf & enpassant_file) << ENPASSANT_POS;
     } else {
         move |= ENPASSANT_STATE_MASK;
     }
@@ -519,7 +519,7 @@ void Bitboard::make_pawn_moves(std::vector<move_t> &dest,
         if ((dest_offset % 8 != 0) && (captured_piece == EMPTY)) {
             copied |= ENPASSANT_FLAG;
         }
-        copied |= (captured_piece & PIECE_MASK) << 16;
+        copied |= (captured_piece & PIECE_MASK) << CAPTURE_PIECE_POS;
         if (dest_pos < 8 || dest_pos >= 56) {
             Color side_to_play = get_color(get_piece(source_pos / 8, source_pos % 8));
             uint64_t all_pieces = get_bitmask(side_to_play, bb_all) | get_bitmask(get_opposite_color(side_to_play), bb_all);
@@ -528,7 +528,7 @@ void Bitboard::make_pawn_moves(std::vector<move_t> &dest,
             // use reverse order because queen is probably better move
             for (piece_t promote = bb_queen; promote >= bb_knight; promote--) {
                 move_t c2 = copied;
-                c2 |= (promote & PIECE_MASK) << 24;
+                c2 |= (promote & PIECE_MASK) << PROMO_PIECE_POS;
                 // does the promoted piece give check?
                 bool gives_check = false;
                 if (promote == bb_knight) {
@@ -557,8 +557,10 @@ move_t Bitboard::make_move(unsigned char srcrank, unsigned char srcfile,
         unsigned char captured_piece, unsigned char promote, bool gives_check) const
 {
     move_t move = srcrank << 9 | srcfile << 6 | destrank << 3 | destfile;
-    move |= (promote & PIECE_MASK) << 24;
-    move |= (captured_piece & PIECE_MASK) << 16;
+    if (promote > 0) {
+        move |= (promote & PIECE_MASK) << PROMO_PIECE_POS;
+    }
+    move |= (captured_piece & PIECE_MASK) << CAPTURE_PIECE_POS;
     assert((captured_piece & PIECE_MASK) != bb_king);
     if (((source_piece & PIECE_MASK) == bb_pawn) && (srcfile != destfile) && (this->get_piece(destrank, destfile) == EMPTY)) {
         move |= ENPASSANT_FLAG;
@@ -569,7 +571,7 @@ move_t Bitboard::make_move(unsigned char srcrank, unsigned char srcfile,
         move |= MOVE_FROM_CHECK;
     }
     if (enpassant_file != -1) {
-        move |= (0xf & enpassant_file) << 20;
+        move |= (0xf & enpassant_file) << ENPASSANT_POS;
     } else {
         move |= ENPASSANT_STATE_MASK;
     }
@@ -1293,6 +1295,11 @@ void Bitboard::apply_move(move_t move)
     piece_t resultpiece = sourcepiece;
     Color color = get_color(sourcepiece);
 
+    if (get_captured_piece(move) > 0 || (sourcepiece & PIECE_MASK) == bb_pawn) {
+        moves_since_progress = 0;
+    } else if (color == White) {
+        moves_since_progress++;
+    }
 
     set_piece(destrank, destfile, sourcepiece);
     set_piece(sourcerank, sourcefile, EMPTY);
@@ -1493,7 +1500,7 @@ void Bitboard::undo_move(move_t move)
     if (captured_piece != EMPTY) {
         captured_piece = make_piece(captured_piece & PIECE_MASK, get_opposite_color(color));
     }
-    in_check = move & MOVE_FROM_CHECK;
+    in_check = (move & MOVE_FROM_CHECK) == MOVE_FROM_CHECK;
 
     // flags
     set_side_to_play(color);
@@ -1532,10 +1539,10 @@ void Bitboard::undo_move(move_t move)
     }
 
     // en passant capture
-    if (move & ENPASSANT_FLAG) {
+    if ((move & ENPASSANT_FLAG) == ENPASSANT_FLAG) {
         set_piece(sourcerank, destfile, make_piece(bb_pawn, get_opposite_color(color)));
     }
-    int new_enpassant_file = (move >> 20) & 0xf;
+    int new_enpassant_file = (move >> ENPASSANT_POS) & 0xf;
     if (new_enpassant_file > 8) {
         new_enpassant_file = -1;
     }

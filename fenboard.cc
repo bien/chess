@@ -341,7 +341,7 @@ void Fenboard::print_move(move_t move, std::ostream &os) const
         }
     }
 
-    if (move & ENPASSANT_FLAG) {
+    if ((move & ENPASSANT_FLAG) == ENPASSANT_FLAG) {
         os << "ep";
     }
 

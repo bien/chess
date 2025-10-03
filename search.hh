@@ -41,6 +41,7 @@ struct SearchUpdate {
 
 const SearchUpdate NullSearchUpdate;
 struct Search;
+const int NTH_SORT_FREQ_BUCKETS = 40;
 
 struct MoveSorter {
     MoveSorter();
@@ -66,6 +67,7 @@ struct MoveSorter {
     Search *s;
     int current_score;
     bool verbose;
+    mutable uint64_t covered_squares = 0;
 };
 
 struct Search {
@@ -91,6 +93,7 @@ struct Search {
     bool use_iterative_deepening;
     bool use_quiescent_search;
     bool use_killer_move;
+    int mtdf_window_size;
 
     int time_available;
     int max_depth;
@@ -102,6 +105,8 @@ struct Search {
     int transposition_partial_hits;
     int transposition_full_hits;
     int transposition_insufficient_depth;
+
+    int nth_sort_freq[NTH_SORT_FREQ_BUCKETS];
 
 private:
     uint64_t *transposition_table;

@@ -13,7 +13,7 @@
 #include "net/psqt.h"
 
 int search_debug = 0;
-const int LIMITED_QUIESCENT_DEPTH = 8;
+const int LIMITED_QUIESCENT_DEPTH = 7;
 
 static int vertical_mirror(int square) {
     return square ^ 56;
@@ -111,7 +111,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_pv(false), use_iterative_deepening(true),
-        use_quiescent_search(true), use_killer_move(true), time_available(0), max_depth(8), soft_deadline(true), use_nega(true)
+        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), time_available(0), max_depth(8), soft_deadline(true), use_nega(true)
 
 {
     srandom(clock());
@@ -125,6 +125,9 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     }
     for (int i = 0; i < max_depth; i++) {
         move_sorter_pool.push_back(new MoveSorter());
+    }
+    for (int i = 0; i < NTH_SORT_FREQ_BUCKETS; i++) {
+        nth_sort_freq[i] = 0;
     }
 }
 
@@ -146,7 +149,7 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     if (search_debug) {
         std::cout << "mtdf guess=" << guess << " depth=" << max_depth << std::endl;
     }
-    const int window_size = 50;
+
     bool last_search = false;
     bool first = true;
     uint64_t mtdf_node_start = nodecount;
@@ -156,16 +159,16 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
         if (deadline > 0 && time(NULL) > deadline) {
             return 0;
         }
-        int alpha = std::max(score - window_size, lowerbound);
-        beta = std::min(upperbound, alpha + window_size);
+        int alpha = std::max(score - mtdf_window_size, lowerbound);
+        beta = std::min(upperbound, alpha + mtdf_window_size);
 
         // if we know there's a checkmate then don't bother being cute
         if (!first) {
-            if (beta < -9900 + window_size) {
+            if (beta < -9900 + mtdf_window_size) {
                 alpha = SCORE_MIN;
                 last_search = true;
             }
-            else if (alpha > 9900 - window_size) {
+            else if (alpha > 9900 - mtdf_window_size) {
                 beta = SCORE_MAX;
                 last_search = true;
             }
@@ -578,6 +581,18 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move) con
         int king_square = get_low_bit(b->piece_bitmasks[side_to_play * (bb_king + 1) + bb_king], 0);
         int source_square = get_source_pos(move);
         int dest_square = get_dest_pos(move);
+        int score = 0;
+
+        if (actor == bb_queen || actor == bb_rook) {
+            if (covered_squares == 0) {
+                covered_squares = b->computed_covered_squares(get_opposite_color(b->get_side_to_play()));
+            }
+            // disprefer giving the queen/rook away
+            if (((1ULL << dest_square) & covered_squares) > 0) {
+               score -= piece_points[actor] * 50;
+            }
+        }
+
         if (side_to_play == Black) {
             king_square = vertical_mirror(king_square);
             source_square = vertical_mirror(source_square);
@@ -587,7 +602,6 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move) con
         int dense_index_actor = king_square * (64 * 10) + (actor - 1) * 64 + source_square;
         int dense_index_dest = king_square * (64 * 10) + (actor - 1) * 64 + dest_square;
 
-        int score = 0;
         score -= psqt_weights[dense_index_actor];
         score += psqt_weights[dense_index_dest];
         if (capture > 0) {
@@ -637,7 +651,9 @@ void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int dep
 
 
     // checks captures
+    int start = 0;
     b->get_moves(side_to_play, true, true, move_iter, buffer);
+    /*
     if (do_sort) {
         std::map<move_t, int> move_scores;
         for (auto iter = buffer.begin(); iter != buffer.end(); iter++) {
@@ -645,13 +661,14 @@ void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int dep
         }
         std::sort(buffer.begin(), buffer.end(), MoveCmp(&move_scores));
     }
+        */
 
     // checks non captures
     b->get_moves(side_to_play, true, false, move_iter, buffer);
     last_check = buffer.size() - 1;
 
     // other captures
-    int start = buffer.size();
+    // int start = buffer.size();
     b->get_moves(side_to_play, false, true, move_iter, buffer);
     std::map<move_t, int> move_scores;
     if (do_sort) {
