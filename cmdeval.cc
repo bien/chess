@@ -23,7 +23,7 @@ int main(int argc, char **argv)
             ("quiescent", po::bool_switch(), "get quiescent eval")
             ("no-tt", po::bool_switch(), "turn off transposition table")
             ("moves", po::bool_switch(), "list moves")
-            ("nnue", po::bool_switch(), "use nnue eval")
+            ("no-nnue", po::bool_switch(), "disable nnue eval")
         ;
 
         po::variables_map vm;
@@ -37,10 +37,10 @@ int main(int argc, char **argv)
 
         Fenboard b;
         Evaluation *e;
-        if (vm["nnue"].as<bool>()){
-            e = new NNUEEvaluation();
-        } else {
+        if (vm["no-nnue"].as<bool>()){
             e = new SimpleBitboardEvaluation();
+        } else {
+            e = new NNUEEvaluation();
         }
         Search s(e);
 
