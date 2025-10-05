@@ -46,12 +46,14 @@ const int NTH_SORT_FREQ_BUCKETS = 40;
 struct MoveSorter {
     MoveSorter();
     bool has_more_moves();
+
     bool next_gives_check() const;
     bool next_gives_check_or_capture() const {
         return index <= last_capture;
     }
+
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, Color side_to_play, int depth=0, bool do_sort=true, int score=0, move_t hint=0, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, bool captures_checks_only=false, int depth=0, bool do_sort=true, int score=0, move_t hint=0, bool verbose=false);
 
     bool operator()(move_t a, move_t b) const;
 

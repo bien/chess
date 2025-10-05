@@ -12,3 +12,7 @@ feature
 games/
 .ipynb_checkpoints
 .DS_Store
+Makefile.deps
+*.pgn
+*.bin
+*.zst

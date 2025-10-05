@@ -277,7 +277,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     } else {
         Acquisition<MoveSorter> move_iter(this);
         int depth_to_go = max_depth - depth;
-        move_iter->reset(&b, this, b.get_side_to_play(), std::max(0, max_depth - depth), depth_to_go > 2, alpha, hint);
+        move_iter->reset(&b, this, is_quiescent, std::max(0, max_depth - depth), depth_to_go > 2, alpha, hint);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -632,11 +632,11 @@ MoveSorter::MoveSorter()
     index = 0;
 }
 
-void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int depth, bool do_sort, int score, move_t hint, bool verbose)
+void MoveSorter::reset(const Fenboard *b, Search *s, bool captures_checks_only, int depth, bool do_sort, int score, move_t hint, bool verbose)
 {
     buffer.clear();
     move_iter.reset();
-    this->side_to_play = side_to_play;
+    this->side_to_play = b->get_side_to_play();
     this->do_sort = do_sort;
     this->hint = hint;
     this->s = s;
@@ -653,22 +653,12 @@ void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int dep
     // checks captures
     int start = 0;
     b->get_moves(side_to_play, true, true, move_iter, buffer);
-    /*
-    if (do_sort) {
-        std::map<move_t, int> move_scores;
-        for (auto iter = buffer.begin(); iter != buffer.end(); iter++) {
-            move_scores[*iter] = get_score(b, current_score, *iter);
-        }
-        std::sort(buffer.begin(), buffer.end(), MoveCmp(&move_scores));
-    }
-        */
 
     // checks non captures
     b->get_moves(side_to_play, true, false, move_iter, buffer);
     last_check = buffer.size() - 1;
 
     // other captures
-    // int start = buffer.size();
     b->get_moves(side_to_play, false, true, move_iter, buffer);
     std::map<move_t, int> move_scores;
     if (do_sort) {
@@ -680,13 +670,15 @@ void MoveSorter::reset(const Fenboard *b, Search *s, Color side_to_play, int dep
     last_capture = buffer.size() - 1;
 
     // non capture non checks
-    start = buffer.size();
-    b->get_moves(side_to_play, false, false, move_iter, buffer);
-    if (do_sort) {
-        for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
-            move_scores[*iter] = get_score(b, current_score, *iter);
+    if (!captures_checks_only || buffer.empty()) {
+        start = buffer.size();
+        b->get_moves(side_to_play, false, false, move_iter, buffer);
+        if (do_sort) {
+            for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
+                move_scores[*iter] = get_score(b, current_score, *iter);
+            }
+            std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
         }
-        std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
     }
 
     // move tranposition entries to front

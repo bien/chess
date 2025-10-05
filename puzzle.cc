@@ -185,7 +185,7 @@ int main(int argc, char **argv)
     if (std::string(argv[1]).find(".pgn") != std::string::npos) {
         read_pgn_puzzles(b, search, puzzles, r);
     } else {
-        read_csv_puzzles(b, search, puzzles, 8, r);
+        read_csv_puzzles(b, search, puzzles, 6, r);
 
     }
 

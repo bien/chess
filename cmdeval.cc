@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 
         if (vm["moves"].as<bool>()) {
             Acquisition<MoveSorter> move_iter(&s);
-            move_iter->reset(&b, &s, b.get_side_to_play(), 0, true, 0, 0, true);
+            move_iter->reset(&b, &s, vm["quiescent"].as<bool>(), 0, true, 0, 0, true);
             while (move_iter->has_more_moves()) {
                 move_t move = move_iter->next_move();
                 std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, 0, move) << std::endl;

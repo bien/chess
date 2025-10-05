@@ -262,7 +262,7 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
         }
     } else {
         MoveSorter ms;
-        ms.reset(this, NULL, color, false);
+        ms.reset(this, NULL);
         while (ms.has_more_moves()) {
             move_t move = ms.next_move();
             unsigned char mdestfile, mdestrank, msourcefile, msourcerank;
@@ -276,7 +276,7 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
         }
         std::cout << (*this) << std::endl << "couldn't find legal moves among: " << std::endl;
         MoveSorter ms2;
-        ms.reset(this, NULL, color);
+        ms.reset(this, NULL);
         while (ms2.has_more_moves()) {
             move_t move = ms2.next_move();
             unsigned char mdestfile, mdestrank, msourcefile, msourcerank;

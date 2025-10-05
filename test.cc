@@ -79,9 +79,9 @@ void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
 }
 
 
-void legal_moves(Fenboard *b, Color color, std::vector<move_t> &moves) {
+void legal_moves(Fenboard *b, std::vector<move_t> &moves) {
     MoveSorter ms;
-    ms.reset(b, NULL, color);
+    ms.reset(b, NULL);
     while (ms.has_more_moves()) {
         moves.push_back(ms.next_move());
     }
@@ -90,6 +90,11 @@ void legal_moves(Fenboard *b, Color color, std::vector<move_t> &moves) {
 void assert_legal_move(Fenboard *b, std::vector<move_t> &move_list, move_t move) {
     std::ostringstream movetext;
     b->print_move(move, movetext);
+    movetext << " among {";
+    for (auto iter = move_list.begin(); iter != move_list.end(); iter++) {
+        movetext << move_to_uci(*iter) << " ";
+    }
+    movetext << "}";
     assert_contains(move_list, move, movetext.str());
 }
 
@@ -109,7 +114,7 @@ void assert_moves(const std::string &fen, const std::vector<std::string> &expect
     std::ostringstream movetext;
 
     b.set_fen(fen);
-    legal_moves(&b, b.get_side_to_play(), legal);
+    legal_moves(&b, legal);
     if (expected_moves.size() != legal.size()) {
         std::cout << "Expected moves: ";
         for (auto iter = expected_moves.begin(); iter != expected_moves.end(); iter++) {
@@ -158,9 +163,9 @@ void test_legal_moves(std::string fischer_pgn_file)
     }
 
     std::vector<move_t> expected_white, expected_black;
-    legal_moves(&b, White, legal_white);
+    legal_moves(&b, legal_white);
     b.set_side_to_play(Black);
-    legal_moves(&b, Black, legal_black);
+    legal_moves(&b, legal_black);
     b.set_side_to_play(White);
 
     for (int i = 0; i < 8; i++) {
@@ -315,7 +320,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     // bug in check computation
     b.set_fen("r4kr1/1b2R1n1/pq4p1/7Q/1p4P1/5P2/PPP4P/1K2R3 b - - 0 1");
     legal_black.clear();
-    legal_moves(&b, Black, legal_black);
+    legal_moves(&b, legal_black);
     for (std::vector<move_t>::iterator iter = legal_black.begin(); iter != legal_black.end(); iter++) {
         movetext.str("");
         b.print_move(*iter, movetext);
@@ -324,7 +329,7 @@ void test_legal_moves(std::string fischer_pgn_file)
 
     b.set_fen("6r1/7k/2p1pPp1/3p4/8/7R/5PPP/5K2 b - - 1 1");
     legal_black.clear();
-    legal_moves(&b, Black, legal_black);
+    legal_moves(&b, legal_black);
     assert_equals(0, static_cast<int>(legal_black.size()));
     assert_equals(true, b.king_in_check(Black));
 
@@ -372,7 +377,7 @@ void test_legal_moves(std::string fischer_pgn_file)
     movetext.clear();
     b.set_fen("8/6r1/4B3/n1p1p1rb/2p1kPpR/1pR1P1b1/6P1/1K6 b - f3 0 2");
     legal_black.clear();
-    legal_moves(&b, Black, legal_black);
+    legal_moves(&b, legal_black);
     for (std::vector<move_t>::iterator iter = legal_black.begin(); iter != legal_black.end(); iter++) {
         movetext.str("");
         b.print_move(*iter, movetext);
