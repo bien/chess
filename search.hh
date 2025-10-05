@@ -133,6 +133,15 @@ private:
         return true;
     }
     void insert_tt_entry(uint64_t hash, move_t move, int16_t value, unsigned char depth, unsigned char type) {
+        move_t old_move;
+        int16_t old_value;
+        unsigned char old_depth, old_type;
+
+        // don't overwrite deeper value already present
+        if (fetch_tt_entry(hash, old_move, old_value, old_depth, old_type) && old_depth > depth) {
+            return;
+        }
+
         uint64_t storage = (static_cast<uint64_t>(move) << 32) | (0xffff0000ULL & (static_cast<int16_t>(value) << 16));
         storage |= (depth & 0x1f) << 2;
         storage |= type & 0x3;
