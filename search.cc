@@ -86,7 +86,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 
         for (int iter_depth = (old_max_depth % 2 == 1 ? 1 : 0); iter_depth <= old_max_depth; iter_depth += 2) {
             max_depth = iter_depth;
-            result = mtdf(b, score, guess_score);
+            result = mtdf(b, score, guess_score, 0, result);
             s(result, max_depth, nodecount, score);
             guess_score = score;
         }
