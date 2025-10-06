@@ -76,7 +76,6 @@ struct Search {
     Search(Evaluation *eval, int transposition_table_size=10000 * 5000 + 1);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
-    // int principal_variation(Fenboard &b, int depth, int alpha, int beta, move_t &best_move, move_t hint=0);
 
     void reset();
 
@@ -109,6 +108,7 @@ struct Search {
     int transposition_insufficient_depth;
 
     int nth_sort_freq[NTH_SORT_FREQ_BUCKETS];
+    int move_counts[NTH_SORT_FREQ_BUCKETS];
 
 private:
     uint64_t *transposition_table;

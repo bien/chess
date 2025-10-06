@@ -20,6 +20,7 @@ int main(int argc, char **argv)
             ("beta", po::value<int>(), "set beta")
             ("window", po::value<int>(), "set mtdf window sie")
             ("debug", po::value<int>(), "set debug level")
+            ("hash", po::bool_switch(), "output hash value")
             ("quiescent", po::bool_switch(), "get quiescent eval")
             ("no-tt", po::bool_switch(), "turn off transposition table")
             ("moves", po::bool_switch(), "list moves")
@@ -75,9 +76,13 @@ int main(int argc, char **argv)
             b.set_starting_position();
         }
 
+        if (vm["hash"].as<bool>()) {
+            std::cout << "Hash: " << b.get_hash() << std::endl;
+        }
+
         if (vm["moves"].as<bool>()) {
             Acquisition<MoveSorter> move_iter(&s);
-            move_iter->reset(&b, &s, vm["quiescent"].as<bool>(), 0, true, 0, 0, true);
+            move_iter->reset(&b, &s, vm["quiescent"].as<bool>(), depth, true, 0, 0, true);
             while (move_iter->has_more_moves()) {
                 move_t move = move_iter->next_move();
                 std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, 0, move) << std::endl;
@@ -115,6 +120,16 @@ int main(int argc, char **argv)
                 seen_moves.insert(next_move);
             }
             std::cout << std::endl << "Node count = " << s.nodecount << " quiescent count = " << s.qnodecount << std::endl;
+            float mrr_actual = 0;
+            int sort_count = 0;
+            for (int i = 0; i < NTH_SORT_FREQ_BUCKETS; i++) {
+                sort_count += s.nth_sort_freq[i];
+                mrr_actual += s.nth_sort_freq[i] * 1.0 / (i+1);
+                if (s.nth_sort_freq[i] > 0) {
+                    std::cout << i << "=" << s.nth_sort_freq[i] << " ";
+                }
+            }
+            std::cout << std::endl << "MRR = " << mrr_actual / sort_count << std::endl;
         }
     }
     catch(std::exception& e) {

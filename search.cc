@@ -147,7 +147,7 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     int upperbound = SCORE_MAX;
     int lowerbound = SCORE_MIN;
     if (search_debug) {
-        std::cout << "mtdf guess=" << guess << " depth=" << max_depth << std::endl;
+        std::cout << "mtdf guess=" << guess << "(" << move_to_uci(move) << ") depth=" << max_depth << std::endl;
     }
 
     bool last_search = false;
@@ -325,7 +325,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         if (depth_to_go == 1) {
             static_eval = eval->evaluate(b);
         }
+        int best_index = -1;
+        int move_index = -1;
         while (move_iter->has_more_moves() && ((first && !initialized_null_move_eval) || !is_quiescent || move_iter->next_gives_check_or_capture())) {
+            move_index++;
             int subtree_score;
             bool checked_futility = false;
             move_t move = move_iter->next_move();
@@ -401,6 +404,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 best_score = subtree_score;
                 best_move = move;
                 best_response = submove;
+                best_index = move_index;
 
                 if (use_pruning) {
                     if (best_score > alpha) {
@@ -435,6 +439,12 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 std::cout << std::endl;
             }
         }
+
+        if (best_index >= 0) {
+            nth_sort_freq[std::min(best_index, NTH_SORT_FREQ_BUCKETS -1)] += 1;
+            move_counts[std::min(move_index, NTH_SORT_FREQ_BUCKETS -1)] += 1;
+        }
+
 
     }
 
