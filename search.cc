@@ -439,13 +439,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 std::cout << std::endl;
             }
         }
-
         if (best_index >= 0) {
             nth_sort_freq[std::min(best_index, NTH_SORT_FREQ_BUCKETS -1)] += 1;
             move_counts[std::min(move_index, NTH_SORT_FREQ_BUCKETS -1)] += 1;
         }
-
-
     }
 
     if (search_debug >= depth + 1) {
@@ -505,6 +502,8 @@ bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth,
                 // special adjustment for transposing into mate sequences -- need to change distance
                 mate_depth_adjustment = (tt_depth - depth);
             }
+            int original_alpha = alpha;
+            int original_beta = beta;
             if (tt_type == TT_EXACT) {
                 transposition_full_hits++;
                 beta = tt_value - mate_depth_adjustment;
@@ -527,9 +526,16 @@ bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth,
             } else {
                 exact_value = tt_value;
             }
+            if (board_hash == tt_hash_debug) {
+                std::cout << "Accept: adjusted bounds from (" << original_alpha << ", " << original_beta << ") to (" << alpha << ", " << beta << ")" << std::endl;
+            }
             return true;
         } else {
             transposition_insufficient_depth++;
+            if (board_hash == tt_hash_debug) {
+                std::cout << "Reject: insufficient depth (needed " << depth << " have " << tt_depth << ")" << std::endl;
+            }
+
         }
     }
     return false;

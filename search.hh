@@ -110,6 +110,8 @@ struct Search {
     int nth_sort_freq[NTH_SORT_FREQ_BUCKETS];
     int move_counts[NTH_SORT_FREQ_BUCKETS];
 
+    uint64_t tt_hash_debug;
+
 private:
     uint64_t *transposition_table;
     // std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
@@ -125,13 +127,26 @@ private:
     bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) const {
         uint64_t storage = transposition_table[hash % transposition_table_size];
         unsigned short checksum = hash & 0xff00;
+        type = storage & 0x3;
         if (type <= 0 || checksum != (storage & 0xff00)) {
             return false;
         }
-        type = storage & 0x3;
         depth = (storage >> 2) & 0x1f;
         value = (storage >> 16) & 0xffff;
         move = (storage >> 32);
+
+
+        if (hash == tt_hash_debug) {
+            std::cout << "Found tt entry for " << hash << " response=" << move_to_uci(move) << " depth=" << (int) depth << " value=" << value << " type=";
+            switch (type) {
+                case TT_EXACT: std::cout << "exact"; break;
+                case TT_LOWER: std::cout << "lower"; break;
+                case TT_UPPER: std::cout << "upper"; break;
+                default: std::cout << "unknown"; break;
+            }
+            std::cout << std::endl;
+        }
+
         return true;
     }
     void insert_tt_entry(uint64_t hash, move_t move, int16_t value, unsigned char depth, unsigned char type) {
@@ -150,6 +165,18 @@ private:
         unsigned short checksum = hash & 0xff00;
         storage |= checksum;
         transposition_table[hash % transposition_table_size] = storage;
+
+        if (hash == tt_hash_debug) {
+            std::cout << "Insert tt entry for " << hash << " response=" << move_to_uci(move) << " depth=" << (int)depth << " value=" << value << " type=";
+            switch (type) {
+                case TT_EXACT: std::cout << "exact"; break;
+                case TT_LOWER: std::cout << "lower"; break;
+                case TT_UPPER: std::cout << "upper"; break;
+                default: std::cout << "unknown"; break;
+            }
+            std::cout << std::endl;
+        }
+
     }
 
     std::vector<MoveSorter *> move_sorter_pool;

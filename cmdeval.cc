@@ -20,6 +20,7 @@ int main(int argc, char **argv)
             ("beta", po::value<int>(), "set beta")
             ("window", po::value<int>(), "set mtdf window sie")
             ("debug", po::value<int>(), "set debug level")
+            ("tt-check", po::value<uint64_t>(), "debug for hash value")
             ("hash", po::bool_switch(), "output hash value")
             ("quiescent", po::bool_switch(), "get quiescent eval")
             ("no-tt", po::bool_switch(), "turn off transposition table")
@@ -58,6 +59,9 @@ int main(int argc, char **argv)
         }
         if (vm.count("debug")) {
             search_debug = vm["debug"].as<int>();
+        }
+        if (vm.count("tt-check")) {
+            s.tt_hash_debug = vm["tt-check"].as<uint64_t>();
         }
         if (vm.count("alpha")) {
             alpha = vm["alpha"].as<int>();
