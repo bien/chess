@@ -69,7 +69,9 @@ struct MoveSorter {
     Search *s;
     int current_score;
     bool verbose;
-    mutable uint64_t covered_squares = 0;
+    mutable uint64_t covered_squares_q = ~0;
+    mutable uint64_t covered_squares_r = ~0;
+    mutable uint64_t covered_squares_bn = ~0;
 };
 
 struct Search {

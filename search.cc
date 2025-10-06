@@ -599,13 +599,26 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move) con
         int dest_square = get_dest_pos(move);
         int score = 0;
 
-        if (actor == bb_queen || actor == bb_rook) {
-            if (covered_squares == 0) {
-                covered_squares = b->computed_covered_squares(get_opposite_color(b->get_side_to_play()));
+        if (actor >= bb_knight && actor <= bb_queen) {
+            if (covered_squares_q == ~0) {
+                Color opponent = get_opposite_color(b->get_side_to_play());
+                covered_squares_bn = b->computed_covered_squares(opponent, INCLUDE_PAWN);
+                covered_squares_r = covered_squares_bn | b->computed_covered_squares(opponent, INCLUDE_BISHOP | INCLUDE_KNIGHT);
+                covered_squares_q = covered_squares_r | b->computed_covered_squares(opponent, INCLUDE_ROOK);
             }
-            // disprefer giving the queen/rook away
-            if (((1ULL << dest_square) & covered_squares) > 0) {
-               score -= piece_points[actor] * 50;
+            uint64_t coverer = 0;
+            switch(actor) {
+                case bb_queen: coverer = covered_squares_q; break;
+                case bb_rook: coverer = covered_squares_r; break;
+                case bb_knight: case bb_bishop: coverer = covered_squares_bn; break;
+            }
+            // move piece out of attack
+            if (((1ULL << source_square) & coverer) > 0) {
+               score += piece_points[actor] * 100;
+            }
+            // disprefer giving the piece away
+            if (((1ULL << dest_square) & coverer) > 0) {
+               score -= piece_points[actor] * 100;
             }
         }
 

@@ -633,7 +633,7 @@ uint64_t Bitboard::get_blocking_squares(int src, int dest, uint64_t blockers) co
 bool Bitboard::king_in_check(Color color) const
 {
     uint64_t king_pos = get_bitmask(color, bb_king);
-    uint64_t covered = computed_covered_squares(get_opposite_color(color));
+    uint64_t covered = computed_covered_squares(get_opposite_color(color), INCLUDE_ALL);
     return covered & king_pos;
 }
 
@@ -663,21 +663,27 @@ uint64_t Bitboard::square_attackers(int dest, Color color) const
 }
 
 /* returns squares that are currently attacked/defended by pieces of Color color */
-uint64_t Bitboard::computed_covered_squares(Color color) const
+uint64_t Bitboard::computed_covered_squares(Color color, int include_flags) const
 {
     uint64_t squares = 0;
     int one_rank_forward = (color == White ? -8 : 8);
 
     PackedMoveIterator moves;
-    get_nk_pseudo_moves(color, bb_king, moves, false, true);
-    get_nk_pseudo_moves(color, bb_knight, moves, false, true);
-    get_slide_pseudo_moves(color, moves, false, get_bitmask(get_opposite_color(color), bb_king), true);
+    if (include_flags & INCLUDE_KING) {
+        get_nk_pseudo_moves(color, bb_king, moves, false, true);
+    }
+    if (include_flags & INCLUDE_KNIGHT) {
+        get_nk_pseudo_moves(color, bb_knight, moves, false, true);
+    }
+    get_slide_pseudo_moves(color, moves, false, include_flags, get_bitmask(get_opposite_color(color), bb_king), true);
     for (auto iter = moves.begin(); iter != moves.end(); iter++) {
         squares |= iter->dest_squares;
     }
     // pawn moves
-    squares |= shift_right(get_bitmask(color, bb_pawn) & ~file_a, one_rank_forward + 1)
-            | shift_right(get_bitmask(color, bb_pawn) & ~file_h, one_rank_forward - 1);
+    if (include_flags & INCLUDE_PAWN) {
+        squares |= shift_right(get_bitmask(color, bb_pawn) & ~file_a, one_rank_forward + 1)
+                | shift_right(get_bitmask(color, bb_pawn) & ~file_h, one_rank_forward - 1);
+    }
     return squares;
 }
 
@@ -771,7 +777,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
     uint64_t all_pieces = get_bitmask(side_to_play, bb_all) | get_bitmask(get_opposite_color(side_to_play), bb_all);
     int opp_king_square = get_low_bit(opp_king, 0);
     uint64_t king_attackers = 0;
-    uint64_t opp_covered_squares = computed_covered_squares(get_opposite_color(side_to_play));
+    uint64_t opp_covered_squares = computed_covered_squares(get_opposite_color(side_to_play), INCLUDE_ALL);
     moves.pawn_check_squares = BitboardCaptures::PregeneratedCaptures[get_opposite_color(side_to_play)][bb_pawn][opp_king_square];
     uint64_t blocking_pieces;
     uint64_t total_blocking_pieces;
@@ -832,7 +838,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
     if (count_bits(king_attackers) < 2) {
         // if in double-check, don't bother generating non-king moves
         get_nk_pseudo_moves(side_to_play, bb_knight, moves, true);
-        get_slide_pseudo_moves(side_to_play, moves, true, 0);
+        get_slide_pseudo_moves(side_to_play, moves, true, INCLUDE_ALL, 0);
         get_pawn_pseudo_moves(side_to_play, moves.pawn_move_one, moves.pawn_move_two, moves.capture_award, moves.capture_hward);
 
         // filter non-king moves
@@ -1020,7 +1026,7 @@ uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blo
 }
 
 
-void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const
+void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, int include_flags, uint64_t exclude_pieces, bool omit_check_calc) const
 {
     uint64_t my_pieces = get_bitmask(color, bb_all);
     uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
@@ -1030,6 +1036,15 @@ void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr
     uint64_t bishop_attacking_sq = ~0ULL, rook_attacking_sq = ~0ULL;
 
     for (piece_t piece_type = bb_bishop; piece_type <= bb_queen; piece_type++) {
+        int include_test = 0;
+        switch(piece_type) {
+            case bb_bishop: include_test = INCLUDE_BISHOP; break;
+            case bb_rook: include_test = INCLUDE_ROOK; break;
+            case bb_queen: include_test = INCLUDE_QUEEN; break;
+        }
+        if ((include_test & include_flags) == 0) {
+            continue;
+        }
         uint64_t actors = get_bitmask(color, piece_type);
         int start_pos = -1;
 

@@ -19,6 +19,14 @@ const piece_t bb_rook = 4;
 const piece_t bb_queen = 5;
 const piece_t bb_king = 6;
 
+const int INCLUDE_PAWN = 1;
+const int INCLUDE_KNIGHT = 2;
+const int INCLUDE_BISHOP = 4;
+const int INCLUDE_ROOK = 8;
+const int INCLUDE_QUEEN = 0x10;
+const int INCLUDE_KING = 0x20;
+const int INCLUDE_ALL = 0x3f;
+
 enum Color { White = 0, Black = 1 };
 
 static constexpr Color get_opposite_color(Color color) {
@@ -281,7 +289,7 @@ private:
     char castle;
     uint64_t get_captures(Color color, piece_t piece_type, int start_pos) const;
     bool removes_check(piece_t piece_type, int start_pos, int dest_pos, Color color, uint64_t covered_squares) const;
-    uint64_t computed_covered_squares(Color color) const;
+    uint64_t computed_covered_squares(Color color, int include_flags) const;
 
     uint64_t square_attackers(int dest, Color color) const;
     uint64_t removes_check_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares, uint64_t attackers) const;
@@ -292,7 +300,7 @@ private:
 
     uint64_t pinned_piece_legal_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const;
     uint64_t get_blocking_pieces(int king_pos, Color king_color, Color blocked_piece_color, uint64_t &immobile_pinned_pieces, uint64_t &pawn_cannot_advance, uint64_t &pawn_cannot_capture_award, uint64_t &pawn_cannot_capture_hward) const;
-    void get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, uint64_t exclude_pieces=0, bool omit_check_calc=false) const;
+    void get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, int include_flags, uint64_t exclude_pieces=0, bool omit_check_calc=false) const;
     void get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures, bool omit_check_calc=false) const;
     void get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const;
 
