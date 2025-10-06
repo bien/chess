@@ -53,7 +53,7 @@ struct MoveSorter {
     }
 
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, bool captures_checks_only=false, int depth=0, bool do_sort=true, int score=0, move_t hint=0, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, bool captures_checks_only=false, int depth=0,  int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, int score=0, move_t hint=0, bool verbose=false);
 
     bool operator()(move_t a, move_t b) const;
 

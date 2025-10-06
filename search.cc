@@ -277,7 +277,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     } else {
         Acquisition<MoveSorter> move_iter(this);
         int depth_to_go = max_depth - depth;
-        move_iter->reset(&b, this, is_quiescent, std::max(0, max_depth - depth), depth_to_go > 2, alpha, hint);
+        move_iter->reset(&b, this, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, alpha, hint);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -648,7 +648,7 @@ MoveSorter::MoveSorter()
     index = 0;
 }
 
-void MoveSorter::reset(const Fenboard *b, Search *s, bool captures_checks_only, int depth, bool do_sort, int score, move_t hint, bool verbose)
+void MoveSorter::reset(const Fenboard *b, Search *s, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, int score, move_t hint, bool verbose)
 {
     buffer.clear();
     move_iter.reset();
@@ -703,7 +703,9 @@ void MoveSorter::reset(const Fenboard *b, Search *s, bool captures_checks_only, 
             move_t ignore;
             int16_t tt_value;
             unsigned char tt_depth, tt_type;
-            if (s->fetch_tt_entry(b->get_zobrist_with_move(*iter), ignore, tt_value, tt_depth, tt_type) && tt_type == TT_EXACT && tt_depth >= depth) {
+            if (s->fetch_tt_entry(b->get_zobrist_with_move(*iter), ignore, tt_value, tt_depth, tt_type)
+                    && (tt_type == TT_EXACT || (tt_type == TT_LOWER && tt_value >= beta) || (tt_type == TT_UPPER && tt_value < alpha))
+                    && tt_depth >= depth) {
                 if (iter > (last_check + buffer.begin()) && last_check >= 0) {
                     last_check++;
                 }
