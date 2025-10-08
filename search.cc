@@ -14,6 +14,8 @@
 
 int search_debug = 0;
 const int LIMITED_QUIESCENT_DEPTH = 7;
+const int MAX_HISTORY = 10000;
+const int HISTORY_SCALER = 500;
 
 static int vertical_mirror(int square) {
     return square ^ 56;
@@ -129,6 +131,8 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     for (int i = 0; i < NTH_SORT_FREQ_BUCKETS; i++) {
         nth_sort_freq[i] = 0;
     }
+
+    memset(&history_bonus, 0, sizeof(history_bonus));
 }
 
 void Search::reset()
@@ -139,6 +143,7 @@ void Search::reset()
     for (int i = 0; i < transposition_table_size; i++) {
         transposition_table[i] = 0;
     }
+    memset(&history_bonus, 0, sizeof(history_bonus));
 }
 
 move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t move)
@@ -396,7 +401,16 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 if (std::get<1>(child) == 0 && submove != 0) {
                     std::cout << "T";
                 }
-                std::cout << " (nodes=" << elapsed_nodes << " qnodes=" << elapsed_qnodes << ") (line=" << line << ")";
+                std::cout << " (depth=" << depth << " nodes=" << elapsed_nodes << " qnodes=" << elapsed_qnodes << ") (line=" << line << ")";
+            }
+
+            if (subtree_score < alpha) {
+                        if (search_debug >= depth + 1) {
+                            std::cout << "~" << std::endl;
+                        }
+               int clamped_bonus = std::max(-(depth_to_go + 1) * (depth_to_go + 1), -MAX_HISTORY);
+                history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] //-= depth;
+                   += clamped_bonus - history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
             }
 
 
@@ -415,6 +429,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                         if (search_debug >= depth + 1) {
                             std::cout << "!" << std::endl;
                         }
+
+                       int clamped_bonus = std::min((depth_to_go + 1) * (depth_to_go + 1) * 5, MAX_HISTORY);
+                        history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)]
+                           += clamped_bonus - history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
                         // pruned = true;
                         break;
                     }
@@ -563,8 +581,6 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move) con
     if (s != NULL && s->fetch_tt_entry(b->get_zobrist_with_move(move), ignore, tt_value, tt_depth, tt_type)) {
         if (tt_type == TT_EXACT) {
             return tt_value + 1000;
-        } else {
-            return tt_value + 100;
         }
     }
 
@@ -639,7 +655,12 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move) con
         if (promo > 0) {
             score += psqt_weights[king_square * (64 * 10) + (promo - 1) * 64 + dest_square];
         }
-        return current_score + score;
+        int point_score = current_score + score;
+        if (s != NULL && !(move & GIVES_CHECK) && capture == 0) {
+            return point_score + s->history_bonus[b->get_side_to_play()][source_square][dest_square] / HISTORY_SCALER;
+        } else {
+            return point_score;
+        }
     }
 }
 

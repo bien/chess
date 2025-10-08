@@ -74,6 +74,7 @@ struct MoveSorter {
     mutable uint64_t covered_squares_bn = ~0;
 };
 
+
 struct Search {
     Search(Evaluation *eval, int transposition_table_size=10000 * 5000 + 1);
     move_t minimax(Fenboard &b, Color color);
@@ -113,6 +114,8 @@ struct Search {
     int move_counts[NTH_SORT_FREQ_BUCKETS];
 
     uint64_t tt_hash_debug;
+
+    int16_t history_bonus[2][64][64];
 
 private:
     uint64_t *transposition_table;
