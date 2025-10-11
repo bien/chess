@@ -13,7 +13,7 @@
 #include "net/psqt.h"
 
 int search_debug = 0;
-const int LIMITED_QUIESCENT_DEPTH = 7;
+const int LIMITED_QUIESCENT_DEPTH = 4;
 const int MAX_HISTORY = 10000;
 const int HISTORY_SCALER = 500;
 
@@ -113,7 +113,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_pv(false), use_iterative_deepening(true),
-        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), time_available(0), max_depth(8), soft_deadline(true), use_nega(true)
+        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true), use_nega(true)
 
 {
     srandom(clock());
@@ -241,7 +241,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         return std::tuple<move_t, move_t, int>(-1, -1, alpha - 1);
     }
 
-    bool is_quiescent = (depth >= max_depth) && use_quiescent_search;
+    bool is_quiescent = (depth >= max_depth) && use_quiescent_search && depth <= max_depth + quiescent_depth;
 
     // check for repetition
     if (b.times_seen() >= 3) {

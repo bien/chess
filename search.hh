@@ -6,6 +6,7 @@
 #include "fenboard.hh"
 #include <tuple>
 #include <utility>
+#include <climits>
 
 const int MATE = 20000;
 const int VERY_GOOD = 10000;
@@ -98,6 +99,7 @@ struct Search {
     bool use_quiescent_search;
     bool use_killer_move;
     int mtdf_window_size;
+    int quiescent_depth;
 
     int time_available;
     int max_depth;

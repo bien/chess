@@ -11,7 +11,7 @@
 
 void tokenize(const std::string &s, unsigned char delimiter, std::vector<std::string> &tokens)
 {
-    unsigned int pos = 0;
+    size_t pos = 0;
     while (pos != std::string::npos) {
         int nextdelim = s.find(delimiter, pos);
         if (nextdelim == std::string::npos) {
@@ -123,7 +123,7 @@ int main(int argc, char **argv)
             std::map<std::string, std::string> options;
             std::string key, value;
             int movemillisecs = 0;
-            unsigned int pos = line.find(' ', 1);
+            size_t pos = line.find(' ', 1);
             while (pos != std::string::npos) {
                 int endpos = line.find(' ', pos + 1);
                 if (endpos == std::string::npos) {
@@ -154,14 +154,14 @@ int main(int argc, char **argv)
                     increment_millis = std::stoi(options["binc"]);
                     time_millis = std::stoi(options["btime"]);
                 }
-                movemillisecs = (increment_millis + time_millis / 40) * .9;
+                movemillisecs = (increment_millis * 0.5 + time_millis / 40) * .7;
             }
             auto starttime = std::chrono::system_clock::now();
 
             search.time_available = movemillisecs / 1000;
             search.soft_deadline = time_millis > 60000;
             std::cout << "time allocation " << search.time_available << std::endl;
-            move_t move = search.alphabeta(b, b.get_side_to_play(), searchUpdate);
+            move_t move = search.alphabeta(b, searchUpdate);
             auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
             std::cout << "info currmove ";
             print_move_uci(move, std::cout) << " currmovenumber " << b.get_move_count() << std::endl;
