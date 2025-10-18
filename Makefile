@@ -5,6 +5,7 @@ ENGINE_SRCS = net/psqt.cc bitboard.cc fenboard.cc move.cc search.cc evaluate.cc 
 ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o)
 OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
 LDFLAGS =  -L/opt/homebrew/lib -lboost_program_options
+DSYMUTIL = dsymutil
 
 all: uciinterface test
 
@@ -44,6 +45,7 @@ testexe: $(ENGINE_OBJS) test.o
 
 puzzle: puzzle.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
+	$(DSYMUTIL) $@
 
 clean:
 	rm -f *.o *.a $(ENGINE_OBJS) chess
