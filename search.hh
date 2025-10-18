@@ -25,12 +25,6 @@ public:
     virtual ~Evaluation() {}
 };
 
-typedef struct LINE {
-    int cmove;              // Number of moves in the line.
-    move_t argmove[64];  // The line.
-}   LINE;
-
-
 
 const int TT_EXACT = 3;
 const int TT_UPPER = 1;
@@ -48,26 +42,41 @@ struct MoveSorter {
     MoveSorter();
     bool has_more_moves();
 
-    bool next_gives_check() const;
-    bool next_gives_check_or_capture() const {
-        return index <= last_capture;
+    bool next_gives_check_or_capture() {
+        return (index < buffer.size() && phase < P_NOCHECK_NO_CAPTURE) || (has_more_moves() && phase <= P_NOCHECK_NO_CAPTURE);
     }
 
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, bool captures_checks_only=false, int depth=0,  int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, int score=0, move_t hint=0, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, bool captures_checks_only=false, int depth=0,  int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, int score=0, move_t hint=0, move_t transposition_hint=0, bool verbose=false);
+    int get_score(const Fenboard *b, int current_score,  move_t) const;
 
+private:
+    void load_more(const Fenboard *b);
+
+    enum Phase {
+        P_HINT=0,
+        P_HINT_REINT=1,
+        P_CHECK_CAPTURE=2,
+        P_CHECK_NOCAPTURE=3,
+        P_NOCHECK_CAPTURE=4,
+        P_NOCHECK_NO_CAPTURE=5,
+        P_DONE=6
+    };
+    int phase;
     bool operator()(move_t a, move_t b) const;
 
-    int get_score(const Fenboard *b, int current_score,  move_t) const;
     int index;
-    int last_check;
     int last_capture;
+    uint64_t opp_covered_squares;
     std::vector<move_t> buffer;
     PackedMoveIterator move_iter;
     Color side_to_play;
     bool do_sort;
+    bool captures_checks_only;
     move_t hint;
+    move_t transposition_hint;
     Search *s;
+    const Fenboard *b;
     int current_score;
     bool verbose;
     mutable uint64_t covered_squares_q = ~0;
@@ -104,8 +113,6 @@ struct Search {
     int time_available;
     int max_depth;
     bool soft_deadline;
-
-    bool use_nega;
 
     int transposition_checks;
     int transposition_partial_hits;

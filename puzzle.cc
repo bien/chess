@@ -95,6 +95,7 @@ void read_csv_puzzles(Fenboard &b, Search &search, std::ifstream &puzzles, int d
         first_move_choices.push_back(first_move);
         uint64_t puzzle_nodecount = 0;
         b.set_fen(parts[1]);
+        search.reset();
         b.apply_move(b.read_move(zero_move, b.get_side_to_play()));
         clock_t starttime = clock();
         bool result = expect_move(search, b, depth, parts[0], first_move_choices, puzzle_nodecount);

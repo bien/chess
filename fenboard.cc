@@ -249,15 +249,15 @@ move_t Fenboard::read_move(const std::string &s, Color color) const
         piece_t piece = bb_king | (color == White ? WhiteMask : BlackMask);
         if (bb_queenside_castle) {
             if (color == White) {
-                return this->make_move(0, 4, piece, 0, 2, EMPTY, 0, check);
+                return this->make_move(color, 0, 4, piece, 0, 2, EMPTY, 0, check);
             } else {
-                return this->make_move(7, 4, piece, 7, 2, EMPTY, 0, check);
+                return this->make_move(color, 7, 4, piece, 7, 2, EMPTY, 0, check);
             }
         } else {
             if (color == White) {
-                return this->make_move(0, 4, piece, 0, 6, EMPTY, 0, check);
+                return this->make_move(color, 0, 4, piece, 0, 6, EMPTY, 0, check);
             } else {
-                return this->make_move(7, 4, piece, 7, 6, EMPTY, 0, check);
+                return this->make_move(color, 7, 4, piece, 7, 6, EMPTY, 0, check);
             }
         }
     } else {
@@ -375,6 +375,12 @@ std::ostream &print_move_uci(move_t move, std::ostream &os)
             case bb_rook: os << "r"; break;
             case bb_queen: os << "q"; break;
         }
+    }
+    if (move & INVALIDATES_CASTLE_K) {
+        os << "xk";
+    }
+    if (move & INVALIDATES_CASTLE_Q) {
+        os << "xq";
     }
     return os;
 }

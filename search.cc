@@ -95,16 +95,11 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
         max_depth = old_max_depth;
     } else {
         std::tuple<move_t, move_t, int> sub;
-        // if (use_nega) {
-            sub = negamax_with_memory(b, 0, SCORE_MIN, SCORE_MAX);
-            score = std::get<2>(sub);
-            if (b.get_side_to_play() == Black){
-                score = -score;
-            }
-        // } else {
-        //     sub = alphabeta_with_memory(b, 0, color, SCORE_MIN, SCORE_MAX);
-        //     score = std::get<2>(sub);
-        // }
+        sub = negamax_with_memory(b, 0, SCORE_MIN, SCORE_MAX);
+        score = std::get<2>(sub);
+        if (b.get_side_to_play() == Black){
+            score = -score;
+        }
         result = std::get<0>(sub);
     }
     return result;
@@ -113,7 +108,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_pv(false), use_iterative_deepening(true),
-        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true), use_nega(true)
+        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true)
 
 {
     srandom(clock());
@@ -249,20 +244,16 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     }
 
     bool tt_hint = false;
+    move_t tt_move = 0;
 
     // check transposition table
     if (use_transposition_table) {
 
-        move_t tt_move = 0;
         int exact_value = 0;
 
         bool found = read_transposition(b.get_hash(), tt_move, max_depth - depth, alpha, beta, exact_value);
-        if (found && alpha >= beta) {
+        if (found && alpha > beta) {
             return std::tuple<move_t, move_t, int>(tt_move, 0, exact_value);
-        }
-        else if (tt_move != 0 && hint == 0) {
-            hint = tt_move;
-            tt_hint = true;
         }
     }
 
@@ -282,7 +273,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     } else {
         Acquisition<MoveSorter> move_iter(this);
         int depth_to_go = max_depth - depth;
-        move_iter->reset(&b, this, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, alpha, hint);
+        move_iter->reset(&b, this, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, alpha, hint, tt_hint);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -317,7 +308,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                     std::cout << "(empty) -> " << best_score << std::endl;
                 }
             }
-            if (best_score >= beta) {
+            if (best_score > beta) {
                 return std::tuple<move_t, move_t, int>(0, 0, best_score);
             }
             else if (best_score > alpha) {
@@ -344,7 +335,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             if (is_quiescent
                 && !(move & GIVES_CHECK)
                 && (get_promotion(move) == 0)
-                && (depth - max_depth > LIMITED_QUIESCENT_DEPTH)
+                && (depth - max_depth > std::min(quiescent_depth, LIMITED_QUIESCENT_DEPTH))
                 && PIECE_VALUE[b.get_piece(sourcerank, sourcefile)] > PIECE_VALUE[get_captured_piece(move)]) {
                 break;
             }
@@ -362,7 +353,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             }
 
             std::string subline = line;
-            if (true || search_debug > 0) {
+            if (search_debug > 0) {
                 if (subline.size() > 0) {
                     subline.append(" ");
                 }
@@ -405,10 +396,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             }
 
             if (subtree_score < alpha) {
-                        if (search_debug >= depth + 1) {
-                            std::cout << "~" << std::endl;
-                        }
-               int clamped_bonus = std::max(-(depth_to_go + 1) * (depth_to_go + 1), -MAX_HISTORY);
+                if (search_debug >= depth + 1) {
+                    std::cout << "~";
+                }
+                int clamped_bonus = std::max(-(depth_to_go + 1) * (depth_to_go + 1), -MAX_HISTORY);
                 history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] //-= depth;
                    += clamped_bonus - history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
             }
@@ -436,14 +427,15 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                         // pruned = true;
                         break;
                     }
-
-                    if (!is_quiescent && !move_iter->next_gives_check_or_capture() && !checked_futility && beta < 9000 && alpha > -9000) {
+/*
+                    if ((move & GIVES_CHECK) == 0 && get_captured_piece(move) == 0 && !checked_futility && beta < 9000 && alpha > -9000) {
                         checked_futility = true;
                         if (!initialized_null_move_eval) {
                             null_move_eval = eval->evaluate(b);
                             initialized_null_move_eval = true;
                         }
                     }
+                    */
 
                 }
 
@@ -551,7 +543,7 @@ bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth,
         } else {
             transposition_insufficient_depth++;
             if (board_hash == tt_hash_debug) {
-                std::cout << "Reject: insufficient depth (needed " << depth << " have " << tt_depth << ")" << std::endl;
+                std::cout << "Reject: insufficient depth (needed " << depth << " have " << (int)tt_depth << ")" << std::endl;
             }
 
         }
@@ -682,118 +674,92 @@ MoveSorter::MoveSorter()
     index = 0;
 }
 
-void MoveSorter::reset(const Fenboard *b, Search *s, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, int score, move_t hint, bool verbose)
+void MoveSorter::load_more(const Fenboard *b) {
+    while (buffer.size() <= index && phase <= P_NOCHECK_NO_CAPTURE){
+        switch(phase) {
+
+            case P_HINT:
+                if (transposition_hint != 0) {
+                    buffer.push_back(transposition_hint);
+                }
+                break;
+
+            case P_HINT_REINT:
+                if (hint != 0) {
+                    move_t move = b->reinterpret_move(hint, opp_covered_squares);
+                    if (move != 0) {
+                        buffer.push_back(move);
+                    }
+                    hint = move;
+                }
+                break;
+            case P_CHECK_CAPTURE:
+                b->get_packed_legal_moves(b->get_side_to_play(), move_iter, opp_covered_squares);
+                /* fall through */
+            default:
+                if (phase == P_NOCHECK_NO_CAPTURE && captures_checks_only && buffer.size() >= 1) {
+                    // skip quiet moves
+                    break;
+                }
+                int start = buffer.size();
+                b->get_moves(b->get_side_to_play(),
+                    phase == P_CHECK_CAPTURE || phase == P_CHECK_NOCAPTURE,
+                    phase == P_CHECK_CAPTURE || phase == P_NOCHECK_CAPTURE,
+                    move_iter,
+                    buffer);
+                if (transposition_hint != 0) {
+                    auto location = std::find(buffer.begin() + start, buffer.end(), transposition_hint);
+                    if (location != buffer.end()) {
+                        buffer.erase(location);
+                    }
+                }
+                if (hint != 0) {
+                    auto location = std::find(buffer.begin() + start, buffer.end(), hint);
+                    if (location != buffer.end()) {
+                        buffer.erase(location);
+                    }
+                }
+                if (do_sort) {
+                    std::map<move_t, int> move_scores;
+                    for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
+                        move_scores[*iter] = get_score(b, current_score, *iter);
+                    }
+                    std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
+                }
+                break;
+        }
+        phase++;
+    }
+}
+void MoveSorter::reset(const Fenboard *b, Search *s, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, int score, move_t hint, move_t transposition_hint, bool verbose)
 {
+    index = 0;
+    last_capture = 0;
+    opp_covered_squares = 0;
     buffer.clear();
     move_iter.reset();
     this->side_to_play = b->get_side_to_play();
     this->do_sort = do_sort;
+    this->captures_checks_only = captures_checks_only;
     this->hint = hint;
+    this->transposition_hint = transposition_hint;
     this->s = s;
+    this->b = b;
     this->verbose = verbose;
-    index = 0;
     if (s != NULL) {
         current_score = score;
     } else {
-        s = 0;
+        current_score = 0;
     }
-    b->get_packed_legal_moves(side_to_play, move_iter);
-
-
-    // checks captures
-    int start = 0;
-    b->get_moves(side_to_play, true, true, move_iter, buffer);
-
-    // checks non captures
-    b->get_moves(side_to_play, true, false, move_iter, buffer);
-    last_check = buffer.size() - 1;
-
-    // other captures
-    b->get_moves(side_to_play, false, true, move_iter, buffer);
-    std::map<move_t, int> move_scores;
-    if (do_sort) {
-        for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
-            move_scores[*iter] = get_score(b, current_score, *iter);
-        }
-        std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
-    }
-    last_capture = buffer.size() - 1;
-
-    // non capture non checks
-    if (!captures_checks_only || buffer.empty()) {
-        start = buffer.size();
-        b->get_moves(side_to_play, false, false, move_iter, buffer);
-        if (do_sort) {
-            for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
-                move_scores[*iter] = get_score(b, current_score, *iter);
-            }
-            std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
-        }
-    }
-
-    // move tranposition entries to front
-    if (s != NULL) {
-        for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
-            move_t ignore;
-            int16_t tt_value;
-            unsigned char tt_depth, tt_type;
-            if (s->fetch_tt_entry(b->get_zobrist_with_move(*iter), ignore, tt_value, tt_depth, tt_type)
-                    && (tt_type == TT_EXACT || (tt_type == TT_LOWER && tt_value >= beta) || (tt_type == TT_UPPER && tt_value < alpha))
-                    && tt_depth >= depth) {
-                if (iter > (last_check + buffer.begin()) && last_check >= 0) {
-                    last_check++;
-                }
-                if (iter > (last_capture + buffer.begin()) && last_capture >= 0) {
-                    last_capture++;
-                }
-                std::rotate(buffer.begin(), iter, iter + 1);
-            }
-        }
-    }
-
-    if (hint != 0) {
-        auto match = std::find(buffer.begin(), buffer.end(), hint);
-        if (match != buffer.end()) {
-            if (match > (last_check + buffer.begin()) && last_check >= 0) {
-                last_check++;
-            }
-            if (match > (last_capture + buffer.begin()) && last_capture >= 0) {
-                last_capture++;
-            }
-            std::rotate(buffer.begin(), match, match + 1);
-        }
-    }
-    if (verbose) {
-        b->get_fen(std::cout);
-        if (hint) {
-            std::cout << "   hint=";
-            print_move_uci(hint, std::cout) << std::endl;
-        }
-        std::cout << std::endl;
-        std::cout << "Available moves" << std::endl;
-        for (auto iter = buffer.begin(); iter != buffer.end(); iter++) {
-            std::cout << "......";
-            print_move_uci(*iter, std::cout);
-            if (iter < buffer.begin() + last_check) {
-                std::cout << " (+)";
-            }
-            else if (iter < buffer.begin() + last_capture) {
-                std::cout << " (x)";
-            }
-            std::cout << std::endl;
-        }
-    }
-
+    phase = P_HINT;
 }
 
-
-bool MoveSorter::next_gives_check() const
-{
-    return index <= last_check;
-}
 
 bool MoveSorter::has_more_moves()
 {
+    if (index == buffer.size()) {
+        load_more(b);
+    }
     return index < buffer.size();
 }
 

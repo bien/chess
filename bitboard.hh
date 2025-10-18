@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cassert>
+#include <iostream>
 #include <strings.h>
 
 typedef unsigned char piece_t;
@@ -197,11 +198,15 @@ public:
     Bitboard();
 
     piece_t get_piece(unsigned char rank, unsigned char file) const;
+    piece_t get_piece(int sq) const {
+        return get_piece(sq / 8, sq % 8);
+    }
     void set_piece(unsigned char rank, unsigned char file, piece_t);
-    bool operator==(const Bitboard&) const = default;
 
-    void get_packed_legal_moves(Color side_to_play, PackedMoveIterator &moves) const;
+    void get_packed_legal_moves(Color side_to_play, PackedMoveIterator &moves, uint64_t &opp_covered_squares, int source_sq=-1, piece_t source_piece=bb_all) const;
     void get_moves(Color side_to_play, bool checks, bool captures_or_promo, const PackedMoveIterator &packed, std::vector<move_t> &moves) const;
+    // return a move from source_sq to dest_sq, if there are any.  If it's promo use =Q
+    move_t reinterpret_move(move_t hint, uint64_t &opp_covered_squares) const;
 
     bool king_in_check(Color) const;
     uint64_t get_bitmask(Color color, piece_t piece_type) const {
@@ -245,18 +250,19 @@ public:
     }
 
 protected:
-    move_t make_move(unsigned char srcrank, unsigned char srcfile,
+    move_t make_move(Color side_to_play, unsigned char srcrank, unsigned char srcfile,
             unsigned char source_piece,
             unsigned char destrank, unsigned char destfile,
             unsigned char captured_piece, unsigned char promote, bool gives_check) const;
 
     // for non-promote
-    void make_moves(std::vector<move_t> &dest,
+    void make_moves(Color side_to_play, std::vector<move_t> &dest,
             int srcfile,
             unsigned char source_piece,
             uint64_t dest_squares, uint64_t dest_gives_check) const;
 
-    void make_pawn_moves(std::vector<move_t> &dest,
+    void make_pawn_moves(Color side_to_play,
+             std::vector<move_t> &dest,
              uint64_t source_squares,
              int dest_offset, bool gives_check) const;
 
