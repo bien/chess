@@ -376,12 +376,6 @@ std::ostream &print_move_uci(move_t move, std::ostream &os)
             case bb_queen: os << "q"; break;
         }
     }
-    if (move & INVALIDATES_CASTLE_K) {
-        os << "xk";
-    }
-    if (move & INVALIDATES_CASTLE_Q) {
-        os << "xq";
-    }
     return os;
 }
 
