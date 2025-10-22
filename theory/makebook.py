@@ -65,8 +65,8 @@ def _tree_search_node(fenpos, mydb, genpopdb, white_to_move:bool, as_white=True,
         for move, dest in node.moves.items():
             w, d, b, m = _tree_search_node(dest.fen, mydb, genpopdb, not white_to_move, as_white, max_depth=max_depth-1, fen_writer=fen_writer, verbose_depth=verbose_depth-1)
             num_games = w + d + b
-            # remove options with less than 1% of moves
-            if num_games * 100 < total_games:
+            # remove options with less than 5% of moves or only one instance
+            if num_games * 20 < total_games or num_games <= 1:
                 continue
             raw_score = (w - b) / num_games
             mcts_bound_term = math.sqrt(math.log(node.white_wins + node.draws + node.black_wins) / num_games)
