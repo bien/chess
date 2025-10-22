@@ -310,6 +310,7 @@ private:
     void get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures, bool omit_check_calc=false) const;
     void get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const;
 
+    void get_slide_pseudo_moves_inner(Color color, PackedMoveIterator &move_repr, piece_t piece_type, uint64_t actors, int opponent_king_square, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const;
 
     const static uint64_t **rook_magic;
     const static uint64_t **bishop_magic;
