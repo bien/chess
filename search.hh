@@ -15,7 +15,6 @@ const int SCORE_MAX = VERY_GOOD + 1000;
 const int SCORE_MIN = VERY_BAD - 1000;
 
 extern int search_debug;
-const int TranspositionTableSize = 1000000001;
 
 class Evaluation {
 public:
@@ -86,7 +85,7 @@ private:
 
 
 struct Search {
-    Search(Evaluation *eval, int transposition_table_size=10000 * 5000 + 1);
+    Search(Evaluation *eval, int transposition_table_size=1000 * 1000 * 750 + 1);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
 
@@ -118,6 +117,7 @@ struct Search {
     int transposition_partial_hits;
     int transposition_full_hits;
     int transposition_insufficient_depth;
+    int transposition_conflicts;
 
     int nth_sort_freq[NTH_SORT_FREQ_BUCKETS];
     int move_counts[NTH_SORT_FREQ_BUCKETS];
@@ -167,6 +167,11 @@ private:
         move_t old_move;
         int16_t old_value;
         unsigned char old_depth, old_type;
+
+        uint64_t store = transposition_table[hash % transposition_table_size];
+        if (store != 0 && (hash & 0xff00) != (store & 0xff00)) {
+            transposition_conflicts++;
+        }
 
         // don't overwrite deeper value already present
         if (fetch_tt_entry(hash, old_move, old_value, old_depth, old_type) && old_depth > depth) {

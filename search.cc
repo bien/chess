@@ -116,6 +116,7 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     transposition_partial_hits = 0;
     transposition_full_hits = 0;
     transposition_insufficient_depth = 0;
+    transposition_conflicts = 0;
     transposition_table = new uint64_t[transposition_table_size];
     for (int i = 0; i < transposition_table_size; i++) {
         transposition_table[i] = 0;

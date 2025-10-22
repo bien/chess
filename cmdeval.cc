@@ -134,6 +134,17 @@ int main(int argc, char **argv)
                 }
             }
             std::cout << std::endl << "MRR = " << mrr_actual / sort_count << std::endl;
+            std::cout << "transposition stats: full_hits: " << s.transposition_full_hits
+                << " partial hits: " << s.transposition_partial_hits
+                << " insufficient_depth: " << s.transposition_insufficient_depth
+                << " checks: " << s.transposition_checks
+                << " conflicts: " << s.transposition_conflicts
+                << std::endl;
+            std::cout << "transposition stats: full_hits: " << (s.transposition_full_hits * 100.0 / s.transposition_checks)
+                << " partial hits: " << (s.transposition_partial_hits * 100.0 / s.transposition_checks)
+                << " insufficient_depth: " << (s.transposition_insufficient_depth * 100.0 / s.transposition_checks)
+                << " misses: " << ((s.transposition_checks - s.transposition_full_hits - s.transposition_partial_hits - s.transposition_insufficient_depth) * 100.0 / s.transposition_checks)
+                << std::endl;
         }
     }
     catch(std::exception& e) {
