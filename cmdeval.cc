@@ -22,6 +22,7 @@ int main(int argc, char **argv)
             ("debug", po::value<int>(), "set debug level")
             ("tt-check", po::value<uint64_t>(), "debug for hash value")
             ("hash", po::bool_switch(), "output hash value")
+            ("use-pv", po::bool_switch(), "use principal value search")
             ("quiescent", po::bool_switch(), "get quiescent eval")
             ("no-tt", po::bool_switch(), "turn off transposition table")
             ("moves", po::bool_switch(), "list moves")
@@ -56,6 +57,12 @@ int main(int argc, char **argv)
         }
         if (vm["no-tt"].as<bool>()) {
             s.use_transposition_table = false;
+        }
+        if (vm["use-pv"].as<bool>()) {
+            s.use_mtdf = false;
+            s.use_pv = true;
+        } else {
+            s.use_mtdf = true;
         }
         if (vm.count("debug")) {
             search_debug = vm["debug"].as<int>();
@@ -123,7 +130,7 @@ int main(int argc, char **argv)
                 }
                 seen_moves.insert(next_move);
             }
-            std::cout << std::endl << "Node count = " << s.nodecount << " quiescent count = " << s.qnodecount << std::endl;
+            std::cout << std::endl << "Node count = " << s.nodecount << " expanded=" << s.moves_expanded << " quiescent count = " << s.qnodecount << std::endl;
             float mrr_actual = 0;
             int sort_count = 0;
             for (int i = 0; i < NTH_SORT_FREQ_BUCKETS; i++) {

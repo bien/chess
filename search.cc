@@ -82,13 +82,38 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
     if (use_mtdf && use_iterative_deepening && time_available > 0) {
         return timed_iterative_deepening(b, s);
     }
-    if (use_mtdf) {
+    if (use_iterative_deepening) {
         int old_max_depth = max_depth;
         int guess_score = 0;
 
         for (int iter_depth = (old_max_depth % 2 == 1 ? 1 : 0); iter_depth <= old_max_depth; iter_depth += 2) {
             max_depth = iter_depth;
-            result = mtdf(b, score, guess_score, 0, result);
+            if (use_mtdf) {
+                result = mtdf(b, score, guess_score, 0, result);
+            } else if (use_pv) {
+                std::tuple<move_t, move_t, int> sub;
+                int alpha = guess_score - 25;
+                int beta = guess_score + 25;
+                int backoff = 200;
+                while (true) {
+                    sub = negamax_with_memory(b, 0, alpha, beta, result);
+                    score = std::get<2>(sub);
+                    if (search_debug) {
+                        std::cout << "pv at depth=" << max_depth << " [" << alpha << "," << beta << "] -> " << score << std::endl;
+                    }
+                    if (score < alpha) {
+                        beta = alpha;
+                        alpha = score - backoff;
+                    } else if (score > beta) {
+                        alpha = beta;
+                        beta = score + backoff;
+                    } else {
+                        break;
+                    }
+                    backoff *= 2;
+                }
+                result = std::get<0>(sub);
+            }
             s(result, max_depth, nodecount, score);
             guess_score = score;
         }
@@ -107,7 +132,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 
 Search::Search(Evaluation *eval, int transposition_table_size)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
-        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(true), use_pv(false), use_iterative_deepening(true),
+        use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
         use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true)
 
 {
@@ -117,6 +142,7 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     transposition_full_hits = 0;
     transposition_insufficient_depth = 0;
     transposition_conflicts = 0;
+    moves_expanded = 0;
     transposition_table = new uint64_t[transposition_table_size];
     for (int i = 0; i < transposition_table_size; i++) {
         transposition_table[i] = 0;
@@ -140,6 +166,7 @@ void Search::reset()
         transposition_table[i] = 0;
     }
     memset(&history_bonus, 0, sizeof(history_bonus));
+    moves_expanded = 0;
 }
 
 move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t move)
@@ -342,31 +369,49 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             }
 
             int child_static_eval = VERY_BAD - 1;
-            if (depth_to_go == 1) {
+            if (depth_to_go <= 1) {
                 child_static_eval = eval->delta_evaluate(b, move, static_eval);
             }
+            uint64_t start_nodecount = 0;
+            uint64_t start_qnodecount = 0;
+            move_t subresponse;
+            if (!use_quiescent_search || depth + 1 >= max_depth + quiescent_depth) {
+                subtree_score = child_static_eval;
+                submove = 0;
+            } else {
+                b.apply_move(move);
+                move_t killer_move = 0;
 
-            b.apply_move(move);
-            move_t killer_move = 0;
-
-            if (use_killer_move && submove != 0) {
-                killer_move = submove;
-            }
-
-            std::string subline = line;
-            if (search_debug > 0) {
-                if (subline.size() > 0) {
-                    subline.append(" ");
+                if (use_killer_move && submove != 0) {
+                    killer_move = submove;
                 }
-                subline.append(move_to_uci(move));
-            }
 
-            uint64_t start_nodecount = nodecount;
-            uint64_t start_qnodecount = qnodecount;
-            std::tuple<move_t, move_t, int> child = negamax_with_memory(b, depth + 1, -beta, -alpha, killer_move, child_static_eval, subline);
-            subtree_score = -std::get<2>(child);
-            submove = std::get<0>(child);
-            b.undo_move(move);
+                std::string subline = line;
+                if (search_debug > 0) {
+                    if (subline.size() > 0) {
+                        subline.append(" ");
+                    }
+                    subline.append(move_to_uci(move));
+                }
+
+                start_nodecount = nodecount;
+                start_qnodecount = qnodecount;
+                std::tuple<move_t, move_t, int> child;
+                if (use_pv && alpha < beta) {
+                    child = negamax_with_memory(b, depth + 1, -alpha, -alpha, killer_move, child_static_eval, subline);
+                    if (-std::get<2>(child) > alpha) {
+                        child = negamax_with_memory(b, depth + 1, -beta, -alpha - 1, killer_move, child_static_eval, subline);
+                    }
+                } else {
+                    child = negamax_with_memory(b, depth + 1, -beta, -alpha, killer_move, child_static_eval, subline);
+                }
+
+                subtree_score = -std::get<2>(child);
+                subresponse = std::get<1>(child);
+                submove = std::get<0>(child);
+                b.undo_move(move);
+
+            }
             uint64_t elapsed_nodes = nodecount - start_nodecount;
             uint64_t elapsed_qnodes = qnodecount - start_qnodecount;
 
@@ -390,7 +435,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                     std::cout << " best was ";
                     print_move_uci(best_move, std::cout) << " = " << best_score;
                 }
-                if (std::get<1>(child) == 0 && submove != 0) {
+                if (subresponse == 0 && submove != 0) {
                     std::cout << "T";
                 }
                 std::cout << " (depth=" << depth << " nodes=" << elapsed_nodes << " qnodes=" << elapsed_qnodes << ") (line=" << line << ")";
@@ -696,6 +741,7 @@ void MoveSorter::load_more(const Fenboard *b) {
                 break;
             case P_CHECK_CAPTURE:
                 b->get_packed_legal_moves(b->get_side_to_play(), move_iter, opp_covered_squares);
+                s->moves_expanded += 1;
                 /* fall through */
             default:
                 if (phase == P_NOCHECK_NO_CAPTURE && captures_checks_only && buffer.size() >= 1) {

@@ -118,6 +118,7 @@ struct Search {
     int transposition_full_hits;
     int transposition_insufficient_depth;
     int transposition_conflicts;
+    int moves_expanded;
 
     int nth_sort_freq[NTH_SORT_FREQ_BUCKETS];
     int move_counts[NTH_SORT_FREQ_BUCKETS];
