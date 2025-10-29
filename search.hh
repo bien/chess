@@ -118,6 +118,7 @@ struct Search {
     int transposition_full_hits;
     int transposition_insufficient_depth;
     int transposition_conflicts;
+    int moves_commenced;
     int moves_expanded;
 
     int nth_sort_freq[NTH_SORT_FREQ_BUCKETS];
@@ -125,7 +126,8 @@ struct Search {
 
     uint64_t tt_hash_debug;
 
-    int16_t history_bonus[2][64][64];
+    // source_piece -> source_square
+    int16_t history_bonus[2][6][64];
 
 private:
     uint64_t *transposition_table;

@@ -143,6 +143,7 @@ Search::Search(Evaluation *eval, int transposition_table_size)
     transposition_insufficient_depth = 0;
     transposition_conflicts = 0;
     moves_expanded = 0;
+    moves_commenced = 0;
     transposition_table = new uint64_t[transposition_table_size];
     for (int i = 0; i < transposition_table_size; i++) {
         transposition_table[i] = 0;
@@ -167,6 +168,7 @@ void Search::reset()
     }
     memset(&history_bonus, 0, sizeof(history_bonus));
     moves_expanded = 0;
+    moves_commenced = 0;
 }
 
 move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t move)
@@ -441,15 +443,16 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 std::cout << " (depth=" << depth << " nodes=" << elapsed_nodes << " qnodes=" << elapsed_qnodes << ") (line=" << line << ")";
             }
 
+            piece_t actor = (b.get_piece(get_source_pos(move)) & PIECE_MASK);
             if (subtree_score < alpha) {
                 if (search_debug >= depth + 1) {
                     std::cout << "~";
                 }
                 int clamped_bonus = std::max(-(depth_to_go + 1) * (depth_to_go + 1), -MAX_HISTORY);
-                history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] //-= depth;
-                   += clamped_bonus - history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
+                assert(actor > 0 && actor <= bb_king);
+                history_bonus[b.get_side_to_play()][actor-1][get_dest_pos(move)] //-= depth;
+                   += clamped_bonus - history_bonus[b.get_side_to_play()][actor-1][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
             }
-
 
             if ((!is_quiescent && first) || subtree_score > best_score) {
                 best_score = subtree_score;
@@ -467,9 +470,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                             std::cout << "!" << std::endl;
                         }
 
-                       int clamped_bonus = std::min((depth_to_go + 1) * (depth_to_go + 1) * 5, MAX_HISTORY);
-                        history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)]
-                           += clamped_bonus - history_bonus[b.get_side_to_play()][get_source_pos(move)][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
+                        int clamped_bonus = std::min((depth_to_go + 1) * (depth_to_go + 1) * 5, MAX_HISTORY);
+                        assert(actor > 0 && actor <= bb_king);
+                        history_bonus[b.get_side_to_play()][actor-1][get_dest_pos(move)]
+                           += clamped_bonus - history_bonus[b.get_side_to_play()][actor-1][get_dest_pos(move)] * clamped_bonus / MAX_HISTORY;
                         // pruned = true;
                         break;
                     }
@@ -695,7 +699,8 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move) con
         }
         int point_score = current_score + score;
         if (s != NULL && !(move & GIVES_CHECK) && capture == 0) {
-            return point_score + s->history_bonus[b->get_side_to_play()][source_square][dest_square] / HISTORY_SCALER;
+            assert(actor > 0 && actor <= bb_king);
+            return point_score + s->history_bonus[b->get_side_to_play()][actor - 1][dest_square] / HISTORY_SCALER;
         } else {
             return point_score;
         }
@@ -728,6 +733,9 @@ void MoveSorter::load_more(const Fenboard *b) {
                 if (transposition_hint != 0) {
                     buffer.push_back(transposition_hint);
                 }
+                if (s != NULL) {
+                    s->moves_commenced += 1;
+                }
                 break;
 
             case P_HINT_REINT:
@@ -741,7 +749,9 @@ void MoveSorter::load_more(const Fenboard *b) {
                 break;
             case P_CHECK_CAPTURE:
                 b->get_packed_legal_moves(b->get_side_to_play(), move_iter, opp_covered_squares);
-                s->moves_expanded += 1;
+                if (s != NULL) {
+                    s->moves_expanded += 1;
+                }
                 /* fall through */
             default:
                 if (phase == P_NOCHECK_NO_CAPTURE && captures_checks_only && buffer.size() >= 1) {

@@ -130,7 +130,7 @@ int main(int argc, char **argv)
                 }
                 seen_moves.insert(next_move);
             }
-            std::cout << std::endl << "Node count = " << s.nodecount << " expanded=" << s.moves_expanded << " quiescent count = " << s.qnodecount << std::endl;
+            std::cout << std::endl << "Node count = " << s.nodecount << " commenced=" << s.moves_commenced << " expanded=" << s.moves_expanded << " quiescent count = " << s.qnodecount << std::endl;
             float mrr_actual = 0;
             int sort_count = 0;
             for (int i = 0; i < NTH_SORT_FREQ_BUCKETS; i++) {
