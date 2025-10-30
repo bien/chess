@@ -83,9 +83,8 @@ private:
     mutable uint64_t covered_squares_bn = ~0;
 };
 
-
 struct Search {
-    Search(Evaluation *eval, int transposition_table_size=1000 * 1000 * 750 + 1);
+    Search(Evaluation *eval, int transposition_table_size_log2=30);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
 
@@ -146,6 +145,9 @@ private:
         unsigned short checksum = hash & 0xff00;
         type = storage & 0x3;
         if (type <= 0 || checksum != (storage & 0xff00)) {
+            if (hash == tt_hash_debug) {
+                std::cout << "Missing tt entry for " << hash << std::endl;
+            }
             return false;
         }
         depth = (storage >> 2) & 0x1f;

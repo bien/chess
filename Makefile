@@ -3,7 +3,7 @@ INCLUDES = -Inet -I. -I/usr/local/include -I/opt/homebrew/include
 CXXFLAGS = -Wall -g -std=c++20 -march=native $(INCLUDES) -O3
 ENGINE_SRCS = net/psqt.cc bitboard.cc fenboard.cc move.cc search.cc evaluate.cc pgn.cc nnueeval.cc nnue-2-layer-64.cc
 ENGINE_OBJS = $(ENGINE_SRCS:.cc=.o)
-OTHER_SRCS = magicsquares.cc puzzle.cc test.cc
+OTHER_SRCS = magicsquares.cc puzzle.cc test.cc cmdeval.cc
 LDFLAGS =  -L/opt/homebrew/lib -lboost_program_options
 DSYMUTIL = dsymutil
 

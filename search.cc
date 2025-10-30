@@ -130,8 +130,8 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
     return result;
 }
 
-Search::Search(Evaluation *eval, int transposition_table_size)
-    : score(0), nodecount(0), qnodecount(0), transposition_table_size(transposition_table_size), use_transposition_table(true),
+Search::Search(Evaluation *eval, int transposition_table_size_log2)
+    : score(0), nodecount(0), qnodecount(0), transposition_table_size(1ULL << transposition_table_size_log2), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
         use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true)
 
@@ -552,6 +552,10 @@ bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth,
 
     int16_t tt_value = 0;
     unsigned char tt_type, tt_depth;
+
+    if (board_hash == tt_hash_debug) {
+        std::cout << "Reading tt entry for " << board_hash << " depth=" << (int) depth << " alpha=" << alpha << " beta=" << beta << std::endl;
+    }
 
     if (fetch_tt_entry(board_hash, tt_move, tt_value, tt_depth, tt_type)) {
         // std::cout << "found " << board_hash << " " << tt_type << " " << tt_value << " " tt_depth << std::endl;
