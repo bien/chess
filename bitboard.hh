@@ -306,11 +306,11 @@ private:
 
     uint64_t pinned_piece_legal_dest(piece_t piece_type, int start_pos, uint64_t dest_squares, Color color, uint64_t covered_squares) const;
     uint64_t get_blocking_pieces(int king_pos, Color king_color, Color blocked_piece_color, uint64_t &immobile_pinned_pieces, uint64_t &pawn_cannot_advance, uint64_t &pawn_cannot_capture_award, uint64_t &pawn_cannot_capture_hward) const;
-    void get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, int include_flags, uint64_t exclude_pieces=0, bool omit_check_calc=false) const;
+    void get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, int include_flags, int start_pos = -1, piece_t piece_type = 0, uint64_t exclude_pieces = 0, bool omit_check_calc = false) const;
     void get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures, bool omit_check_calc=false) const;
     void get_pawn_pseudo_moves(Color color, uint64_t &move_one, uint64_t &move_two, uint64_t &capture_award, uint64_t &capture_hward) const;
-
-    void get_slide_pseudo_moves_inner(Color color, PackedMoveIterator &move_repr, piece_t piece_type, uint64_t actors, int opponent_king_square, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const;
+    void get_slide_pseudo_moves_inner(Color color, PackedMoveIterator &move_repr, piece_t piece_type, int start_pos, int opponent_king_square, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const;
+    void get_slide_pseudo_moves_single(Color color, PackedMoveIterator &move_repr, piece_t piece_type, int start_pos, int opponent_king_square, bool remove_self_captures, bool omit_check_calc, uint64_t all_pieces, uint64_t my_pieces, uint64_t &rook_attacking_sq, uint64_t &bishop_attacking_sq) const;
 
     const static uint64_t **rook_magic;
     const static uint64_t **bishop_magic;

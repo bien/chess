@@ -676,7 +676,7 @@ uint64_t Bitboard::computed_covered_squares(Color color, int include_flags) cons
     if (include_flags & INCLUDE_KNIGHT) {
         get_nk_pseudo_moves(color, bb_knight, moves, false, true);
     }
-    get_slide_pseudo_moves(color, moves, false, include_flags, get_bitmask(get_opposite_color(color), bb_king), true);
+    get_slide_pseudo_moves(color, moves, false, include_flags, -1, 0, get_bitmask(get_opposite_color(color), bb_king), true);
     for (auto iter = moves.begin(); iter != moves.end(); iter++) {
         squares |= iter->dest_squares;
     }
@@ -874,7 +874,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
             get_nk_pseudo_moves(side_to_play, bb_knight, moves, true);
         }
         if (source_piece != bb_knight) {
-            get_slide_pseudo_moves(side_to_play, moves, true, INCLUDE_ALL, 0);
+            get_slide_pseudo_moves(side_to_play, moves, true, INCLUDE_ALL, source_sq, source_piece);
         }
         if (source_piece == bb_pawn || source_piece == bb_all) {
             get_pawn_pseudo_moves(side_to_play, moves.pawn_move_one, moves.pawn_move_two, moves.capture_award, moves.capture_hward);
@@ -1069,73 +1069,90 @@ uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blo
     return pinned_pieces;
 }
 
-
-void Bitboard::get_slide_pseudo_moves_inner(Color color, PackedMoveIterator &move_repr, piece_t piece_type, uint64_t actors, int opponent_king_square, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const
+void Bitboard::get_slide_pseudo_moves_inner(Color color, PackedMoveIterator &move_repr, piece_t piece_type, int start_pos, int opponent_king_square, bool remove_self_captures, uint64_t exclude_pieces, bool omit_check_calc) const
 {
     uint64_t my_pieces = get_bitmask(color, bb_all);
     uint64_t opp_pieces = get_bitmask(get_opposite_color(color), bb_all);
     uint64_t all_pieces = (my_pieces | opp_pieces) & ~exclude_pieces;
     uint64_t rook_attacking_sq = ~0ULL, bishop_attacking_sq = ~0ULL;
-    int start_pos = -1;
+    uint64_t actors = get_bitmask(color, piece_type);
 
-    while ((start_pos = get_low_bit(actors, start_pos + 1)) > -1) {
-        uint64_t dest_squares = 0;
-        if (piece_type == bb_rook || piece_type == bb_queen) {
-            dest_squares |= get_rook_moves(start_pos, all_pieces);
+    if (start_pos >= 0) {
+        if ((1ULL << start_pos) & actors) {
+            get_slide_pseudo_moves_single(color, move_repr, piece_type, start_pos, opponent_king_square, remove_self_captures, omit_check_calc, all_pieces, my_pieces, rook_attacking_sq, bishop_attacking_sq);
         }
-        if (piece_type == bb_bishop || piece_type == bb_queen) {
-            dest_squares |= get_bishop_moves(start_pos, all_pieces);
-        }
+    } else {
+        start_pos = -1;
 
-        if (remove_self_captures) {
-            dest_squares &= ~my_pieces;
+        while ((start_pos = get_low_bit(actors, start_pos + 1)) > -1) {
+            get_slide_pseudo_moves_single(color, move_repr, piece_type, start_pos, opponent_king_square, remove_self_captures, omit_check_calc, all_pieces, my_pieces, rook_attacking_sq, bishop_attacking_sq);
         }
-        if (dest_squares == 0) {
-            continue;
-        }
-        PackedMoves &pm = move_repr.append();
-        pm.piece_type = piece_type;
-        pm.source_pos = start_pos;
-        pm.dest_squares = dest_squares;
-        pm.check_squares = 0;
-
-        if (omit_check_calc) {
-            continue;
-        }
-
-        if (piece_type == bb_rook || piece_type == bb_queen) {
-            if (rook_attacking_sq == ~0ULL) {
-                rook_attacking_sq = get_rook_moves(opponent_king_square, all_pieces);
-            }
-            pm.check_squares |= rook_attacking_sq;
-        }
-        if (piece_type == bb_bishop || piece_type == bb_queen) {
-            if (bishop_attacking_sq == ~0ULL) {
-                bishop_attacking_sq = get_bishop_moves(opponent_king_square, all_pieces);
-            }
-            pm.check_squares |= bishop_attacking_sq;
-        }
-
-        pm.check_squares &= pm.dest_squares;
     }
 }
 
+void Bitboard::get_slide_pseudo_moves_single(Color color, PackedMoveIterator &move_repr, piece_t piece_type, int start_pos, int opponent_king_square, bool remove_self_captures, bool omit_check_calc, uint64_t all_pieces, uint64_t my_pieces, uint64_t &rook_attacking_sq, uint64_t &bishop_attacking_sq) const
+{
+    uint64_t dest_squares = 0;
+    if (piece_type == bb_rook || piece_type == bb_queen) {
+        dest_squares |= get_rook_moves(start_pos, all_pieces);
+    }
+    if (piece_type == bb_bishop || piece_type == bb_queen) {
+        dest_squares |= get_bishop_moves(start_pos, all_pieces);
+    }
+
+    if (remove_self_captures) {
+        dest_squares &= ~my_pieces;
+    }
+    if (dest_squares == 0) {
+        return;
+    }
+    PackedMoves &pm = move_repr.append();
+    pm.piece_type = piece_type;
+    pm.source_pos = start_pos;
+    pm.dest_squares = dest_squares;
+    pm.check_squares = 0;
+
+    if (omit_check_calc) {
+        return;
+    }
+
+    if (piece_type == bb_rook || piece_type == bb_queen) {
+        if (rook_attacking_sq == ~0ULL) {
+            rook_attacking_sq = get_rook_moves(opponent_king_square, all_pieces);
+        }
+        pm.check_squares |= rook_attacking_sq;
+    }
+    if (piece_type == bb_bishop || piece_type == bb_queen) {
+        if (bishop_attacking_sq == ~0ULL) {
+            bishop_attacking_sq = get_bishop_moves(opponent_king_square, all_pieces);
+        }
+        pm.check_squares |= bishop_attacking_sq;
+    }
+
+    pm.check_squares &= pm.dest_squares;
+}
 
 
-void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, int include_flags, uint64_t exclude_pieces, bool omit_check_calc) const
+void Bitboard::get_slide_pseudo_moves(Color color, PackedMoveIterator &move_repr, bool remove_self_captures, int include_flags, int start_pos, piece_t piece_type, uint64_t exclude_pieces, bool omit_check_calc) const
 {
     uint64_t opponent_king_pos = get_bitmask(get_opposite_color(color), bb_king);
     int opponent_king_square = get_low_bit(opponent_king_pos, 0);
 
-    if ((include_flags & INCLUDE_BISHOP) != 0) {
-        get_slide_pseudo_moves_inner(color, move_repr, bb_bishop, get_bitmask(color, bb_bishop), opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
+    if (start_pos >= 0) {
+        get_slide_pseudo_moves_inner(color, move_repr, piece_type, start_pos, opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
+    } else {
+        if ((include_flags & INCLUDE_BISHOP) != 0) {
+            get_slide_pseudo_moves_inner(color, move_repr, bb_bishop, start_pos, opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
+        }
+        if ((include_flags & INCLUDE_ROOK) != 0) {
+            get_slide_pseudo_moves_inner(color, move_repr, bb_rook, start_pos, opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
+        }
+        if ((include_flags & INCLUDE_QUEEN) != 0) {
+            get_slide_pseudo_moves_inner(color, move_repr, bb_queen, start_pos, opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
+        }
+
     }
-    if ((include_flags & INCLUDE_ROOK) != 0) {
-        get_slide_pseudo_moves_inner(color, move_repr, bb_rook, get_bitmask(color, bb_rook), opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
-    }
-    if ((include_flags & INCLUDE_QUEEN) != 0) {
-        get_slide_pseudo_moves_inner(color, move_repr, bb_queen, get_bitmask(color, bb_queen), opponent_king_square, remove_self_captures, exclude_pieces, omit_check_calc);
-    }
+
 }
 
 void Bitboard::get_nk_pseudo_moves(Color color, piece_t piece_type, PackedMoveIterator &move_repr, bool remove_self_captures, bool omit_check_calc) const
