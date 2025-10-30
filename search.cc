@@ -131,7 +131,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 }
 
 Search::Search(Evaluation *eval, int transposition_table_size_log2)
-    : score(0), nodecount(0), qnodecount(0), transposition_table_size(1ULL << transposition_table_size_log2), use_transposition_table(true),
+    : score(0), nodecount(0), qnodecount(0), transposition_table_size_log2(transposition_table_size_log2), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
         use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true)
 
@@ -144,10 +144,8 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     transposition_conflicts = 0;
     moves_expanded = 0;
     moves_commenced = 0;
-    transposition_table = new uint64_t[transposition_table_size];
-    for (int i = 0; i < transposition_table_size; i++) {
-        transposition_table[i] = 0;
-    }
+    transposition_table = new uint64_t[1ULL<<transposition_table_size_log2];
+    reset();
     for (int i = 0; i < max_depth; i++) {
         move_sorter_pool.push_back(new MoveSorter());
     }
@@ -163,9 +161,7 @@ void Search::reset()
     score = 0;
     nodecount = 0;
     qnodecount = 0;
-    for (int i = 0; i < transposition_table_size; i++) {
-        transposition_table[i] = 0;
-    }
+    memset(transposition_table, 0, sizeof(uint64_t) * (1ULL<<transposition_table_size_log2));
     memset(&history_bonus, 0, sizeof(history_bonus));
     moves_expanded = 0;
     moves_commenced = 0;

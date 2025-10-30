@@ -84,7 +84,7 @@ private:
 };
 
 struct Search {
-    Search(Evaluation *eval, int transposition_table_size_log2=30);
+    Search(Evaluation *eval, int transposition_table_size_log2=28);
     move_t minimax(Fenboard &b, Color color);
     move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
 
@@ -94,7 +94,7 @@ struct Search {
     uint64_t nodecount;
     uint64_t qnodecount;
     // hash -> depth, (max, min)
-    int transposition_table_size;
+    int transposition_table_size_log2;
     bool use_transposition_table;
 
     bool use_pruning;
@@ -140,8 +140,14 @@ public:
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 private:
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);
+    uint64_t &tt_entry(uint64_t hash) {
+        return transposition_table[hash & ((1ULL << transposition_table_size_log2)-1)];
+    }
+    const uint64_t &tt_entry(uint64_t hash) const {
+        return transposition_table[hash & ((1ULL << transposition_table_size_log2)-1)];
+    }
     bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) const {
-        uint64_t storage = transposition_table[hash % transposition_table_size];
+        uint64_t storage = tt_entry(hash);
         unsigned short checksum = hash & 0xff00;
         type = storage & 0x3;
         if (type <= 0 || checksum != (storage & 0xff00)) {
@@ -173,7 +179,7 @@ private:
         int16_t old_value;
         unsigned char old_depth, old_type;
 
-        uint64_t store = transposition_table[hash % transposition_table_size];
+        uint64_t store = tt_entry(hash);
         if (store != 0 && (hash & 0xff00) != (store & 0xff00)) {
             transposition_conflicts++;
         }
@@ -188,7 +194,7 @@ private:
         storage |= type & 0x3;
         unsigned short checksum = hash & 0xff00;
         storage |= checksum;
-        transposition_table[hash % transposition_table_size] = storage;
+        tt_entry(hash) = storage;
 
         if (hash == tt_hash_debug) {
             std::cout << "Insert tt entry for " << hash << " response=" << move_to_uci(move) << " depth=" << (int)depth << " value=" << value << " type=";
