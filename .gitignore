@@ -16,3 +16,4 @@ Makefile.deps
 *.pgn
 *.bin
 *.zst
+*.out

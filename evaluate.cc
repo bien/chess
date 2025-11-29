@@ -284,44 +284,39 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) {
     int dblpawn = 0;
     int rhopenfile = 0;
     int rfopenfile = 0;
-    int start_pos = 0;
-
-    while ((start_pos = get_low_bit(b.piece_bitmasks[bb_pawn], start_pos)) > -1) {
-        if (white_pawns[start_pos % 8] > 0) {
-            dblpawn++;
-        } else {
-            white_pawns[start_pos % 8] = start_pos / 8;
-        }
-        start_pos ++;
-    }
-    start_pos = 0;
-    while ((start_pos = get_low_bit(b.piece_bitmasks[bb_pawn + bb_king + 1], start_pos)) > -1) {
-        if (black_pawns[start_pos % 8] > 0) {
-            dblpawn--;
-        }
-        black_pawns[start_pos % 8] = start_pos / 8;
-        start_pos ++;
-    }
 
     piece_counts[bb_pawn] = count_bits(b.piece_bitmasks[bb_pawn]) - count_bits(b.piece_bitmasks[bb_pawn + bb_king + 1]);
+
+    int white_pawn_files = 0;
+    uint64_t white_pawns_bitset = b.piece_bitmasks[bb_pawn];
+    for (int rank = 2; rank <= 6; rank++) {
+        white_pawn_files |= (white_pawns_bitset >> (rank * 8));
+    }
+    uint64_t black_pawns_bitset = b.get_bitmask(Black, bb_pawn);
+    int black_pawn_files = 0;
+    for (int rank = 2; rank <= 6; rank++) {
+        black_pawn_files |= (black_pawns_bitset >> (rank * 8));
+    }
+    dblpawn += count_bits(white_pawn_files) - count_bits(black_pawn_files) - piece_counts[bb_pawn];
 
     for (int i = bb_knight; i <= bb_king; i++) {
         piece_counts[i] = count_bits(b.piece_bitmasks[i]) - count_bits(b.piece_bitmasks[i + bb_king + 1]);
         piece_scores[i] = 0;
     }
+    /*
+    PackedMoveIterator move_repr;
     for (Color color = White; color <= Black; color = static_cast<Color>(color + 1)) {
         move_repr.reset();
         b.get_slide_pseudo_moves(color, move_repr, true, true);
         b.get_nk_pseudo_moves(color, bb_king, move_repr, true, true);
         b.get_nk_pseudo_moves(color, bb_knight, move_repr, true, true);
         int multiplier = color == White ? 1 : -1;
-        for (auto move_iter = move_repr.begin(); move_iter <= move_repr.end(); move_iter++) {
+        for (auto move_iter = move_repr.begin(); move_iter < move_repr.end(); move_iter++) {
             piece_scores[move_iter->piece_type] += multiplier * count_bits(move_iter->dest_squares);
-
         }
-
     }
-
+*/
+    int start_pos = 0;
     while ((start_pos = get_low_bit(b.piece_bitmasks[bb_rook], start_pos)) > -1) {
         if (white_pawns[start_pos%8] == 0) {
             rhopenfile++;
@@ -384,14 +379,26 @@ void SimpleBitboardEvaluation::get_features(const Fenboard &b, int *features) {
 bool SimpleEvaluation::endgame(const Fenboard &b, int &eval) const {
     int pieces = count_bits(b.piece_bitmasks[bb_all] | b.piece_bitmasks[bb_all + bb_king + 1]);
 
-    if (pieces < 4) {
+    if (pieces < 7) {
         // K/K is draw
         if (pieces == 2) {
             eval = 0;
             return true;
         }
-        // KB/K and KN/K are draws
-        else if (count_bits(b.piece_bitmasks[bb_knight] | b.piece_bitmasks[bb_knight + bb_king + 1] | b.piece_bitmasks[bb_bishop] | b.piece_bitmasks[bb_bishop + bb_king + 1]) >= 1) {
+
+        int pawns = count_bits(b.get_bitmask(White, bb_pawn)) + count_bits(b.get_bitmask(Black, bb_pawn));
+        int queens = count_bits(b.get_bitmask(White, bb_queen)) + count_bits(b.get_bitmask(Black, bb_queen));
+        int rooks = count_bits(b.get_bitmask(White, bb_rook)) + count_bits(b.get_bitmask(Black, bb_rook));
+
+        if (pawns > 0 || queens > 0 || rooks > 0) {
+            return false;
+        }
+
+        else if (count_bits(b.get_bitmask(White, bb_bishop)) >= 2 || count_bits(b.get_bitmask(Black, bb_bishop)) >= 2) {
+            return false;
+        }
+        // KB, KN, KBN, KNN are not sufficient for mating
+        else {
             eval = 0;
             return true;
         }

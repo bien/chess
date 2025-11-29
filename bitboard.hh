@@ -10,6 +10,7 @@
 #include <cassert>
 #include <iostream>
 #include <strings.h>
+#include <stdalign.h>
 
 typedef unsigned char piece_t;
 const piece_t bb_all = 0;
@@ -47,8 +48,9 @@ const int CAPTURE_PIECE_POS = 12;
 const int PROMO_PIECE_POS = 15;
 const int ENPASSANT_FLAG = 0x38000;
 const int MOVE_FROM_CHECK = 0x40000;
-const int MOVES_MASK_OFFSET = 19;
-const int MOVES_MASK = 0x01f80000;
+const int ACTOR_OFFSET = 19;
+const int ACTOR_MASK = 0x0380000;
+const int UNUSED_MASK = 0x01c00000;
 const int ENPASSANT_POS = 25;
 const int ENPASSANT_STATE_MASK = 0xf << ENPASSANT_POS;
 const int INVALIDATES_CASTLE_K = 0x20000000;
@@ -62,8 +64,6 @@ const int FL_EMPTY = 1;
 static constexpr Color get_color(piece_t piece) {
     return piece & 0x8 ? Black : White;
 }
-
-
 
 const int Mod67BitPos[] = {
     0, 0, 1, 39, 2, 15, 40, 23, 3, 12, 16, 59, 41, 19, 24, 54, 4, 0, 13, 10, 17,
@@ -126,11 +126,16 @@ static constexpr piece_t make_piece(piece_t type, Color color)
 }
 
 
+constexpr piece_t get_actor(move_t move)
+{
+    return (move & ACTOR_MASK) >> ACTOR_OFFSET;
+}
+
 struct PackedMoves {
+    alignas(64) uint64_t dest_squares;
+    uint64_t check_squares;
     char source_pos;
     char piece_type;
-    uint64_t dest_squares;
-    uint64_t check_squares;
     // missing moving_discovers_check
     PackedMoves() {
         dest_squares = 0;

@@ -378,7 +378,7 @@ const uint64_t **Bitboard::bishop_magic = const_cast<const uint64_t **>(initiali
 
 
 Bitboard::Bitboard()
-    : side_to_play(White), hash(0)
+    : side_to_play(White), castle(0), hash(0)
 {
     memset(piece_bitmasks, 0, sizeof(piece_bitmasks));
     enpassant_file = -1;
@@ -465,6 +465,7 @@ void Bitboard::make_moves(Color side_to_play,
         invalidates_castle |= INVALIDATES_CASTLE_K;
     }
     move |= invalidates_castle;
+    move |= ((source_piece & PIECE_MASK) << ACTOR_OFFSET);
 
     int dest_pos = -1;
     while ((dest_pos = get_low_bit(dest_squares, dest_pos+1)) >= 0) {
@@ -506,6 +507,7 @@ void Bitboard::make_pawn_moves(Color side_to_play,
     } else {
         move |= ENPASSANT_STATE_MASK;
     }
+    move |= bb_pawn << ACTOR_OFFSET;
 
     int source_pos = -1;
     while ((source_pos = get_low_bit(source_squares, source_pos+1)) >= 0) {
@@ -595,6 +597,7 @@ move_t Bitboard::make_move(Color side_to_play, unsigned char srcrank, unsigned c
         move |= GIVES_CHECK;
     }
     move |= invalidates_castle;
+    move |= ((source_piece & PIECE_MASK) << ACTOR_OFFSET);
 
     return move;
 }
@@ -1374,6 +1377,8 @@ void Bitboard::apply_move(move_t move)
     piece_t sourcepiece = get_piece(sourcerank, sourcefile);
     piece_t resultpiece = sourcepiece;
     Color color = get_color(sourcepiece);
+
+    assert((sourcepiece & PIECE_MASK) == get_actor(move));
 
     // std::cout << "applying move " << move_to_uci(move) << std::endl;
 

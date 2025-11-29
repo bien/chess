@@ -12,20 +12,19 @@ all: uciinterface test
 libengine.a: $(ENGINE_OBJS)
 	ar rcs $@ $^
 
+annotate: annotate.o $(ENGINE_OBJS)
+	$(CXX) $(LDFLAGS) $^ -o $@
+	$(DSYMUTIL) $@
+
 cmdeval: cmdeval.o $(ENGINE_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@
+	codesign --entitlements entitlements.plist -f -s "-" --options runtime $@
 
 chess: bitboard.o fenboard.o test.o move.o
 	$(CXX) $^ -o $@
 
 uciinterface: $(ENGINE_OBJS) uciinterface.o
 	$(CXX) $^ -o $@
-
-moves: moves.o $(ENGINE_OBJS)
-	$(CXX) $^ -o $@
-
-neteval: neteval.o $(ENGINE_OBJS)
-	$(CXX) $(LDFLAGS) $^ -o $@
 
 magicsquares: magicsquares.o bitboard.o
 	$(CXX) $^ -o $@
@@ -37,9 +36,6 @@ test: testexe puzzle
 	./testexe games/Fischer.pgn
 	./puzzle lichess_db_puzzle.csv.head
 
-playover: $(ENGINE_OBJS) playover.o
-	$(CXX) $^ -o $@
-
 testexe: $(ENGINE_OBJS) test.o
 	$(CXX) $^ -o $@
 
@@ -48,7 +44,7 @@ puzzle: puzzle.o $(ENGINE_OBJS)
 	$(DSYMUTIL) $@
 
 clean:
-	rm -f *.o *.a $(ENGINE_OBJS) chess
+	rm -f *.o *.a $(ENGINE_OBJS) annotate uciinterface testexe puzzle cmdeval magicsquares start
 
 Makefile.deps: Makefile $(ENGINE_SRCS) $(OTHER_SRCS)
 	$(CXX) -MM $(ENGINE_SRCS) $(INCLUDES) $(OTHER_SRCS) > $@

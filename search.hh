@@ -15,6 +15,7 @@ const int SCORE_MAX = VERY_GOOD + 1000;
 const int SCORE_MIN = VERY_BAD - 1000;
 
 extern int search_debug;
+extern int search_features;
 
 class Evaluation {
 public:
@@ -37,6 +38,23 @@ const SearchUpdate NullSearchUpdate;
 struct Search;
 const int NTH_SORT_FREQ_BUCKETS = 40;
 
+enum {
+    score_part_trans,
+    score_part_exchange,
+    score_part_king_handeval,
+    score_part_psqt,
+    score_part_history1,
+    score_part_history2,
+    score_part_refutation1,
+    score_part_refutation2,
+    score_part_followup1,
+    score_part_followup2,
+    score_part_distant1,
+    score_part_distant2,
+    score_part_hint,
+    score_part_len
+} score_parts;
+
 struct MoveSorter {
     MoveSorter();
     bool has_more_moves();
@@ -46,8 +64,9 @@ struct MoveSorter {
     }
 
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, bool captures_checks_only=false, int depth=0,  int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, int score=0, move_t hint=0, move_t transposition_hint=0, bool verbose=false);
-    int get_score(const Fenboard *b, int current_score,  move_t) const;
+    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, int score=0, move_t hint=0, move_t transposition_hint=0, bool verbose=false);
+    int get_score(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line) const;
+    void get_score_parts(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const;
 
 private:
     void load_more(const Fenboard *b);
@@ -74,6 +93,7 @@ private:
     bool captures_checks_only;
     move_t hint;
     move_t transposition_hint;
+    const std::vector<move_t> *line;
     Search *s;
     const Fenboard *b;
     int current_score;
@@ -85,10 +105,11 @@ private:
 
 struct Search {
     Search(Evaluation *eval, int transposition_table_size_log2=28);
-    move_t minimax(Fenboard &b, Color color);
+    move_t minimax(Fenboard &b);
     move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
 
     void reset();
+    void reset_counters();
 
     int score;
     uint64_t nodecount;
@@ -105,6 +126,11 @@ struct Search {
     bool use_iterative_deepening;
     bool use_quiescent_search;
     bool use_killer_move;
+    bool enable_history;
+    bool enable_history_v2;
+    bool enable_refutation;
+    bool enable_followup;
+    bool enable_distant;
     int mtdf_window_size;
     int quiescent_depth;
 
@@ -126,15 +152,23 @@ struct Search {
     uint64_t tt_hash_debug;
 
     // source_piece -> source_square
-    int16_t history_bonus[2][6][64];
+    int32_t history_bonus1[2][6][64];
+    int32_t history_bonus2[2][6][64];
 
 private:
-    uint64_t *transposition_table;
-    // std::tuple<move_t, move_t, int> alphabeta_with_memory(Fenboard &b, int depth, Color color, int alpha, int beta, move_t hint=0);
-    public:
-    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, move_t hint=0, int static_score=0, const std::string &line="");
+    int32_t refutation_table1[6][64][6][64];
+    int32_t refutation_table2[6][64][6][64];
 
+    int32_t followup_table1[6][64][6][64];
+    int32_t followup_table2[6][64][6][64];
+
+    int32_t distant_table1[6][64][6][64];
+    int32_t distant_table2[6][64][6][64];
+
+    void history_cutoff(Color side_to_play, int depth_to_go, move_t move, int move_rank, const std::vector<move_t> &line, bool high);
+    uint64_t *transposition_table;
 public:
+    std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, std::vector<move_t> &line, move_t hint=0, int static_score=0);
     move_t mtdf(Fenboard &b, int &score, int guess, time_t deadline=0, move_t hint=0);
     move_t timed_iterative_deepening(Fenboard &b, const SearchUpdate &s);
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);

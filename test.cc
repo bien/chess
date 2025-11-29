@@ -81,7 +81,8 @@ void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
 
 void legal_moves(Fenboard *b, std::vector<move_t> &moves) {
     MoveSorter ms;
-    ms.reset(b, NULL);
+    std::vector<move_t> line;
+    ms.reset(b, NULL, line);
     while (ms.has_more_moves()) {
         moves.push_back(ms.next_move());
     }
@@ -149,6 +150,7 @@ void test_legal_moves(std::string fischer_pgn_file)
             assert_equals(r, get_board_rank(bp));
         }
     }
+    assert_equals(static_cast<uint64_t>(0), b.get_hash());
     b.set_starting_position();
     assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
     int pieces[8] = { bb_rook, bb_knight, bb_bishop, bb_queen, bb_king, bb_bishop, bb_knight, bb_rook };
@@ -394,11 +396,12 @@ void test_move_finding()
     Search search(&simple);
     move_t move;
     search.use_quiescent_search = false;
+    search.quiescent_depth = 0;
 
     // white has mate in 1
     b.set_fen("rnbqkbnr/ppppp2p/5p2/6p1/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 1");
     search.max_depth = 2;
-    move = search.minimax(b, White);
+    move = search.minimax(b);
     assert_equals(VERY_GOOD - 1, search.score);
     search.reset();
     move = search.alphabeta(b);
@@ -413,7 +416,7 @@ void test_move_finding()
     search.use_mtdf = false;
     search.use_pruning = true;
     search.use_quiescent_search = false;
-    move = search.minimax(b, White);
+    move = search.minimax(b);
     assert_equals(b.read_move("Rf7+", White), move);
     assert_equals(VERY_GOOD - 3, search.score);
 
@@ -462,9 +465,8 @@ void test_move_finding()
     b.set_fen("r1b1k2r/p3bppp/2p2n2/1p2p3/3n4/2Pp4/PP1P1PPP/RNB1K1NR w KQkq - 0 12");
     search.reset();
     search.use_transposition_table = true;
-    search.use_mtdf = true;
     search.use_pruning = true;
-    search.max_depth = 6;
+    search.max_depth = 7;
     move = search.alphabeta(b);
 
     assert_equals(b.read_move("cxd4", White), move);
@@ -499,7 +501,7 @@ int main(int argc, char **argv)
     }
 
     test_legal_moves(argv[1]);
-    // test_move_finding();
+    test_move_finding();
     // test_matrix();
     return 0;
 }
