@@ -876,7 +876,7 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
         if (source_piece == bb_all || source_piece == bb_knight) {
             get_nk_pseudo_moves(side_to_play, bb_knight, moves, true);
         }
-        if (source_piece != bb_knight) {
+        if (source_piece != bb_knight && source_piece != bb_pawn) {
             get_slide_pseudo_moves(side_to_play, moves, true, INCLUDE_ALL, source_sq, source_piece);
         }
         if (source_piece == bb_pawn || source_piece == bb_all) {
@@ -890,7 +890,6 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
         int one_rank_forward = (side_to_play == White ? 8 : -8);
 
         if (in_check) {
-
             int attacker = get_low_bit(king_attackers, 0);
             assert(attacker >= 0);
 
