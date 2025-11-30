@@ -146,11 +146,8 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     transposition_full_hits = 0;
     transposition_insufficient_depth = 0;
     transposition_conflicts = 0;
-    enable_history = true;
-    enable_history_v2 = true;
-    enable_refutation = true;
-    enable_followup = true;
-    enable_distant = true;
+    slow_followup_distant = false;
+    recapture_first_bonus = 1000;
     moves_expanded = 0;
     moves_commenced = 0;
     transposition_table = new uint64_t[1ULL<<transposition_table_size_log2];
@@ -761,6 +758,9 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
             parts[score_part_psqt] += psqt_weights[king_square * (64 * 10) + (promo - 1) * 64 + dest_square];
         }
     }
+    if (s != NULL && s->recapture_first_bonus != 0 && capture != 0 && recapture_on_sq == dest_sq) {
+        parts[score_part_exchange] += s->recapture_first_bonus - piece_points[actor] * 100;
+    }
 
     if (s != NULL) {
         assert(actor > 0 && actor <= bb_king);
@@ -809,37 +809,34 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move, con
     int value = score_parts[score_part_king_handeval] +
         score_parts[score_part_psqt];
     if (s != NULL) {
-        auto history_idx = (s->enable_history_v2 ? score_part_history2 : score_part_history1);
-        auto refut_idx = (s->enable_history_v2 ? score_part_refutation2 : score_part_refutation1);
+        auto history_idx =score_part_history2;
+        auto refut_idx = score_part_refutation2;
         auto followup_idx = score_part_followup1;
         auto distant_idx = score_part_distant1;
-        if (s->enable_history) {
-            if (score_parts[history_idx] > 0) {
-                value += log2l(score_parts[history_idx]) * 10;
-            } else if (score_parts[history_idx] < 0){
-                value -= log2l(-score_parts[history_idx]) * 10;
-            }
+        int followup_mult = 10, distant_mult = 10;
+        if (s->slow_followup_distant) {
+            followup_mult = 2;
+            distant_mult = 1;
         }
-        if (s->enable_refutation) {
-            if (score_parts[refut_idx] > 0) {
-                value += log2l(score_parts[refut_idx]) * 10;
-            } else if (score_parts[refut_idx] < 0){
-                value -= log2l(-score_parts[refut_idx]) * 10;
-            }
+        if (score_parts[history_idx] > 0) {
+            value += log2l(score_parts[history_idx]) * 10;
+        } else if (score_parts[history_idx] < 0){
+            value -= log2l(-score_parts[history_idx]) * 10;
         }
-        if (s->enable_followup) {
-            if (score_parts[followup_idx] > 0) {
-                value += log2l(score_parts[followup_idx]) * 10;
-            } else if (score_parts[followup_idx] < 0){
-                value -= log2l(-score_parts[followup_idx]) * 10;
-            }
+        if (score_parts[refut_idx] > 0) {
+            value += log2l(score_parts[refut_idx]) * 10;
+        } else if (score_parts[refut_idx] < 0){
+            value -= log2l(-score_parts[refut_idx]) * 10;
         }
-        if (s->enable_distant) {
-            if (score_parts[distant_idx] > 0) {
-                value += log2l(score_parts[distant_idx]) * 10;
-            } else if (score_parts[distant_idx] < 0){
-                value -= log2l(-score_parts[distant_idx]) * 10;
-            }
+        if (score_parts[followup_idx] > 0) {
+            value += log2l(score_parts[followup_idx]) * followup_mult;
+        } else if (score_parts[followup_idx] < 0){
+            value -= log2l(-score_parts[followup_idx]) * followup_mult;
+        }
+        if (score_parts[distant_idx] > 0) {
+            value += log2l(score_parts[distant_idx]) * distant_mult;
+        } else if (score_parts[distant_idx] < 0){
+            value -= log2l(-score_parts[distant_idx]) * distant_mult;
         }
     }
     return value;
@@ -926,7 +923,7 @@ void MoveSorter::load_more(const Fenboard *b) {
         phase++;
     }
 }
-void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, int score, move_t hint, move_t transposition_hint, bool verbose)
+void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, int score, move_t hint, move_t transposition_hint, char recapture_on_sq, bool verbose)
 {
     index = 0;
     last_capture = 0;
@@ -942,6 +939,7 @@ void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &
     this->b = b;
     this->verbose = verbose;
     this->line = &line;
+    this->recapture_on_sq = recapture_on_sq;
     if (s != NULL) {
         current_score = score;
     } else {

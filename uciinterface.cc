@@ -74,10 +74,8 @@ int main(int argc, char **argv)
             std::cout << "option name Hash type spin default 1 min 1 max 1024" << std::endl;
             std::cout << "option name depth type spin default 7 min 1 max 1024" << std::endl;
             std::cout << "option name quiescentlimit type spin default 4 min 0 max 1024" << std::endl;
-            std::cout << "option name history type combo default V1 var Off var V1 var V2" << std::endl;
-            std::cout << "option name refutation type check default true" << std::endl;
-            std::cout << "option name followup type check default true" << std::endl;
-            std::cout << "option name distant type check default true" << std::endl;
+            std::cout << "option name slowfollowup type check default true" << std::endl;
+            std::cout << "option name recapture type spin default 1000 min 0 max 2000" << std::endl;
             std::cout << "option name debug type spin default 0 min 0 max 8" << std::endl;
             std::cout << "uciok" << std::endl;
         }
@@ -97,18 +95,11 @@ int main(int argc, char **argv)
                 search_debug = stoi(tokens[4]);
                 std::cout << "set debug = " << search_debug << std::endl;
             }
-            else if (tokens[2] == "history" && tokens.size() > 4) {
-                search.enable_history = (tokens[4] != "Off");
-                search.enable_history_v2 = (tokens[4] == "V2");
+            else if (tokens[2] == "slowfollowup" && tokens.size() > 4) {
+                search.slow_followup_distant = (tokens[4] == "true");
             }
-            else if (tokens[2] == "refutation" && tokens.size() > 4) {
-                search.enable_refutation = (tokens[4] == "true");
-            }
-            else if (tokens[2] == "followup" && tokens.size() > 4) {
-                search.enable_followup = (tokens[4] == "true");
-            }
-            else if (tokens[2] == "distant" && tokens.size() > 4) {
-                search.enable_distant = (tokens[4] == "true");
+            else if (tokens[2] == "recapture" && tokens.size() > 4) {
+                search.recapture_first_bonus = stoi(tokens[4]);
             }
         }
         else if (line.rfind("position", 0) == 0) {
