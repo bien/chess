@@ -18,7 +18,7 @@ annotate: annotate.o $(ENGINE_OBJS)
 
 cmdeval: cmdeval.o $(ENGINE_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@
-	codesign --entitlements entitlements.plist -f -s "-" --options runtime $@
+	codesign -s - -f --entitlements entitlements.plist ./$@
 
 chess: bitboard.o fenboard.o test.o move.o
 	$(CXX) $^ -o $@
@@ -42,6 +42,7 @@ testexe: $(ENGINE_OBJS) test.o
 puzzle: puzzle.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 	$(DSYMUTIL) $@
+	codesign --entitlements entitlements.plist -f -s "-" --options runtime $@
 
 clean:
 	rm -f *.o *.a $(ENGINE_OBJS) annotate uciinterface testexe puzzle cmdeval magicsquares start

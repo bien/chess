@@ -137,7 +137,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 Search::Search(Evaluation *eval, int transposition_table_size_log2)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size_log2(transposition_table_size_log2), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
-        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(4), time_available(0), max_depth(8), soft_deadline(true)
+        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true)
 
 {
     srandom(clock());
@@ -164,14 +164,10 @@ void Search::reset()
 {
     reset_counters();
     memset(transposition_table, 0, sizeof(uint64_t) * (1ULL<<transposition_table_size_log2));
-    memset(&history_bonus1, 0, sizeof(history_bonus1));
     memset(&history_bonus2, 0, sizeof(history_bonus2));
-    memset(&refutation_table1, 0, sizeof(refutation_table1));
     memset(&refutation_table2, 0, sizeof(refutation_table2));
     memset(&followup_table1, 0, sizeof(followup_table1));
-    memset(&followup_table2, 0, sizeof(followup_table2));
     memset(&distant_table1, 0, sizeof(distant_table1));
-    memset(&distant_table2, 0, sizeof(distant_table2));
 }
 
 void Search::reset_counters()
@@ -268,13 +264,11 @@ void Search::history_cutoff(Color side_to_play, int depth_to_go, move_t move, in
         bonus1 = -bonus1 * std::max(1, 3 - move_rank);
         bonus2 = -bonus2 * (std::max(1, 3 - move_rank) * std::max(1, 3 - move_rank));
     }
-    history_bonus1[side_to_play][actor-1][get_dest_pos(move)] += bonus1;
     history_bonus2[side_to_play][actor-1][get_dest_pos(move)] += bonus2;
 
     if (!line.empty()) {
         piece_t counter_actor = get_actor(line.back());
         assert(counter_actor != 0);
-        refutation_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(line.back())] += bonus1;
         refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(line.back())] += bonus2;
     }
     if (line.size() >= 2) {
@@ -282,14 +276,12 @@ void Search::history_cutoff(Color side_to_play, int depth_to_go, move_t move, in
         piece_t counter_actor = get_actor(past_move);
         assert(counter_actor != 0);
         followup_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)] += bonus1;
-        followup_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)] += bonus2;
     }
     for (int distance = 3; distance <= line.size(); distance += 2) {
         move_t past_move = line[line.size() - distance];
         piece_t counter_actor = get_actor(past_move);
         assert(counter_actor != 0);
         distant_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)] += bonus1;
-        distant_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)] += bonus2;
     }
 }
 
@@ -765,26 +757,22 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
     if (s != NULL) {
         assert(actor > 0 && actor <= bb_king);
         int dest_square = get_dest_pos(move);
-        parts[score_part_history1] = s->history_bonus1[b->get_side_to_play()][actor - 1][dest_square];
         parts[score_part_history2] = s->history_bonus2[b->get_side_to_play()][actor - 1][dest_square];
         if (line.size() > 0) {
             move_t previous_move = line.back();
             int counter_actor = get_actor(previous_move);
-            parts[score_part_refutation1] = s->refutation_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(previous_move)];
             parts[score_part_refutation2] = s->refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(previous_move)];
             if (line.size() >= 2) {
                 move_t past_move = line[line.size() - 2];
                 piece_t counter_actor = get_actor(past_move);
                 assert(counter_actor != 0);
                 parts[score_part_followup1] = s->followup_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
-                parts[score_part_followup2] = s->followup_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
             }
             for (int distance = 3; distance <= line.size(); distance += 2) {
                 move_t past_move = line[line.size() - distance];
                 piece_t counter_actor = get_actor(past_move);
                 assert(counter_actor != 0);
                 parts[score_part_distant1] = s->distant_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
-                parts[score_part_distant2] = s->distant_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
             }
         }
     }
@@ -809,7 +797,7 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move, con
     int value = score_parts[score_part_king_handeval] +
         score_parts[score_part_psqt];
     if (s != NULL) {
-        auto history_idx =score_part_history2;
+        auto history_idx = score_part_history2;
         auto refut_idx = score_part_refutation2;
         auto followup_idx = score_part_followup1;
         auto distant_idx = score_part_distant1;
