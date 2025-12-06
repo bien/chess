@@ -12,6 +12,8 @@
 #include <strings.h>
 #include <stdalign.h>
 
+const int PIECE_VALUE[] = { 0, 1, 3, 3, 5, 9, 1000 };
+
 typedef unsigned char piece_t;
 const piece_t bb_all = 0;
 const piece_t bb_pawn = 1;
@@ -212,6 +214,8 @@ public:
     void get_moves(Color side_to_play, bool checks, bool captures_or_promo, const PackedMoveIterator &packed, std::vector<move_t> &moves) const;
     // return a move from source_sq to dest_sq, if there are any.  If it's promo use =Q
     move_t reinterpret_move(move_t hint, uint64_t &opp_covered_squares) const;
+    int static_exchange_eval(Color side_to_play, int square, piece_t current_piece, piece_t capturer) const;
+    int static_exchange_negamax(piece_t current_occupier, char attackers[bb_king], char defenders[bb_king]) const;
 
     bool king_in_check(Color) const;
     uint64_t get_bitmask(Color color, piece_t piece_type) const {

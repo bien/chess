@@ -29,7 +29,6 @@ void print_line(Fenboard &b, Search &s, move_t first_move)
     for (auto iter = seen_moves.rbegin(); iter != seen_moves.rend(); iter++) {
         b.undo_move(*iter);
     }
-    std::cout << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -77,6 +76,9 @@ int main(int argc, char **argv)
             e = new NNUEEvaluation();
         }
         Search s(e);
+
+        s.alternate_exchange_scoring = true;
+        s.recapture_first_bonus = 0;
 
         int depth = 0;
         int alpha = VERY_BAD;
@@ -192,23 +194,26 @@ int main(int argc, char **argv)
         }
         if (vm["moves"].as<bool>()) {
             Acquisition<MoveSorter> move_iter(&s);
-            move_iter->reset(&b, &s, line, depth, alpha, beta, true, 0, 0, 0, 0, true);
+            move_iter->reset(&b, &s, line, false, depth, alpha, beta, true, 0, 0, 0, 0, true);
             while (move_iter->has_more_moves()) {
                 move_t move = move_iter->next_move();
                 int score_parts[score_part_len];
                 move_iter->get_score_parts(&b, alpha, move, line, score_parts);
-                std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, 0, move, line) << std::endl;
+                std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, 0, move, line);
+                std::cout << " see=" << score_parts[score_part_exchange];
                 std::cout << "      ";
                 print_line(b, s, move);
+
                 move_t tt_move;
                 int tt_value = 0, tt_alpha = SCORE_MIN, tt_beta = SCORE_MAX;
                 if (s.read_transposition(b.get_hash(), tt_move, 0, tt_alpha, tt_beta, tt_value)) {
                     std::cout << tt_value << " " << ((move & GIVES_CHECK) != 0 ? "1 " : "0 ") << (get_captured_piece(move) != 0 ? "1 " : "0 ") << (int)get_actor(move) << " ";
-                    for (int i = 0; i < score_part_len; i++) {
-                        std::cout << score_parts[i] << " ";
-                    }
-                    std::cout << std::endl;
                 }
+                for (int i = 0; i < score_part_len; i++) {
+                    std::cout << score_parts[i] << " ";
+                }
+
+                std::cout << std::endl;
             }
         }
 

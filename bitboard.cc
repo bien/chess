@@ -17,6 +17,8 @@ const uint64_t rank_2 = 0xff00;
 const uint64_t rank_7 = rank_1 << 48;
 const uint64_t rank_8 = rank_1 << 56;
 
+char fen_repr(unsigned char p);
+
 constexpr uint64_t shift_right(uint64_t x, int amount) {
     if (amount > 0) {
         return x >> amount;
@@ -691,6 +693,93 @@ uint64_t Bitboard::computed_covered_squares(Color color, int include_flags) cons
     return squares;
 }
 
+piece_t peek_least_valuable_piece(const char piece_count[bb_king]) {
+    for (int i = 0; i < bb_king; i++) {
+        if (piece_count[i] > 0) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+piece_t pop_least_valuable_piece(char piece_count[bb_king]) {
+    for (int i = 0; i < bb_king; i++) {
+        if (piece_count[i] > 0) {
+            piece_count[i]--;
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+// side_to_play meaning the first side to capture the current_piece at square
+// return net result of the exchange, positive means side_to_play gains material
+int Bitboard::static_exchange_eval(Color side_to_play, int square, piece_t current_piece, piece_t capturer) const {
+    char attacker_count[bb_king];
+    char defender_count[bb_king];
+    memset(attacker_count, 0, sizeof(attacker_count));
+    memset(defender_count, 0, sizeof(defender_count));
+    uint64_t all_pieces = get_bitmask(side_to_play, bb_all) | get_bitmask(get_opposite_color(side_to_play), bb_all);
+    uint64_t queen_pieces = get_bitmask(side_to_play, bb_queen) | get_bitmask(get_opposite_color(side_to_play), bb_queen);
+    uint64_t bishop_pieces = queen_pieces | get_bitmask(side_to_play, bb_bishop) | get_bitmask(get_opposite_color(side_to_play), bb_bishop);
+    uint64_t rook_pieces = queen_pieces | get_bitmask(side_to_play, bb_rook) | get_bitmask(get_opposite_color(side_to_play), bb_rook);
+
+    for (piece_t attacker = bb_pawn; attacker <= bb_king; attacker++) {
+        int attacker_idx = attacker - 1;
+        switch(attacker) {
+            case bb_pawn: {
+                int attackers = count_bits(BitboardCaptures::PregeneratedCaptures[get_opposite_color(side_to_play)][attacker][square]
+                                    & get_bitmask(side_to_play, attacker));
+                int defenders = count_bits(BitboardCaptures::PregeneratedCaptures[side_to_play][attacker][square]
+                                    & get_bitmask(get_opposite_color(side_to_play), attacker));
+                attacker_count[attacker_idx] = attackers;
+                defender_count[attacker_idx] = defenders;
+            }
+            break;
+            case bb_knight: case bb_king: {
+                uint64_t dest_sq = BitboardCaptures::PregeneratedMoves[attacker][square];
+                attacker_count[attacker_idx] = count_bits(dest_sq & get_bitmask(side_to_play, attacker));
+                defender_count[attacker_idx] = count_bits(dest_sq & get_bitmask(get_opposite_color(side_to_play), attacker));
+            }
+            break;
+            case bb_rook: case bb_queen: case bb_bishop: {
+                if (attacker == bb_rook || attacker == bb_queen) {
+                    uint64_t dest_sq = get_rook_moves(square, all_pieces & ~rook_pieces);
+                    attacker_count[attacker_idx] += count_bits(dest_sq & get_bitmask(side_to_play, attacker));
+                    defender_count[attacker_idx] += count_bits(dest_sq & get_bitmask(get_opposite_color(side_to_play), attacker));
+                }
+                if (attacker == bb_bishop || attacker == bb_queen) {
+                    uint64_t dest_sq = get_bishop_moves(square, all_pieces & ~bishop_pieces);
+                    attacker_count[attacker_idx] += count_bits(dest_sq & get_bitmask(side_to_play, attacker));
+                    defender_count[attacker_idx] += count_bits(dest_sq & get_bitmask(get_opposite_color(side_to_play), attacker));
+                }
+            }
+            break;
+        }
+    }
+
+    // step 1: capture piece
+    int net_score = PIECE_VALUE[current_piece];
+    piece_t current_occupier;
+    if (capturer == 0) {
+        current_occupier = pop_least_valuable_piece(attacker_count);
+    } else {
+        current_occupier = capturer;
+        attacker_count[capturer - 1]--;
+    }
+
+    return net_score - static_exchange_negamax(current_occupier, defender_count, attacker_count);
+}
+
+int Bitboard::static_exchange_negamax(piece_t current_occupier, char attackers[bb_king], char defenders[bb_king]) const {
+    // first capture with least valuable attacker
+    piece_t next_capturer = pop_least_valuable_piece(attackers);
+    if (next_capturer == 0) {
+        return 0;
+    }
+    int subline = static_exchange_negamax(next_capturer, defenders, attackers);
+    return std::max(0, PIECE_VALUE[current_occupier] - subline);
+}
 
 void Bitboard::get_moves(Color side_to_play, bool checks, bool captures_or_promo, const PackedMoveIterator &packed, std::vector<move_t> &moves) const
 {

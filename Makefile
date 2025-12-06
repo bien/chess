@@ -42,7 +42,7 @@ testexe: $(ENGINE_OBJS) test.o
 puzzle: puzzle.o $(ENGINE_OBJS)
 	$(CXX) $^ -o $@
 	$(DSYMUTIL) $@
-	codesign --entitlements entitlements.plist -f -s "-" --options runtime $@
+	codesign -s - -f --entitlements entitlements.plist ./$@
 
 clean:
 	rm -f *.o *.a $(ENGINE_OBJS) annotate uciinterface testexe puzzle cmdeval magicsquares start

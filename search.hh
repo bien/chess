@@ -25,16 +25,15 @@ public:
     virtual ~Evaluation() {}
 };
 
-
 const int TT_EXACT = 3;
 const int TT_UPPER = 1;
 const int TT_LOWER = 2;
 
 struct SearchUpdate {
-    virtual void operator()(move_t best_move, int depth, int nodecount, int score) const {}
+    virtual void operator()(move_t best_move, int depth, int nodecount, int score) = 0;
+    virtual ~SearchUpdate() {}
 };
 
-const SearchUpdate NullSearchUpdate;
 struct Search;
 const int NTH_SORT_FREQ_BUCKETS = 40;
 
@@ -43,14 +42,10 @@ enum {
     score_part_exchange,
     score_part_king_handeval,
     score_part_psqt,
-    score_part_history1,
     score_part_history2,
-    score_part_refutation1,
     score_part_refutation2,
     score_part_followup1,
-    score_part_followup2,
     score_part_distant1,
-    score_part_distant2,
     score_part_hint,
     score_part_len
 } score_parts;
@@ -107,7 +102,7 @@ private:
 struct Search {
     Search(Evaluation *eval, int transposition_table_size_log2=28);
     move_t minimax(Fenboard &b);
-    move_t alphabeta(Fenboard &b, const SearchUpdate &s = NullSearchUpdate);
+    move_t alphabeta(Fenboard &b, SearchUpdate *s = NULL);
 
     void reset();
     void reset_counters();
@@ -127,14 +122,22 @@ struct Search {
     bool use_iterative_deepening;
     bool use_quiescent_search;
     bool use_killer_move;
-    bool slow_followup_distant;
     int recapture_first_bonus;
+    int handeval_coeff;
+    int psqt_coeff;
+    int exchange_coeff;
+    int history_coeff;
+    int hint_coeff;
+    bool alternate_exchange_scoring;
     int mtdf_window_size;
     int quiescent_depth;
+    bool quiescent_positive_capture_only;
+    bool quiescent_single_capture_square_only;
 
-    int time_available;
+    unsigned int millis_available;
     int max_depth;
     bool soft_deadline;
+    std::chrono::system_clock::time_point deadline;
 
     int transposition_checks;
     int transposition_partial_hits;
@@ -162,7 +165,6 @@ private:
 public:
     std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, std::vector<move_t> &line, move_t hint=0, int static_score=0);
     move_t mtdf(Fenboard &b, int &score, int guess, time_t deadline=0, move_t hint=0);
-    move_t timed_iterative_deepening(Fenboard &b, const SearchUpdate &s);
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 private:
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);

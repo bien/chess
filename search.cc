@@ -15,14 +15,12 @@
 int search_debug = 0;
 int search_features = 0;
 const int LIMITED_QUIESCENT_DEPTH = 4;
-const int MAX_HISTORY = 10000;
-const int HISTORY_SCALER = 500;
+// const int MAX_HISTORY = 10000;
+// const int HISTORY_SCALER = 500;
 
 static int vertical_mirror(int square) {
     return square ^ 56;
 }
-
-const int PIECE_VALUE[] = { 0, 1, 3, 3, 5, 8, 1000 };
 
 move_t Search::minimax(Fenboard &b)
 {
@@ -42,83 +40,59 @@ move_t Search::minimax(Fenboard &b)
     return std::get<0>(result);
 }
 
-move_t Search::timed_iterative_deepening(Fenboard &b, const SearchUpdate &s)
-{
-    time_t deadline = time(NULL) + time_available;
-    move_t result = 0;
-    score = 0;
-    int guess = eval->evaluate(b);
-    int old_max_depth = max_depth;
-    int depth = 2;
-    do {
-        max_depth = depth;
-        int new_score = 0;
-        int mtdf_deadline = deadline;
-        if (soft_deadline) {
-            mtdf_deadline = 0;
-        }
-        move_t new_result = mtdf(b, new_score, guess, mtdf_deadline, result);
-        if (search_debug) {
-            std::cout << "depth " << depth << " ";
-            b.print_move(new_result, std::cout);
-            std::cout << " eval=" << new_score << " timeused=" << (time_available - deadline + time(NULL)) << std::endl;
-        }
-
-        if (new_result != 0) {
-            result = new_result;
-            score = new_score;
-            s(result, max_depth, nodecount, score);
-            guess = score;
-        }
-        depth += 1;
-    } while (time(NULL) < deadline && depth < old_max_depth);
-    max_depth = old_max_depth;
-    return result;
-}
-
-move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
+move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
 {
     nodecount = 0;
     move_t result = 0;
 
-    if (use_mtdf && use_iterative_deepening && time_available > 0) {
-        return timed_iterative_deepening(b, s);
-    }
     if (use_iterative_deepening) {
         int old_max_depth = max_depth;
         int guess_score = 0;
+        if (millis_available > 0) {
+            deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(millis_available);
+        }
 
-        for (int iter_depth = (old_max_depth % 2 == 1 ? 1 : 0); iter_depth <= old_max_depth; iter_depth += 2) {
-            max_depth = iter_depth;
-            if (use_mtdf) {
-                result = mtdf(b, score, guess_score, 0, result);
-            } else if (use_pv) {
-                std::tuple<move_t, move_t, int> sub;
-                std::vector<move_t> line;
-                int alpha = guess_score - 25;
-                int beta = guess_score + 25;
-                int backoff = 200;
-                while (true) {
-                    sub = negamax_with_memory(b, 0, alpha, beta, line, result);
-                    score = std::get<2>(sub);
-                    if (search_debug) {
-                        std::cout << "pv at depth=" << max_depth << " [" << alpha << "," << beta << "] -> " << score << std::endl;
+        try {
+            for (int iter_depth = (old_max_depth % 2 == 1 ? 1 : 0); iter_depth <= old_max_depth; iter_depth += 2) {
+                max_depth = iter_depth;
+                if (use_mtdf) {
+                    result = mtdf(b, score, guess_score, 0, result);
+                } else if (use_pv) {
+                    std::tuple<move_t, move_t, int> sub;
+                    std::vector<move_t> line;
+                    int alpha = guess_score - 25;
+                    int beta = guess_score + 25;
+                    int backoff = 200;
+                    while (true) {
+                        sub = negamax_with_memory(b, 0, alpha, beta, line, result);
+                        score = std::get<2>(sub);
+                        if (search_debug) {
+                            std::cout << "pv at depth=" << max_depth << " [" << alpha << "," << beta << "] -> " << score << std::endl;
+                        }
+                        if (score < alpha) {
+                            beta = alpha;
+                            alpha = score - backoff;
+                        } else if (score > beta) {
+                            alpha = beta;
+                            beta = score + backoff;
+                        } else {
+                            break;
+                        }
+                        backoff *= 2;
                     }
-                    if (score < alpha) {
-                        beta = alpha;
-                        alpha = score - backoff;
-                    } else if (score > beta) {
-                        alpha = beta;
-                        beta = score + backoff;
-                    } else {
-                        break;
-                    }
-                    backoff *= 2;
+                    result = std::get<0>(sub);
                 }
-                result = std::get<0>(sub);
+                if (s != NULL) {
+                    (*s)(result, max_depth, nodecount, score);
+                }
+                guess_score = score;
+                if (millis_available > 0 && std::chrono::system_clock::now() > deadline) {
+                    break;
+                }
             }
-            s(result, max_depth, nodecount, score);
-            guess_score = score;
+        }
+        catch (const std::exception &e) {
+            std::cout << "Search interrupted: " << e.what() << std::endl;
         }
         max_depth = old_max_depth;
     } else {
@@ -137,7 +111,7 @@ move_t Search::alphabeta(Fenboard &b, const SearchUpdate &s)
 Search::Search(Evaluation *eval, int transposition_table_size_log2)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size_log2(transposition_table_size_log2), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_mtdf(false), use_pv(true), use_iterative_deepening(true),
-        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(5), time_available(0), max_depth(8), soft_deadline(true)
+        use_quiescent_search(true), use_killer_move(true), mtdf_window_size(10), quiescent_depth(2), millis_available(0), max_depth(8), soft_deadline(true)
 
 {
     srandom(clock());
@@ -146,10 +120,18 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     transposition_full_hits = 0;
     transposition_insufficient_depth = 0;
     transposition_conflicts = 0;
-    slow_followup_distant = false;
     recapture_first_bonus = 1000;
+    alternate_exchange_scoring = false;
     moves_expanded = 0;
     moves_commenced = 0;
+    handeval_coeff = 1;
+    psqt_coeff = 1;
+    exchange_coeff = 1;
+    history_coeff = 1;
+    hint_coeff = 300;
+    quiescent_positive_capture_only = false;
+    quiescent_single_capture_square_only = false;
+
     transposition_table = new uint64_t[1ULL<<transposition_table_size_log2];
     reset();
     for (int i = 0; i < max_depth; i++) {
@@ -184,6 +166,7 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     score = guess;
     int upperbound = SCORE_MAX;
     int lowerbound = SCORE_MIN;
+
     if (search_debug) {
         std::cout << "mtdf guess=" << guess << "(" << move_to_uci(move) << ") depth=" << max_depth << std::endl;
     }
@@ -250,7 +233,6 @@ move_t Search::mtdf(Fenboard &b, int &score, int guess, time_t deadline, move_t 
     return move;
 }
 
-
 void Search::history_cutoff(Color side_to_play, int depth_to_go, move_t move, int move_rank, const std::vector<move_t> &line, bool high)
 {
     piece_t actor = get_actor(move);
@@ -295,9 +277,31 @@ void emit_sort_feature(const Fenboard &b, move_t move, int alpha, int beta, int 
     }
 }
 
+struct Counter {
+    std::map<move_t, int> counts;
+    void add(move_t value) {
+        counts[value] += 1;
+    }
+    move_t maximum() {
+        move_t best_move = 0;
+        int best_count = -1;
+        for (const auto &pair : counts) {
+            if (pair.second > best_count) {
+                best_count = pair.second;
+                best_move = pair.first;
+            }
+        }
+        return best_move;
+    }
+};
+
 // principal move, principal reply, cp score
 std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, std::vector<move_t> &line, move_t hint, int static_score)
 {
+    if (depth < 3 && millis_available > 0 && !soft_deadline && std::chrono::system_clock::now() > deadline) {
+        throw std::runtime_error("Time limit exceeded");
+    }
+
     nodecount++;
 
     int best_score = INT_MIN;
@@ -371,10 +375,10 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         // null move
         int null_move_eval = 0;
         bool initialized_null_move_eval = false;
+        int quiescent_depth_so_far = depth - max_depth;
         if (is_quiescent) {
-            int quiescent_depth = depth - max_depth;
             // null move isn't necessarily valid if we're in check
-            if (!b.king_in_check(b.get_side_to_play()) || quiescent_depth > LIMITED_QUIESCENT_DEPTH) {
+            if (!b.king_in_check(b.get_side_to_play()) || quiescent_depth_so_far > LIMITED_QUIESCENT_DEPTH) {
                 initialized_null_move_eval = true;
                 null_move_eval = eval->evaluate(b);
                 if (b.get_side_to_play() == Black) {
@@ -407,6 +411,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         }
         int best_index = -1;
         int move_index = -1;
+        Counter killer_move_counter;
         while (move_iter->has_more_moves() && ((first && !initialized_null_move_eval) || !is_quiescent || move_iter->next_gives_check_or_capture())) {
             move_index++;
             int subtree_score;
@@ -438,16 +443,16 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 submove = 0;
             } else {
                 b.apply_move(move);
-                move_t killer_move = 0;
 
                 if (use_killer_move && submove != 0) {
-                    killer_move = submove;
+                    killer_move_counter.add(submove);
                 }
 
                 start_nodecount = nodecount;
                 start_qnodecount = qnodecount;
                 std::tuple<move_t, move_t, int> child;
                 line.push_back(move);
+                move_t killer_move = killer_move_counter.maximum();
                 if (use_pv && alpha < beta) {
                     child = negamax_with_memory(b, depth + 1, -alpha, -alpha, line, killer_move, child_static_eval);
                     if (-std::get<2>(child) > alpha) {
@@ -664,6 +669,7 @@ const int centralization[64] = {
     0, 0, 0, 0, 0, 0, 0, 0,
 };
 
+
 void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const
 {
     move_t ignore;
@@ -699,10 +705,9 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
             invalidate_castle_penalty--;
         }
 
-        int score = piece_points[capture] * 64 + invalidate_castle_penalty;
         int central = centralization[dest_sq] - centralization[src_sq];
         // want best score first
-        parts[score_part_king_handeval] = current_score + score * 10 + central;
+        parts[score_part_king_handeval] = invalidate_castle_penalty * 50 + central;
         parts[score_part_exchange] = piece_points[capture] * 100;
     } else {
         int king_square = get_low_bit(b->piece_bitmasks[side_to_play * (bb_king + 1) + bb_king], 0);
@@ -741,13 +746,24 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
         int dense_index_actor = king_square * (64 * 10) + (actor - 1) * 64 + source_square;
         int dense_index_dest = king_square * (64 * 10) + (actor - 1) * 64 + dest_square;
 
-        parts[score_part_psqt] = psqt_weights[dense_index_actor];
+        parts[score_part_psqt] = -psqt_weights[dense_index_actor];
         parts[score_part_psqt] += psqt_weights[dense_index_dest];
         if (capture > 0) {
             parts[score_part_psqt] -= psqt_weights[king_square * (64 * 10) + (capture - 1 + 5) * 64 + dest_square];
         }
         if (promo > 0) {
             parts[score_part_psqt] += psqt_weights[king_square * (64 * 10) + (promo - 1) * 64 + dest_square];
+        }
+    }
+    if (s != NULL && s->alternate_exchange_scoring) {
+        parts[score_part_exchange] = 100 * b->static_exchange_eval(b->get_side_to_play(), dest_sq, capture, actor);
+        // don't double-count captured piece
+        if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0) {
+            parts[score_part_exchange] -= 100 * PIECE_VALUE[capture] * s->exchange_coeff / s->psqt_coeff;
+        }
+
+        if (opp_covered_squares & (1ULL << src_sq)) {
+            parts[score_part_exchange] += 100 * b->static_exchange_eval(get_opposite_color(b->get_side_to_play()), src_sq, actor, 0);
         }
     }
     if (s != NULL && s->recapture_first_bonus != 0 && capture != 0 && recapture_on_sq == dest_sq) {
@@ -794,38 +810,41 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move, con
 
     int score_parts[score_part_len];
     get_score_parts(b, current_score, move, line, score_parts);
-    int value = score_parts[score_part_king_handeval] +
-        score_parts[score_part_psqt];
+    int value = score_parts[score_part_trans];
     if (s != NULL) {
+        value +=
+            score_parts[score_part_king_handeval] * s->handeval_coeff +
+            score_parts[score_part_psqt] * s->psqt_coeff +
+            score_parts[score_part_exchange] * s->exchange_coeff +
+            score_parts[score_part_hint] * s->hint_coeff;
+
         auto history_idx = score_part_history2;
         auto refut_idx = score_part_refutation2;
         auto followup_idx = score_part_followup1;
         auto distant_idx = score_part_distant1;
         int followup_mult = 10, distant_mult = 10;
-        if (s->slow_followup_distant) {
-            followup_mult = 2;
-            distant_mult = 1;
-        }
+        int history_value = 0;
         if (score_parts[history_idx] > 0) {
-            value += log2l(score_parts[history_idx]) * 10;
+            history_value += log2l(score_parts[history_idx]) * 10;
         } else if (score_parts[history_idx] < 0){
-            value -= log2l(-score_parts[history_idx]) * 10;
+            history_value -= log2l(-score_parts[history_idx]) * 10;
         }
         if (score_parts[refut_idx] > 0) {
-            value += log2l(score_parts[refut_idx]) * 10;
+            history_value += log2l(score_parts[refut_idx]) * 10;
         } else if (score_parts[refut_idx] < 0){
-            value -= log2l(-score_parts[refut_idx]) * 10;
-        }
+            history_value -= log2l(-score_parts[refut_idx]) * 10;
+        }/*
         if (score_parts[followup_idx] > 0) {
-            value += log2l(score_parts[followup_idx]) * followup_mult;
+            history_value += log2l(score_parts[followup_idx]) * followup_mult;
         } else if (score_parts[followup_idx] < 0){
-            value -= log2l(-score_parts[followup_idx]) * followup_mult;
+            history_value -= log2l(-score_parts[followup_idx]) * followup_mult;
         }
         if (score_parts[distant_idx] > 0) {
-            value += log2l(score_parts[distant_idx]) * distant_mult;
+            history_value += log2l(score_parts[distant_idx]) * distant_mult;
         } else if (score_parts[distant_idx] < 0){
-            value -= log2l(-score_parts[distant_idx]) * distant_mult;
-        }
+            history_value -= log2l(-score_parts[distant_idx]) * distant_mult;
+        }*/
+        value += history_value * s->history_coeff;
     }
     return value;
 }
@@ -887,6 +906,22 @@ void MoveSorter::load_more(const Fenboard *b) {
                     phase == P_CHECK_CAPTURE || phase == P_NOCHECK_CAPTURE,
                     move_iter,
                     buffer);
+
+                if (s != NULL && phase == P_NOCHECK_CAPTURE && captures_checks_only) {
+                    // skip moves that don't capture on recapture_on_sq
+                    for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
+                        bool exclude = false;
+                        if (s->quiescent_positive_capture_only && b->static_exchange_eval(b->get_side_to_play(), get_dest_pos(*iter), get_captured_piece(*iter), get_actor(*iter)) < 0) {
+                            exclude = true;
+                        } else if (s->quiescent_single_capture_square_only && recapture_on_sq != 0 && get_dest_pos(*iter) != recapture_on_sq) {
+                            exclude = true;
+                        }
+                        if (exclude) {
+                            buffer.erase(iter);
+                            iter--;
+                        }
+                    }
+                }
                 if (transposition_hint != 0) {
                     auto location = std::find(buffer.begin() + start, buffer.end(), transposition_hint);
                     if (location != buffer.end()) {
