@@ -145,7 +145,6 @@ int main(int argc, char **argv)
                 }
                 if (see_eval) {
                     Acquisition<MoveSorter> move_iter(s);
-                    s->alternate_exchange_scoring = true;
                     s->psqt_coeff = 1;
                     int suggested_move_see_score = 0;
                     std::vector<move_t> line;

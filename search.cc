@@ -120,14 +120,14 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     transposition_full_hits = 0;
     transposition_insufficient_depth = 0;
     transposition_conflicts = 0;
-    recapture_first_bonus = 1000;
+    recapture_first_bonus = 0;
     moves_expanded = 0;
     moves_commenced = 0;
-    handeval_coeff = 1;
+    handeval_coeff = 0;
     psqt_coeff = 1;
     exchange_coeff = 1;
-    history_coeff = 1;
-    hint_coeff = 300;
+    history_coeff = 2;
+    hint_coeff = 0;
     quiescent_positive_capture_only = false;
     quiescent_single_capture_square_only = false;
 
@@ -833,7 +833,7 @@ int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move
         auto refut_idx = score_part_refutation2;
         auto followup_idx = score_part_followup1;
         auto distant_idx = score_part_distant1;
-        int followup_mult = 10, distant_mult = 10;
+        int followup_mult = 0, distant_mult = 0;
         int history_value = 0;
         if (score_parts[history_idx] > 0) {
             history_value += log2l(score_parts[history_idx]) * 10;
@@ -844,7 +844,7 @@ int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move
             history_value += log2l(score_parts[refut_idx]) * 10;
         } else if (score_parts[refut_idx] < 0){
             history_value -= log2l(-score_parts[refut_idx]) * 10;
-        }/*
+        }
         if (score_parts[followup_idx] > 0) {
             history_value += log2l(score_parts[followup_idx]) * followup_mult;
         } else if (score_parts[followup_idx] < 0){
@@ -854,7 +854,7 @@ int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move
             history_value += log2l(score_parts[distant_idx]) * distant_mult;
         } else if (score_parts[distant_idx] < 0){
             history_value -= log2l(-score_parts[distant_idx]) * distant_mult;
-        }*/
+        }
         value += history_value * s->history_coeff;
     }
     return value;
