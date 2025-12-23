@@ -59,9 +59,9 @@ struct MoveSorter {
     }
 
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, int score=0, move_t hint=0, move_t transposition_hint=0, char recapture_on_sq=-1, bool verbose=false);
-    int get_score(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line) const;
-    void get_score_parts(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const;
+    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, move_t hint=0, move_t transposition_hint=0, char recapture_on_sq=-1, bool verbose=false);
+    int get_score(const Fenboard *b, move_t move, const std::vector<move_t> &line) const;
+    void get_score_parts(const Fenboard *b, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const;
 
 private:
     void load_more(const Fenboard *b);
@@ -128,7 +128,6 @@ struct Search {
     int exchange_coeff;
     int history_coeff;
     int hint_coeff;
-    bool alternate_exchange_scoring;
     int mtdf_window_size;
     int quiescent_depth;
     bool quiescent_positive_capture_only;

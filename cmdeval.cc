@@ -54,6 +54,7 @@ int main(int argc, char **argv)
             ("no-tt", po::bool_switch(), "turn off transposition table")
             ("search-features", po::bool_switch(), "turn on search features")
             ("moves", po::bool_switch(), "list moves")
+            ("only", po::value<std::string>(), "only move to consider")
             ("no-nnue", po::bool_switch(), "disable nnue eval")
         ;
 
@@ -77,7 +78,6 @@ int main(int argc, char **argv)
         }
         Search s(e);
 
-        s.alternate_exchange_scoring = true;
         s.recapture_first_bonus = 0;
 
         int depth = 0;
@@ -193,19 +193,33 @@ int main(int argc, char **argv)
             }
         }
         if (vm["moves"].as<bool>()) {
+            s.recapture_first_bonus = 0;
+            // s.psqt_coeff = 0;
             Acquisition<MoveSorter> move_iter(&s);
-            move_iter->reset(&b, &s, line, false, depth, alpha, beta, true, 0, 0, 0, 0, true);
+            move_iter->reset(&b, &s, line, false, depth, alpha, beta, vm.count("only") == 0, 0, 0, -1, true);
+            int static_score = e->evaluate(b);
+            std::cout << "static score=" << static_score << std::endl;
             while (move_iter->has_more_moves()) {
                 move_t move = move_iter->next_move();
+                if (vm.count("only")) {
+                    std::string only_move = vm["only"].as<std::string>();
+                    if (b.read_move(only_move, b.get_side_to_play()) != move) {
+                        continue;
+                    }
+                }
+                int point_score = e->delta_evaluate(b, move, static_score);
                 int score_parts[score_part_len];
-                move_iter->get_score_parts(&b, alpha, move, line, score_parts);
-                std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, 0, move, line);
+                move_iter->get_score_parts(&b, move, line, score_parts);
+                std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, move, line);
                 std::cout << " see=" << score_parts[score_part_exchange];
+                std::cout << " psqt=" << score_parts[score_part_psqt];
+                std::cout << " score=" << point_score;
                 std::cout << "      ";
                 print_line(b, s, move);
 
                 move_t tt_move;
                 int tt_value = 0, tt_alpha = SCORE_MIN, tt_beta = SCORE_MAX;
+                std::cout << " ";
                 if (s.read_transposition(b.get_hash(), tt_move, 0, tt_alpha, tt_beta, tt_value)) {
                     std::cout << tt_value << " " << ((move & GIVES_CHECK) != 0 ? "1 " : "0 ") << (get_captured_piece(move) != 0 ? "1 " : "0 ") << (int)get_actor(move) << " ";
                 }

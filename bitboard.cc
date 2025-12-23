@@ -765,7 +765,10 @@ int Bitboard::static_exchange_eval(Color side_to_play, int square, piece_t curre
         current_occupier = pop_least_valuable_piece(attacker_count);
     } else {
         current_occupier = capturer;
-        attacker_count[capturer - 1]--;
+        if (capturer != bb_pawn) {
+            // pieces other than pawns can't capture twice
+            attacker_count[capturer - 1]--;
+        }
     }
 
     return net_score - static_exchange_negamax(current_occupier, defender_count, attacker_count);

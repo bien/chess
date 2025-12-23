@@ -13,6 +13,12 @@ constexpr BoardPos make_board_pos(int rank, int file)
 {
     return rank * 8 + file;
 }
+
+constexpr BoardPos algebra_to_square(char file, int rank)
+{
+    return make_board_pos(rank - 1, file - 'a');
+}
+
 piece_t get_captured_piece(move_t move, Color color=White);
 piece_t get_promotion(move_t move, Color color=White);
 void get_source(move_t move, unsigned char &rank, unsigned char &file);

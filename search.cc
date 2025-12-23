@@ -121,7 +121,6 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     transposition_insufficient_depth = 0;
     transposition_conflicts = 0;
     recapture_first_bonus = 1000;
-    alternate_exchange_scoring = false;
     moves_expanded = 0;
     moves_commenced = 0;
     handeval_coeff = 1;
@@ -361,7 +360,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     } else {
         Acquisition<MoveSorter> move_iter(this);
         int depth_to_go = max_depth - depth;
-        move_iter->reset(&b, this, line, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, alpha, hint, tt_hint);
+        move_iter->reset(&b, this, line, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, hint, tt_hint);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -418,7 +417,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             // bool checked_futility = false;
             move_t move = move_iter->next_move();
             int score_parts[score_part_len];
-            move_iter->get_score_parts(&b, alpha, move, line, score_parts);
+            move_iter->get_score_parts(&b, move, line, score_parts);
 
             // don't try quiescent moves that aren't check, promotion, capture a lesser value piece, and are beyond LIMITED_QUIESCENCE depth
             unsigned char sourcerank, sourcefile;
@@ -670,7 +669,7 @@ const int centralization[64] = {
 };
 
 
-void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const
+void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const
 {
     move_t ignore;
     int16_t tt_value;
@@ -694,6 +693,10 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
     int src_sq = (src_rank * 8 + src_file);
     int dest_sq = (dest_rank * 8 + dest_file);
     int invalidate_castle_penalty = 0;
+
+    int psqt_king_square = -1;
+    int psqt_dest_square = -1;
+
     if (actor == bb_king) {
         if (dest_file - src_file == 2 || dest_file - src_file == -2) {
             invalidate_castle_penalty += 3;
@@ -708,11 +711,10 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
         int central = centralization[dest_sq] - centralization[src_sq];
         // want best score first
         parts[score_part_king_handeval] = invalidate_castle_penalty * 50 + central;
-        parts[score_part_exchange] = piece_points[capture] * 100;
     } else {
-        int king_square = get_low_bit(b->piece_bitmasks[side_to_play * (bb_king + 1) + bb_king], 0);
+        psqt_king_square = get_low_bit(b->piece_bitmasks[side_to_play * (bb_king + 1) + bb_king], 0);
         int source_square = get_source_pos(move);
-        int dest_square = get_dest_pos(move);
+        psqt_dest_square = get_dest_pos(move);
 
         if (actor >= bb_knight && actor <= bb_queen) {
             if (covered_squares_q == ~0) {
@@ -732,42 +734,52 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
                parts[score_part_exchange] += piece_points[actor] * 100;
             }
             // disprefer giving the piece away
-            if (((1ULL << dest_square) & coverer) > 0) {
+            if (((1ULL << psqt_dest_square) & coverer) > 0) {
                parts[score_part_exchange] -= piece_points[actor] * 100;
             }
         }
 
         if (side_to_play == Black) {
-            king_square = vertical_mirror(king_square);
+            psqt_king_square = vertical_mirror(psqt_king_square);
             source_square = vertical_mirror(source_square);
-            dest_square = vertical_mirror(dest_square);
+            psqt_dest_square = vertical_mirror(psqt_dest_square);
         }
 
-        int dense_index_actor = king_square * (64 * 10) + (actor - 1) * 64 + source_square;
-        int dense_index_dest = king_square * (64 * 10) + (actor - 1) * 64 + dest_square;
+        int dense_index_actor = psqt_king_square * (64 * 10) + (actor - 1) * 64 + source_square;
+        int dense_index_dest = psqt_king_square * (64 * 10) + (actor - 1) * 64 + psqt_dest_square;
 
         parts[score_part_psqt] = -psqt_weights[dense_index_actor];
         parts[score_part_psqt] += psqt_weights[dense_index_dest];
-        if (capture > 0) {
-            parts[score_part_psqt] -= psqt_weights[king_square * (64 * 10) + (capture - 1 + 5) * 64 + dest_square];
+        if (capture > 0 /* && score_part_exchange == 0 */) {
+            parts[score_part_psqt] -= psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
         }
         if (promo > 0) {
-            parts[score_part_psqt] += psqt_weights[king_square * (64 * 10) + (promo - 1) * 64 + dest_square];
+            parts[score_part_psqt] += psqt_weights[psqt_king_square * (64 * 10) + (promo - 1) * 64 + psqt_dest_square];
         }
     }
-    if (s != NULL && s->alternate_exchange_scoring) {
+    if (actor == bb_king) {
+        parts[score_part_exchange] = piece_points[capture] * 100;
+    }
+    else if (s != NULL) {
         parts[score_part_exchange] = 100 * b->static_exchange_eval(b->get_side_to_play(), dest_sq, capture, actor);
+        // std::cout << "SEE capt=" << parts[score_part_exchange];
         // don't double-count captured piece
-        if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0) {
-            parts[score_part_exchange] -= 100 * PIECE_VALUE[capture] * s->exchange_coeff / s->psqt_coeff;
+        if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0 && psqt_king_square >= 0 && psqt_dest_square >= 0 && parts[score_part_exchange] == 100 * PIECE_VALUE[capture]) {
+            parts[score_part_exchange] += (s->exchange_coeff / s->psqt_coeff) * psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
+//            std::cout << " SEE psqt-adj=" << parts[score_part_exchange];
         }
 
         if (opp_covered_squares & (1ULL << src_sq)) {
-            parts[score_part_exchange] += 100 * b->static_exchange_eval(get_opposite_color(b->get_side_to_play()), src_sq, actor, 0);
+            int null_move_capture = 100 * b->static_exchange_eval(get_opposite_color(b->get_side_to_play()), src_sq, actor, 0);
+            if (null_move_capture > 0) {
+                parts[score_part_exchange] += null_move_capture;
+            }
+            // std::cout << " SEE psqt-save=" << parts[score_part_exchange];
+       }
+        // std::cout << std::endl;
+        if (s->recapture_first_bonus != 0 && capture != 0 && recapture_on_sq == dest_sq) {
+            parts[score_part_exchange] += s->recapture_first_bonus - piece_points[actor] * 100;
         }
-    }
-    if (s != NULL && s->recapture_first_bonus != 0 && capture != 0 && recapture_on_sq == dest_sq) {
-        parts[score_part_exchange] += s->recapture_first_bonus - piece_points[actor] * 100;
     }
 
     if (s != NULL) {
@@ -795,8 +807,7 @@ void MoveSorter::get_score_parts(const Fenboard *b, int current_score, move_t mo
     parts[score_part_hint] = (move == hint ? 1 : 0);
 }
 
-
-int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move, const std::vector<move_t> &line) const
+int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move_t> &line) const
 {
     move_t ignore;
     int16_t tt_value;
@@ -809,7 +820,7 @@ int MoveSorter::get_score(const Fenboard *b, int current_score, move_t move, con
     }
 
     int score_parts[score_part_len];
-    get_score_parts(b, current_score, move, line, score_parts);
+    get_score_parts(b, move, line, score_parts);
     int value = score_parts[score_part_trans];
     if (s != NULL) {
         value +=
@@ -900,7 +911,13 @@ void MoveSorter::load_more(const Fenboard *b) {
                     // skip quiet moves
                     break;
                 }
+
+                if (opp_covered_squares == 0) {
+                    opp_covered_squares = b->computed_covered_squares(get_opposite_color(b->get_side_to_play()), INCLUDE_ALL);
+                }
+
                 int start = buffer.size();
+
                 b->get_moves(b->get_side_to_play(),
                     phase == P_CHECK_CAPTURE || phase == P_CHECK_NOCAPTURE,
                     phase == P_CHECK_CAPTURE || phase == P_NOCHECK_CAPTURE,
@@ -937,7 +954,7 @@ void MoveSorter::load_more(const Fenboard *b) {
                 if (do_sort) {
                     std::map<move_t, int> move_scores;
                     for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
-                        move_scores[*iter] = get_score(b, current_score, *iter, *line);
+                        move_scores[*iter] = get_score(b, *iter, *line);
                     }
                     std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
                 }
@@ -946,7 +963,7 @@ void MoveSorter::load_more(const Fenboard *b) {
         phase++;
     }
 }
-void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, int score, move_t hint, move_t transposition_hint, char recapture_on_sq, bool verbose)
+void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only, int depth, int alpha, int beta, bool do_sort, move_t hint, move_t transposition_hint, char recapture_on_sq, bool verbose)
 {
     index = 0;
     last_capture = 0;
@@ -963,11 +980,6 @@ void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &
     this->verbose = verbose;
     this->line = &line;
     this->recapture_on_sq = recapture_on_sq;
-    if (s != NULL) {
-        current_score = score;
-    } else {
-        current_score = 0;
-    }
     phase = P_HINT;
 }
 

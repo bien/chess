@@ -470,6 +470,19 @@ void test_move_finding()
     move = search.alphabeta(b);
 
     assert_equals(b.read_move("cxd4", White), move);
+}
+
+void test_static_exchange()
+{
+    Fenboard b;
+    b.set_fen("r3k1r1/1p3p1p/p1n1pq2/3p4/3P1bb1/2N2NP1/PP1Q1PBP/3R1RK1 w q - 0 16");
+    assert_equals(3, b.static_exchange_eval(White, algebra_to_square('f', 4), bb_bishop, bb_queen));
+    assert_equals(3, b.static_exchange_eval(White, algebra_to_square('f', 4), bb_bishop, bb_pawn));
+
+    assert_equals(6, b.static_exchange_eval(Black, algebra_to_square('d', 2), bb_queen, bb_bishop));
+
+    b.set_fen("r2r2k1/p2n1p1p/b1n1pb2/q7/2ppN3/B2P1NP1/P1P1Q1BP/R4RK1 w - - 6 19");
+    assert_equals(1, b.static_exchange_eval(White, algebra_to_square('c', 4), bb_pawn, bb_pawn));
 
 }
 
@@ -502,6 +515,7 @@ int main(int argc, char **argv)
 
     test_legal_moves(argv[1]);
     test_move_finding();
+    test_static_exchange();
     // test_matrix();
     return 0;
 }
