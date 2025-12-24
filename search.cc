@@ -25,6 +25,7 @@ static int vertical_mirror(int square) {
 move_t Search::minimax(Fenboard &b)
 {
     nodecount = 0;
+    null_nodecount = 0;
     bool old_pruning = use_pruning;
     bool old_mtdf = use_mtdf;
     use_pruning = false;
@@ -43,7 +44,9 @@ move_t Search::minimax(Fenboard &b)
 move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
 {
     nodecount = 0;
+    null_nodecount = 0;
     move_t result = 0;
+    low_depth_nodecount = 0;
 
     if (use_iterative_deepening) {
         int old_max_depth = max_depth;
@@ -65,6 +68,9 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
                     int backoff = 200;
                     while (true) {
                         sub = negamax_with_memory(b, 0, alpha, beta, line, result);
+                        if (iter_depth < old_max_depth) {
+                            low_depth_nodecount = nodecount;
+                        }
                         score = std::get<2>(sub);
                         if (search_debug) {
                             std::cout << "pv at depth=" << max_depth << " [" << alpha << "," << beta << "] -> " << score << std::endl;
@@ -89,6 +95,9 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
                 if (millis_available > 0 && std::chrono::system_clock::now() > deadline) {
                     break;
                 }
+            }
+            if (b.get_side_to_play() == Black){
+                score = -score;
             }
         }
         catch (const std::exception &e) {
@@ -155,6 +164,7 @@ void Search::reset_counters()
 {
     score = 0;
     nodecount = 0;
+    null_nodecount = 0;
     qnodecount = 0;
     moves_expanded = 0;
     moves_commenced = 0;
@@ -302,6 +312,9 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     }
 
     nodecount++;
+    if (alpha == beta) {
+        null_nodecount++;
+    }
 
     int best_score = INT_MIN;
     move_t best_response = -1;
@@ -414,7 +427,6 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
         while (move_iter->has_more_moves() && ((first && !initialized_null_move_eval) || !is_quiescent || move_iter->next_gives_check_or_capture())) {
             move_index++;
             int subtree_score;
-            // bool checked_futility = false;
             move_t move = move_iter->next_move();
             int score_parts[score_part_len];
             move_iter->get_score_parts(&b, move, line, score_parts);
@@ -527,16 +539,6 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                     } else {
                         emit_sort_feature(b, move, original_alpha, original_beta, best_score, "mid", score_parts);
                     }
-/*
-                    if ((move & GIVES_CHECK) == 0 && get_captured_piece(move) == 0 && !checked_futility && beta < 9000 && alpha > -9000) {
-                        checked_futility = true;
-                        if (!initialized_null_move_eval) {
-                            null_move_eval = eval->evaluate(b);
-                            initialized_null_move_eval = true;
-                        }
-                    }
-                    */
-
                 }
 
 
@@ -592,7 +594,6 @@ void Search::write_transposition(uint64_t board_hash, move_t move, int best_scor
     if (depth < 0) {
         depth = 0;
     }
-    // std::cout << "write " << board_hash << " " << tt_type << " " << best_score << " " << depth << std::endl;
     insert_tt_entry(board_hash, move, best_score, depth, tt_type);
 }
 
@@ -608,7 +609,6 @@ bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth,
     }
 
     if (fetch_tt_entry(board_hash, tt_move, tt_value, tt_depth, tt_type)) {
-        // std::cout << "found " << board_hash << " " << tt_type << " " << tt_value << " " tt_depth << std::endl;
         if (tt_depth >= depth) {
             // found something at appropriate depth
             int mate_depth_adjustment = 0;
@@ -750,7 +750,7 @@ void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vect
 
         parts[score_part_psqt] = -psqt_weights[dense_index_actor];
         parts[score_part_psqt] += psqt_weights[dense_index_dest];
-        if (capture > 0 /* && score_part_exchange == 0 */) {
+        if (capture > 0) {
             parts[score_part_psqt] -= psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
         }
         if (promo > 0) {

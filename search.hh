@@ -109,6 +109,8 @@ struct Search {
 
     int score;
     uint64_t nodecount;
+    uint64_t low_depth_nodecount;
+    uint64_t null_nodecount;
     uint64_t qnodecount;
     // hash -> depth, (max, min)
     int transposition_table_size_log2;

@@ -95,6 +95,8 @@ int main(int argc, char **argv)
     }
     // play some games
     uint64_t total_nodecount = 0;
+    uint64_t total_null_nodecount = 0;
+    uint64_t total_low_depth_nodecount = 0;
     for (auto pgnfilename : pgnfiles) {
         std::ifstream pgnstream(pgnfilename);
         if (!pgnstream) {
@@ -174,9 +176,11 @@ int main(int argc, char **argv)
                 }
 
                 std::cout << " time=" << elapsed_usecs / 1000.0 << "ms ";
-                std::cout << "Node count=" << s->nodecount << " commenced=" << s->moves_commenced << " expanded=" << s->moves_expanded << " quiescent count = " << s->qnodecount;
+                std::cout << "Node count=" << s->nodecount << " null=" << s->null_nodecount << " low=" << s->low_depth_nodecount << " commenced=" << s->moves_commenced << " expanded=" << s->moves_expanded << " quiescent count = " << s->qnodecount;
                 std::cout << std::endl;
                 total_nodecount += s->nodecount;
+                total_null_nodecount += s->null_nodecount;
+                total_low_depth_nodecount += s->low_depth_nodecount;
                 b.apply_move(move);
                 plyno++;
                 s->reset_counters();
@@ -184,5 +188,5 @@ int main(int argc, char **argv)
             std::cout << "game over" << std::endl;
         }
     }
-    std::cout << "Total nodecount=" << total_nodecount << std::endl;
+    std::cout << "Total nodecount=" << total_nodecount << " null=" << total_null_nodecount << " low=" << total_low_depth_nodecount << std::endl;
 }
