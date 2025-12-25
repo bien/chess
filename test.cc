@@ -415,7 +415,6 @@ void test_move_finding()
     search.reset();
     search.use_killer_move = true;
     search.max_depth = 4;
-    search.use_mtdf = false;
     search.use_pruning = true;
     search.use_quiescent_search = false;
     move = search.minimax(b);
@@ -431,7 +430,6 @@ void test_move_finding()
     search.reset();
     search.use_killer_move = true;
     search.max_depth = 4;
-    search.use_mtdf = false;
     move = search.alphabeta(b);
     assert_equals(b.read_move("Kc3", White), move);
     assert_equals(VERY_GOOD - 3, search.score);

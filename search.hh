@@ -59,7 +59,7 @@ struct MoveSorter {
     }
 
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, move_t hint=0, move_t transposition_hint=0, char recapture_on_sq=-1, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, move_t hint=0, move_t transposition_hint=0, bool verbose=false);
     int get_score(const Fenboard *b, move_t move, const std::vector<move_t> &line) const;
     void get_score_parts(const Fenboard *b, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const;
 
@@ -119,7 +119,6 @@ struct Search {
     bool use_pruning;
     Evaluation *eval;
     int min_score_prune_sorting;
-    bool use_mtdf;
     bool use_pv;
     bool use_iterative_deepening;
     bool use_quiescent_search;
@@ -130,7 +129,6 @@ struct Search {
     int exchange_coeff;
     int history_coeff;
     int hint_coeff;
-    int mtdf_window_size;
     int quiescent_depth;
     bool quiescent_positive_capture_only;
     bool quiescent_single_capture_square_only;
@@ -165,7 +163,6 @@ private:
     uint64_t *transposition_table;
 public:
     std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, std::vector<move_t> &line, move_t hint=0, int static_score=0);
-    move_t mtdf(Fenboard &b, int &score, int guess, time_t deadline=0, move_t hint=0);
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 private:
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);

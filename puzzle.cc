@@ -180,7 +180,6 @@ int main(int argc, char **argv)
 
     NNUEEvaluation simple;
     Search search(&simple);
-    search.use_mtdf = false;
     search.use_pv = true;
 
     Results r;

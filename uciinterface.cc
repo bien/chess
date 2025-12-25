@@ -55,7 +55,6 @@ int main(int argc, char **argv)
     NNUEEvaluation simple;
     Search search(&simple);
     search.use_transposition_table = false;
-    search.use_mtdf = false;
     search.use_pv = true;
     search.use_quiescent_search = true;
     search.use_iterative_deepening = true;
@@ -79,7 +78,6 @@ int main(int argc, char **argv)
             std::cout << "option name depth type spin default 7 min 1 max 1024" << std::endl;
             std::cout << "option name quiescentlimit type spin default 4 min 0 max 1024" << std::endl;
             std::cout << "option name recapture type spin default 1000 min 0 max 2000" << std::endl;
-            std::cout << "option name altexchange type check default true" << std::endl;
             std::cout << "option name debug type spin default 0 min 0 max 8" << std::endl;
 
             std::cout << "option name handeval type spin default 1 min 0 max 2000" << std::endl;
@@ -106,9 +104,6 @@ int main(int argc, char **argv)
                 else if (tokens[2] == "debug" && tokens.size() > 4) {
                     search_debug = stoi(tokens[4]);
                     std::cout << "set debug = " << search_debug << std::endl;
-                }
-                else if (tokens[2] == "altexchange" && tokens.size() > 4) {
-                    search.alternate_exchange_scoring = (tokens[4] == "true");
                 }
                 else if (tokens[2] == "recapture" && tokens.size() > 4) {
                     search.recapture_first_bonus = stoi(tokens[4]);

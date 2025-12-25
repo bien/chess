@@ -151,7 +151,7 @@ int main(int argc, char **argv)
                     int suggested_move_see_score = 0;
                     std::vector<move_t> line;
                     std::vector<std::pair<move_t, int> > see_scores;
-                    move_iter->reset(&b, s, line, false, 0, SCORE_MIN, SCORE_MAX, true, 0, 0, -1, true);
+                    move_iter->reset(&b, s, line, false, 0, SCORE_MIN, SCORE_MAX, true, 0, 0, true);
                     while (move_iter->has_more_moves()) {
                         move_t testmove = move_iter->next_move();
                         int score_parts[score_part_len];

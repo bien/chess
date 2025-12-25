@@ -44,12 +44,10 @@ int main(int argc, char **argv)
             ("alpha", po::value<int>(), "set alpha")
             ("qdepth", po::value<int>(), "set quiescent depth")
             ("beta", po::value<int>(), "set beta")
-            ("window", po::value<int>(), "set mtdf window sie")
             ("debug", po::value<int>(), "set debug level")
             ("tt-check", po::value<uint64_t>(), "debug for hash value")
             ("hash", po::bool_switch(), "output hash value")
             ("use-pv", po::bool_switch(), "use principal value search")
-            ("use-mtdf", po::bool_switch(), "use mtdf search")
             ("quiescent", po::bool_switch(), "get quiescent eval")
             ("no-tt", po::bool_switch(), "turn off transposition table")
             ("search-features", po::bool_switch(), "turn on search features")
@@ -97,12 +95,9 @@ int main(int argc, char **argv)
             s.use_transposition_table = false;
         }
         if (vm["use-pv"].as<bool>()) {
-            s.use_mtdf = false;
             s.use_pv = true;
-        } else if (vm["use-mtdf"].as<bool>()) {
-            s.use_mtdf = true;
         } else {
-            s.use_mtdf = false;
+            s.use_pv = false;
             s.use_iterative_deepening = false;
         }
         if (vm.count("debug")) {
@@ -116,10 +111,6 @@ int main(int argc, char **argv)
         }
         if (vm.count("beta")) {
             beta = vm["beta"].as<int>();
-        }
-
-        if (vm.count("window")) {
-            s.mtdf_window_size = vm["window"].as<int>();
         }
 
         if (vm.count("fen")) {
@@ -196,7 +187,7 @@ int main(int argc, char **argv)
             s.recapture_first_bonus = 0;
             // s.psqt_coeff = 0;
             Acquisition<MoveSorter> move_iter(&s);
-            move_iter->reset(&b, &s, line, false, depth, alpha, beta, vm.count("only") == 0, 0, 0, -1, true);
+            move_iter->reset(&b, &s, line, false, depth, alpha, beta, vm.count("only") == 0, 0, 0, true);
             int static_score = e->evaluate(b);
             std::cout << "static score=" << static_score << std::endl;
             while (move_iter->has_more_moves()) {
