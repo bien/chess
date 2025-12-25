@@ -361,6 +361,8 @@ void test_legal_moves(std::string fischer_pgn_file)
     assert_moves("8/8/6p1/6Pb/p2RpPk1/P3P1P1/6K1/8 b - f3 0 4", { "Kf5" });
     // moving pawn forward doesn't discover check here
     assert_moves("k7/8/8/8/8/Pp6/RP6/K7 w - - 0 2", { "a4", "Kb1" });
+    // ep is check but other capture isn't
+    assert_moves("7k/7p/7P/2P5/3rPp1K/B1Q3P1/P7/1R3R2 b - e3 0 35", { "fxg3", "fxe3ep+", "f3", "Kg8" });
 
     // discovered check
     assert_moves("2r5/8/8/8/3k4/p7/1P6/BK6 w - - 0 2", { "bxa3+", "b3+", "b4+", "Ka2"});

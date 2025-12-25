@@ -1143,16 +1143,19 @@ uint64_t Bitboard::get_blocking_pieces(int king_pos, Color king_color, Color blo
     }
     while ((start_pos = get_low_bit(xray_lateral_attackers, start_pos + 1)) >= 0) {
         uint64_t pins = get_blocking_squares(start_pos, king_pos, all_pieces) & (blocking_pieces | ep_capturable);
-        uint64_t pawn_ep_pins = pins;
+        uint64_t pawn_ep_award_pins = pins;
+        uint64_t pawn_ep_hward_pins = pins;
         if (ep_capturable && start_pos / 8 == king_pos / 8 && (get_blocking_squares(start_pos, king_pos, all_pieces & ~my_pawns) & ep_capturable) > 0) {
             // en-passant capture can remove two pieces from 4th rank
-            pawn_ep_pins |= get_blocking_squares(start_pos, king_pos, all_pieces & ~ep_capturable) & my_pawns;
+            uint64_t ep_double_pins = get_blocking_squares(start_pos, king_pos, all_pieces & ~ep_capturable) & my_pawns;
+            pawn_ep_award_pins |= (ep_double_pins & (ep_capturable << 1));
+            pawn_ep_hward_pins |= (ep_double_pins & (ep_capturable >> 1));
         }
         // bishops and knights are definitely immobile under pins.
         // pawns cannot capture and are immobile if on different file from pinner or king
         pinned_pieces |= pins;
-        pawn_cannot_capture_award |= pawn_ep_pins;
-        pawn_cannot_capture_hward |= pawn_ep_pins;
+        pawn_cannot_capture_award |= pawn_ep_award_pins;
+        pawn_cannot_capture_hward |= pawn_ep_hward_pins;
         immobile_pinned_pieces |= (pins & (get_bitmask(blocked_piece_color, bb_bishop) | get_bitmask(blocked_piece_color, bb_knight)));
         if (king_pos % 8 == start_pos % 8) {
             pawn_cannot_advance |= (pins & get_bitmask(blocked_piece_color, bb_pawn)) & ~(file_a << (start_pos % 8));

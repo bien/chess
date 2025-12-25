@@ -210,7 +210,7 @@ int main(int argc, char **argv)
                 int point_score = e->delta_evaluate(b, move, static_score);
                 int score_parts[score_part_len];
                 move_iter->get_score_parts(&b, move, line, score_parts);
-                std::cout << "  " << move_to_uci(move) << " sort=" << move_iter->get_score(&b, move, line);
+                std::cout << "  " << move_to_algebra(&b, move) << " sort=" << move_iter->get_score(&b, move, line);
                 std::cout << " see=" << score_parts[score_part_exchange];
                 std::cout << " psqt=" << score_parts[score_part_psqt];
                 std::cout << " score=" << point_score;
