@@ -486,10 +486,14 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 if (subtree_score > best_quiet_score) {
                     best_quiet_score = subtree_score;
                 }
+
                 if ((max_depth - depth) <= 1 && best_quiet_score < alpha - FUTILITY_MARGIN) {
                     // futility pruning
                     if (!initialized_null_move_eval) {
                         null_move_eval = eval->evaluate(b);
+                        if (b.get_side_to_play() == Black) {
+                            null_move_eval = -null_move_eval;
+                        }
                         initialized_null_move_eval = true;
                     }
                     if (null_move_eval < alpha - FUTILITY_MARGIN) {
@@ -914,6 +918,7 @@ void MoveSorter::load_more(const Fenboard *b) {
                     }
                     std::sort(buffer.begin() + start, buffer.end(), MoveCmp(&move_scores));
                 }
+
                 break;
         }
         phase++;
