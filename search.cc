@@ -15,6 +15,7 @@
 int search_debug = 0;
 int search_features = 0;
 const int LIMITED_QUIESCENT_DEPTH = 4;
+const int FUTILITY_MARGIN = 300;
 // const int MAX_HISTORY = 10000;
 // const int HISTORY_SCALER = 500;
 
@@ -47,7 +48,7 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
 
     if (use_iterative_deepening) {
         int old_max_depth = max_depth;
-        int guess_score = 0;
+        int guess_score = eval->evaluate(b);
         if (millis_available > 0) {
             deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(millis_available);
         }
@@ -65,13 +66,15 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
                     int beta = guess_score + 25;
                     int backoff = 200;
                     while (true) {
+                        uint64_t start_nodecount = nodecount;
                         sub = negamax_with_memory(b, 0, alpha, beta, line, result);
                         if (iter_depth < old_max_depth) {
                             low_depth_nodecount = nodecount;
                         }
                         score = std::get<2>(sub);
                         if (search_debug) {
-                            std::cout << "pv at depth=" << max_depth << " [" << alpha << "," << beta << "] -> " << score << std::endl;
+                            std::cout << "***pv at depth=" << max_depth << " [" << alpha << "," << beta << "] -> " << score << " nodes=" << (nodecount - start_nodecount);
+                            std::cout << std::endl;
                         }
                         if (score < alpha) {
                             beta = alpha;
@@ -244,6 +247,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     }
 
     int best_score = INT_MIN;
+    int best_quiet_score = INT_MIN;
     move_t best_response = -1;
     move_t best_move = -1;
     int original_alpha = alpha;
@@ -289,7 +293,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     }
 
     if (search_debug > depth) {
-        std::cout << "negamax at depth=" << max_depth << " [" << alpha << "," << beta << "] " << "tt_hint=" << move_to_uci(tt_move) << " hint0=" << move_to_uci(hint) << std::endl;
+        std::cout << "negamax at depth=" << depth << " [" << alpha << "," << beta << "] " << "tt_hint=" << move_to_uci(tt_move) << " hint0=" << move_to_uci(hint) << std::endl;
     }
 
     if (depth >= max_depth && !is_quiescent) {
@@ -377,8 +381,8 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
             if (depth_to_go <= 1) {
                 child_static_eval = eval->delta_evaluate(b, move, static_eval);
             }
-            uint64_t start_nodecount = 0;
-            uint64_t start_qnodecount = 0;
+            uint64_t start_nodecount = nodecount;
+            uint64_t start_qnodecount = qnodecount;
             move_t subresponse;
             if (depth + 1 >= max_depth + quiescent_depth) {
                 subtree_score = child_static_eval;
@@ -422,7 +426,8 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 if (depth % 2 == 1) {
                     std::cout << "..";
                 }
-                print_move_uci(move, std::cout) << " -> ";
+
+                std::cout << move_to_algebra(&b, move) << " -> ";
                 print_move_uci(submove, std::cout) << " = " << subtree_score << " (" << alpha << ", " << beta << ") ";
                 if (is_quiescent) {
                     std::cout << "Q ";
@@ -475,6 +480,24 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
 
                 if (search_debug >= depth + 1) {
                     std::cout << "*";
+                }
+            }
+            if ((move & GIVES_CHECK) == 0 && get_captured_piece(move) == 0) {
+                if (subtree_score > best_quiet_score) {
+                    best_quiet_score = subtree_score;
+                }
+                if ((max_depth - depth) <= 1 && best_quiet_score < alpha - FUTILITY_MARGIN) {
+                    // futility pruning
+                    if (!initialized_null_move_eval) {
+                        null_move_eval = eval->evaluate(b);
+                        initialized_null_move_eval = true;
+                    }
+                    if (null_move_eval < alpha - FUTILITY_MARGIN) {
+                        emit_sort_feature(b, move, alpha, original_beta, subtree_score, "futility", score_parts);
+                        history_cutoff(b.get_side_to_play(), depth_to_go, move, move_index, line, false);
+                        break;
+                    }
+
                 }
             }
             first = false;
