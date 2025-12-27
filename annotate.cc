@@ -82,9 +82,6 @@ int main(int argc, char **argv)
         if (vm.count("debug")) {
             search_debug = vm["debug"].as<int>();
         }
-        if (vm.count("window")) {
-            s->mtdf_window_size = vm["window"].as<int>();
-        }
     }
     catch(std::exception& e) {
         std::cerr << "error: " << e.what() << "\n";
