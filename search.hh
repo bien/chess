@@ -108,7 +108,7 @@ private:
 };
 
 struct Search {
-    Search(Evaluation *eval, int transposition_table_size_log2=28);
+    Search(Evaluation *eval, int transposition_table_size_log2=29);
     move_t minimax(Fenboard &b);
     move_t alphabeta(Fenboard &b, SearchUpdate *s = NULL);
 

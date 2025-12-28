@@ -849,7 +849,7 @@ move_t Bitboard::reinterpret_move(move_t hint, uint64_t &opp_covered_squares) co
 {
     int start_pos = get_source_pos(hint);
     int dest_pos = get_dest_pos(hint);
-    piece_t source_piece = get_piece(start_pos);
+    piece_t source_piece = get_actor(hint);
     piece_t dest_piece = get_piece(dest_pos);
     uint64_t my_pieces = get_bitmask(side_to_play, bb_all);
 
@@ -882,10 +882,9 @@ void Bitboard::get_packed_legal_moves(Color side_to_play, PackedMoveIterator &mo
     int opp_king_square = get_low_bit(opp_king, 0);
     uint64_t king_attackers = 0;
     moves.pawn_check_squares = BitboardCaptures::PregeneratedCaptures[get_opposite_color(side_to_play)][bb_pawn][opp_king_square];
-    uint64_t blocking_pieces;
     uint64_t total_blocking_pieces;
     uint64_t pawn_advance_discovers = 0, pawn_capture_award_discovers = 0, pawn_capture_hward_discovers = 0;
-    blocking_pieces = get_blocking_pieces(opp_king_square, get_opposite_color(side_to_play), side_to_play, total_blocking_pieces, pawn_advance_discovers, pawn_capture_award_discovers, pawn_capture_hward_discovers);
+    uint64_t blocking_pieces = get_blocking_pieces(opp_king_square, get_opposite_color(side_to_play), side_to_play, total_blocking_pieces, pawn_advance_discovers, pawn_capture_award_discovers, pawn_capture_hward_discovers);
 
     if (in_check) {
         king_attackers = square_attackers(king_square, get_opposite_color(side_to_play));

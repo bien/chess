@@ -294,7 +294,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     } else {
         Acquisition<MoveSorter> move_iter(this);
         int depth_to_go = max_depth - depth;
-        move_iter->reset(&b, this, line, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, hint, tt_hint);
+        move_iter->reset(&b, this, line, is_quiescent, std::max(0, max_depth - depth), alpha, beta, depth_to_go > 2, hint, tt_move);
 
         if (!move_iter->has_more_moves()) {
             if (b.king_in_check(b.get_side_to_play())) {
@@ -808,7 +808,11 @@ void MoveSorter::load_more(const Fenboard *b) {
 
             case P_HINT:
                 if (transposition_hint != 0) {
-                    buffer.push_back(transposition_hint);
+                    move_t move = b->reinterpret_move(transposition_hint, opp_covered_squares);
+                    transposition_hint = move;
+                    if (move != 0) {
+                        buffer.push_back(transposition_hint);
+                    }
                 }
                 if (s != NULL) {
                     s->moves_commenced += 1;
@@ -875,7 +879,7 @@ void MoveSorter::load_more(const Fenboard *b) {
                         buffer.erase(location);
                     }
                 }
-                if (do_sort &&(buffer.size() - start) > 1) {
+                if (do_sort && (buffer.size() - start) > 1) {
                     std::map<move_t, int> move_scores;
                     for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
                         move_scores[*iter] = get_score(b, *iter, *line);
