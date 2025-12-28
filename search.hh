@@ -164,8 +164,6 @@ struct Search {
 
 private:
     int32_t refutation_table2[6][64][6][64];
-    int32_t followup_table1[6][64][6][64];
-    int32_t distant_table1[6][64][6][64];
 
     void history_cutoff(Color side_to_play, int depth_to_go, move_t move, int move_rank, const std::vector<move_t> &line, bool high);
     uint64_t *transposition_table;

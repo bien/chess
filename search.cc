@@ -158,8 +158,6 @@ void Search::reset()
     memset(transposition_table, 0, sizeof(uint64_t) * (1ULL<<transposition_table_size_log2));
     memset(&history_bonus2, 0, sizeof(history_bonus2));
     memset(&refutation_table2, 0, sizeof(refutation_table2));
-    memset(&followup_table1, 0, sizeof(followup_table1));
-    memset(&distant_table1, 0, sizeof(distant_table1));
 }
 
 void Search::reset_counters()
@@ -191,18 +189,6 @@ void Search::history_cutoff(Color side_to_play, int depth_to_go, move_t move, in
         piece_t counter_actor = get_actor(line.back());
         assert(counter_actor != 0);
         refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(line.back())] += bonus2;
-    }
-    if (line.size() >= 2) {
-        move_t past_move = line[line.size() - 2];
-        piece_t counter_actor = get_actor(past_move);
-        assert(counter_actor != 0);
-        followup_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)] += bonus1;
-    }
-    for (int distance = 3; distance <= line.size(); distance += 2) {
-        move_t past_move = line[line.size() - distance];
-        piece_t counter_actor = get_actor(past_move);
-        assert(counter_actor != 0);
-        distant_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)] += bonus1;
     }
 }
 
@@ -707,30 +693,19 @@ int MoveSorter::get_score_parts_exchange(Color side_to_play, move_t move, uint64
     }
     return score;
 }
+
 void MoveSorter::get_score_parts_history(move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const {
-if (s != NULL) {
-    piece_t actor = get_actor(move);
-    assert(actor > 0 && actor <= bb_king);
-    int dest_square = get_dest_pos(move);
-    parts[score_part_history2] = s->history_bonus2[b->get_side_to_play()][actor - 1][dest_square];
-    if (line.size() > 0) {
-        move_t previous_move = line.back();
-        int counter_actor = get_actor(previous_move);
-        parts[score_part_refutation2] = s->refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(previous_move)];
-        if (line.size() >= 2) {
-            move_t past_move = line[line.size() - 2];
-            piece_t counter_actor = get_actor(past_move);
-            assert(counter_actor != 0);
-            parts[score_part_followup1] = s->followup_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
-        }
-        for (int distance = 3; distance <= line.size(); distance += 2) {
-            move_t past_move = line[line.size() - distance];
-            piece_t counter_actor = get_actor(past_move);
-            assert(counter_actor != 0);
-            parts[score_part_distant1] = s->distant_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
+    if (s != NULL) {
+        piece_t actor = get_actor(move);
+        assert(actor > 0 && actor <= bb_king);
+        int dest_square = get_dest_pos(move);
+        parts[score_part_history2] = s->history_bonus2[b->get_side_to_play()][actor - 1][dest_square];
+        if (line.size() > 0) {
+            move_t previous_move = line.back();
+            int counter_actor = get_actor(previous_move);
+            parts[score_part_refutation2] = s->refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(previous_move)];
         }
     }
-}
 }
 
 void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const
@@ -793,9 +768,6 @@ int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move
 
         auto history_idx = score_part_history2;
         auto refut_idx = score_part_refutation2;
-        auto followup_idx = score_part_followup1;
-        auto distant_idx = score_part_distant1;
-        int followup_mult = 0, distant_mult = 0;
         int history_value = 0;
         if (score_parts[history_idx] > 0) {
             history_value += log2l(score_parts[history_idx]) * 10;
@@ -806,16 +778,6 @@ int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move
             history_value += log2l(score_parts[refut_idx]) * 10;
         } else if (score_parts[refut_idx] < 0){
             history_value -= log2l(-score_parts[refut_idx]) * 10;
-        }
-        if (score_parts[followup_idx] > 0) {
-            history_value += log2l(score_parts[followup_idx]) * followup_mult;
-        } else if (score_parts[followup_idx] < 0){
-            history_value -= log2l(-score_parts[followup_idx]) * followup_mult;
-        }
-        if (score_parts[distant_idx] > 0) {
-            history_value += log2l(score_parts[distant_idx]) * distant_mult;
-        } else if (score_parts[distant_idx] < 0){
-            history_value -= log2l(-score_parts[distant_idx]) * distant_mult;
         }
         value += history_value * s->history_coeff;
     }
