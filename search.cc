@@ -385,7 +385,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                 std::tuple<move_t, move_t, int> child;
                 line.push_back(move);
                 move_t killer_move = killer_move_counter.maximum();
-                if (use_pv && alpha < beta) {
+                if (use_pv && alpha < beta && !first) {
                     child = negamax_with_memory(b, depth + 1, -alpha, -alpha, line, killer_move, child_static_eval);
                     if (-std::get<2>(child) > alpha) {
                         child = negamax_with_memory(b, depth + 1, -beta, -alpha - 1, line, killer_move, child_static_eval);
@@ -822,7 +822,7 @@ void MoveSorter::load_more(const Fenboard *b) {
             case P_HINT_REINT:
                 if (hint != 0) {
                     move_t move = b->reinterpret_move(hint, opp_covered_squares);
-                    if (move != 0) {
+                    if (move != 0 && move != transposition_hint) {
                         buffer.push_back(move);
                     }
                     hint = move;
