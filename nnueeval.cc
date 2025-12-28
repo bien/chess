@@ -72,8 +72,10 @@ static int get_dense_index(int king_square, int piece_type, int piece_pos, int p
     return dense_index;
 }
 
-NNUEEvaluation::NNUEEvaluation()
-    : model(load_nnue_model()),
+NNUEEvaluation::NNUEEvaluation(bool use_backup)
+    :
+      model(load_nnue_model()),
+      use_backup(use_backup),
       model_dense_bias_promoted(model->model_dense_bias),
       model_dense_weights_promoted(model->model_dense_weights),
       model_cp_weights_promoted(model->model_cp_weights),
@@ -85,6 +87,19 @@ int NNUEEvaluation::delta_evaluate(Fenboard &b, move_t move, int previous_score)
     int score;
     unsigned char src_rank, src_file, dest_rank, dest_file;
     piece_t captured_piece;
+
+    if (use_backup) {
+        if ((b.get_side_to_play() == White && previous_score > 400)
+            || (b.get_side_to_play() == Black && previous_score < -400)) {
+            return backup.delta_evaluate(b, move, previous_score);
+        }
+        if (get_captured_piece(move) == 0 &&
+            ((b.get_side_to_play() == White && previous_score < -400)
+            || (b.get_side_to_play() == Black && previous_score > 400))) {
+            return backup.delta_evaluate(b, move, previous_score);
+        }
+    }
+
     get_source(move, src_rank, src_file);
     get_dest(move, dest_rank, dest_file);
     captured_piece = b.get_piece(dest_rank, dest_file);

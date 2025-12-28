@@ -88,7 +88,7 @@ struct weight_promotion {
 
 class NNUEEvaluation : public SimpleEvaluation {
 public:
-    NNUEEvaluation();
+    NNUEEvaluation(bool use_backup=true);
     int evaluate(const Fenboard &b);
     int delta_evaluate(Fenboard &b, move_t move, int previous_score);
 
@@ -99,6 +99,8 @@ private:
     mvector<MODEL_FIRST_LAYER_WIDTH, int16_t> dense_1_layer;
     int psqt_cached;
     nnue_model *model;
+    bool use_backup;
+    SimpleEvaluation backup;
 
     const bias_promotion<MODEL_DENSE_LAYERS, MODEL_HIDDEN_LAYER_WIDTH, int8_t> model_dense_bias_promoted;
     const weight_promotion<MODEL_DENSE_LAYERS-1, MODEL_HIDDEN_LAYER_WIDTH, MODEL_HIDDEN_LAYER_WIDTH, int8_t> model_dense_weights_promoted;
