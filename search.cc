@@ -482,7 +482,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
                         }
                         initialized_null_move_eval = true;
                     }
-                    if (null_move_eval < alpha - FUTILITY_MARGIN) {
+                    if (alpha < 9000 && null_move_eval < alpha - FUTILITY_MARGIN) {
                         emit_sort_feature(b, move, alpha, original_beta, subtree_score, "futility", score_parts);
                         history_cutoff(b.get_side_to_play(), depth_to_go, move, move_index, line, false);
                         break;
