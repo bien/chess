@@ -676,29 +676,6 @@ void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vect
         int source_square = get_source_pos(move);
         psqt_dest_square = get_dest_pos(move);
 
-        if (actor >= bb_knight && actor <= bb_queen) {
-            if (covered_squares_q == ~0) {
-                Color opponent = get_opposite_color(b->get_side_to_play());
-                covered_squares_bn = b->computed_covered_squares(opponent, INCLUDE_PAWN);
-                covered_squares_r = covered_squares_bn | b->computed_covered_squares(opponent, INCLUDE_BISHOP | INCLUDE_KNIGHT);
-                covered_squares_q = covered_squares_r | b->computed_covered_squares(opponent, INCLUDE_ROOK);
-            }
-            uint64_t coverer = 0;
-            switch(actor) {
-                case bb_queen: coverer = covered_squares_q; break;
-                case bb_rook: coverer = covered_squares_r; break;
-                case bb_knight: case bb_bishop: coverer = covered_squares_bn; break;
-            }
-            // move piece out of attack
-            if (((1ULL << source_square) & coverer) > 0) {
-               parts[score_part_exchange] += piece_points[actor] * 100;
-            }
-            // disprefer giving the piece away
-            if (((1ULL << psqt_dest_square) & coverer) > 0) {
-               parts[score_part_exchange] -= piece_points[actor] * 100;
-            }
-        }
-
         if (side_to_play == Black) {
             psqt_king_square = vertical_mirror(psqt_king_square);
             source_square = vertical_mirror(source_square);
