@@ -854,7 +854,7 @@ move_t Bitboard::reinterpret_move(move_t hint, uint64_t &opp_covered_squares) co
     uint64_t my_pieces = get_bitmask(side_to_play, bb_all);
 
     PackedMoveIterator pm;
-    std::vector<move_t> moves;
+    std::vector<move_t> moves(8);
 
     // no self captures
     if ((my_pieces & (1ULL << dest_pos)) != 0) {
@@ -1552,8 +1552,8 @@ uint64_t Bitboard::get_zobrist_with_move(move_t move) const {
     unsigned char destrank, destfile, sourcerank, sourcefile;
     get_source(move, sourcerank, sourcefile);
     get_dest(move, destrank, destfile);
-    piece_t destpiece = get_piece(destrank, destfile);
-    piece_t sourcepiece = get_piece(sourcerank, sourcefile);
+    piece_t destpiece = get_captured_piece(move);
+    piece_t sourcepiece = get_actor(move);
     piece_t resultpiece = sourcepiece;
     Color color = get_color(sourcepiece);
     int newfile = -1;

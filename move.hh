@@ -61,13 +61,44 @@ constexpr BoardPos algebra_to_square(char file, int rank)
     return make_board_pos(rank - 1, file - 'a');
 }
 
-piece_t get_captured_piece(move_t move, Color color=White);
-piece_t get_promotion(move_t move, Color color=White);
-void get_source(move_t move, unsigned char &rank, unsigned char &file);
-void get_dest(move_t move, unsigned char &rank, unsigned char &file);
+constexpr piece_t get_captured_piece(move_t move, Color color=White)
+{
+    return make_piece((move >> CAPTURE_PIECE_POS) & PIECE_MASK, color);
 
-bool get_invalidates_queenside_castle(move_t move);
-bool get_invalidates_kingside_castle(move_t move);
+}
+
+constexpr piece_t get_promotion(move_t move, Color color=White)
+{
+    piece_t piece = (move >> PROMO_PIECE_POS) & PIECE_MASK;
+    if (piece > 0 && piece < bb_king) {
+        return make_piece(piece, color);
+    } else {
+        return 0;
+    }
+}
+
+constexpr void get_source(move_t move, unsigned char &rank, unsigned char &file)
+{
+    BoardPos bp = get_source_pos(move);
+    rank = get_board_rank(bp);
+    file = get_board_file(bp);
+}
+constexpr void get_dest(move_t move, unsigned char &rank, unsigned char &file)
+{
+    BoardPos bp = get_dest_pos(move);
+    rank = get_board_rank(bp);
+    file = get_board_file(bp);
+}
+
+
+constexpr bool get_invalidates_queenside_castle(move_t move)
+{
+    return move & INVALIDATES_CASTLE_Q;
+}
+constexpr bool get_invalidates_kingside_castle(move_t move)
+{
+    return move & INVALIDATES_CASTLE_K;
+}
 
 const int LOGICAL_RANKS = 8;
 const int LOGICAL_FILES = 8;

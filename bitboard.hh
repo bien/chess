@@ -155,14 +155,15 @@ public:
 
     piece_t get_piece(unsigned char rank, unsigned char file) const {
         uint64_t test = 1ULL << make_board_pos(rank, file);
-        for (int i = 0; i < 2; i++) {
-            Color color = static_cast<Color>(i);
-            if (get_bitmask(color, bb_all) & test) {
-                for (int piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
-                    if (get_bitmask(color, piece_type)& test) {
-                        return make_piece(piece_type, color);
-                    }
-                }
+        Color color;
+        if (get_bitmask(White, bb_all) & test)  {
+            color = White;
+        } else {
+            color = Black;
+        }
+        for (int piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
+            if (get_bitmask(color, piece_type) & test) {
+                return make_piece(piece_type, color);
             }
         }
         return 0;

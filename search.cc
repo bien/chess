@@ -698,12 +698,14 @@ void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vect
         parts[score_part_exchange] = piece_points[capture] * 100;
     }
     else if (s != NULL) {
-        parts[score_part_exchange] = 100 * b->static_exchange_eval(b->get_side_to_play(), dest_sq, capture, actor);
-        // std::cout << "SEE capt=" << parts[score_part_exchange];
-        // don't double-count captured piece
-        if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0 && psqt_king_square >= 0 && psqt_dest_square >= 0 && parts[score_part_exchange] == 100 * PIECE_VALUE[capture]) {
-            parts[score_part_exchange] += (s->exchange_coeff / s->psqt_coeff) * psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
-//            std::cout << " SEE psqt-adj=" << parts[score_part_exchange];
+        if (capture != 0) {
+            parts[score_part_exchange] = 100 * b->static_exchange_eval(b->get_side_to_play(), dest_sq, capture, actor);
+            // std::cout << "SEE capt=" << parts[score_part_exchange];
+            // don't double-count captured piece
+            if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0 && psqt_king_square >= 0 && psqt_dest_square >= 0 && parts[score_part_exchange] == 100 * PIECE_VALUE[capture]) {
+                parts[score_part_exchange] += (s->exchange_coeff / s->psqt_coeff) * psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
+    //            std::cout << " SEE psqt-adj=" << parts[score_part_exchange];
+            }
         }
 
         if (opp_covered_squares & (1ULL << src_sq)) {
@@ -888,7 +890,7 @@ void MoveSorter::load_more(const Fenboard *b) {
                         buffer.erase(location);
                     }
                 }
-                if (do_sort) {
+                if (do_sort && (buffer.size() - start) > 1) {
                     std::map<move_t, int> move_scores;
                     for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
                         move_scores[*iter] = get_score(b, *iter, *line);
