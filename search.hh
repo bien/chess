@@ -59,11 +59,17 @@ struct MoveSorter {
     }
 
     move_t next_move();
-    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, move_t hint=0, move_t transposition_hint=0, bool verbose=false);
+    void reset(const Fenboard *b, Search *s, const std::vector<move_t> &line, bool captures_checks_only=false, int depth_to_go=0, int alpha=INT_MIN, int beta=INT_MAX, bool do_sort=true, move_t hint=0, move_t transposition_hint=0, bool verbose=false);
     int get_score(const Fenboard *b, move_t move, const std::vector<move_t> &line) const;
     void get_score_parts(const Fenboard *b, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const;
 
 private:
+    int get_score_parts_king(move_t move) const;
+    int get_score_parts_psqt(Color side_to_play, move_t move) const;
+    int get_score_parts_exchange(Color side_to_play, move_t move, uint64_t opp_covered_squares) const;
+    void get_score_parts_history(move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const;
+
+
     void load_more(const Fenboard *b);
 
     enum Phase {
@@ -92,7 +98,9 @@ private:
     const std::vector<move_t> *line;
     Search *s;
     const Fenboard *b;
-    int current_score;
+    int depth_to_go;
+    int alpha;
+    int beta;
     bool verbose;
     mutable uint64_t covered_squares_q = ~0;
     mutable uint64_t covered_squares_r = ~0;

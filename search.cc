@@ -628,6 +628,110 @@ const int centralization[64] = {
     0, 0, 0, 0, 0, 0, 0, 0,
 };
 
+int MoveSorter::get_score_parts_king(move_t move) const {
+    int invalidate_castle_penalty = 0;
+    unsigned char src_rank, src_file, dest_rank, dest_file;
+    get_source(move, src_rank, src_file);
+    get_dest(move, dest_rank, dest_file);
+    int src_sq = (src_rank * 8 + src_file);
+    int dest_sq = get_dest_pos(move);
+
+    if (dest_file - src_file == 2 || dest_file - src_file == -2) {
+        invalidate_castle_penalty += 3;
+    }
+    if (get_invalidates_kingside_castle(move)) {
+        invalidate_castle_penalty--;
+    }
+    if (get_invalidates_queenside_castle(move)) {
+        invalidate_castle_penalty--;
+    }
+
+    int central = centralization[dest_sq] - centralization[src_sq];
+    // want best score first
+    return invalidate_castle_penalty * 50 + central;
+}
+
+int MoveSorter::get_score_parts_psqt(Color side_to_play, move_t move) const {
+    int psqt_king_square = get_low_bit(b->get_bitmask(side_to_play, bb_king), 0);
+    int source_square = get_source_pos(move);
+    int psqt_dest_square = get_dest_pos(move);
+    piece_t actor = get_actor(move);
+    piece_t promo = get_promotion(move);
+    piece_t capture = get_captured_piece(move) & PIECE_MASK;
+
+    if (side_to_play == Black) {
+        psqt_king_square = vertical_mirror(psqt_king_square);
+        source_square = vertical_mirror(source_square);
+        psqt_dest_square = vertical_mirror(psqt_dest_square);
+    }
+
+    int dense_index_actor = psqt_king_square * (64 * 10) + (actor - 1) * 64 + source_square;
+    int dense_index_dest = psqt_king_square * (64 * 10) + (actor - 1) * 64 + psqt_dest_square;
+
+    int psqt_score = -psqt_weights[dense_index_actor];
+    psqt_score += psqt_weights[dense_index_dest];
+    if (capture > 0) {
+        psqt_score -= psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
+    }
+    if (promo > 0) {
+        psqt_score += psqt_weights[psqt_king_square * (64 * 10) + (promo - 1) * 64 + psqt_dest_square];
+    }
+
+    return psqt_score;
+
+}
+int MoveSorter::get_score_parts_exchange(Color side_to_play, move_t move, uint64_t opp_covered_squares) const {
+    int score = 0;
+    int psqt_king_square = get_low_bit(b->get_bitmask(side_to_play, bb_king), 0);
+    piece_t capture = get_captured_piece(move) & PIECE_MASK;
+    int src_sq = get_source_pos(move);
+    int dest_sq = get_dest_pos(move);
+    piece_t actor = get_actor(move);
+
+    if (capture != 0) {
+        score = 100 * b->static_exchange_eval(b->get_side_to_play(), dest_sq, capture, actor);
+        // don't double-count captured piece
+        if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0 && psqt_king_square >= 0 && dest_sq >= 0 && score == 100 * PIECE_VALUE[capture]) {
+            score += (s->exchange_coeff / s->psqt_coeff) * psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + dest_sq];
+        }
+    }
+
+    if (opp_covered_squares & (1ULL << src_sq)) {
+        int null_move_capture = 100 * b->static_exchange_eval(get_opposite_color(b->get_side_to_play()), src_sq, actor, 0);
+        if (null_move_capture > 0) {
+            score += null_move_capture;
+        }
+    }
+    if (s->recapture_first_bonus != 0 && capture != 0 && recapture_on_sq == dest_sq) {
+        score += s->recapture_first_bonus - piece_points[actor] * 100;
+    }
+    return score;
+}
+void MoveSorter::get_score_parts_history(move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const {
+if (s != NULL) {
+    piece_t actor = get_actor(move);
+    assert(actor > 0 && actor <= bb_king);
+    int dest_square = get_dest_pos(move);
+    parts[score_part_history2] = s->history_bonus2[b->get_side_to_play()][actor - 1][dest_square];
+    if (line.size() > 0) {
+        move_t previous_move = line.back();
+        int counter_actor = get_actor(previous_move);
+        parts[score_part_refutation2] = s->refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(previous_move)];
+        if (line.size() >= 2) {
+            move_t past_move = line[line.size() - 2];
+            piece_t counter_actor = get_actor(past_move);
+            assert(counter_actor != 0);
+            parts[score_part_followup1] = s->followup_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
+        }
+        for (int distance = 3; distance <= line.size(); distance += 2) {
+            move_t past_move = line[line.size() - distance];
+            piece_t counter_actor = get_actor(past_move);
+            assert(counter_actor != 0);
+            parts[score_part_distant1] = s->distant_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
+        }
+    }
+}
+}
 
 void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vector<move_t> &line, int parts[score_part_len]) const
 {
@@ -647,114 +751,33 @@ void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vect
     unsigned char src_rank, src_file, dest_rank, dest_file;
     get_source(move, src_rank, src_file);
     get_dest(move, dest_rank, dest_file);
-    piece_t actor = b->get_piece(src_rank, src_file) & PIECE_MASK;
-    piece_t promo = get_promotion(move);
-
-    int src_sq = (src_rank * 8 + src_file);
-    int dest_sq = (dest_rank * 8 + dest_file);
-    int invalidate_castle_penalty = 0;
-
-    int psqt_king_square = -1;
-    int psqt_dest_square = -1;
+    piece_t actor = get_actor(move);
 
     if (actor == bb_king) {
-        if (dest_file - src_file == 2 || dest_file - src_file == -2) {
-            invalidate_castle_penalty += 3;
-        }
-        if (get_invalidates_kingside_castle(move)) {
-            invalidate_castle_penalty--;
-        }
-        if (get_invalidates_queenside_castle(move)) {
-            invalidate_castle_penalty--;
-        }
-
-        int central = centralization[dest_sq] - centralization[src_sq];
-        // want best score first
-        parts[score_part_king_handeval] = invalidate_castle_penalty * 50 + central;
+        parts[score_part_king_handeval] = get_score_parts_king(move);
+        parts[score_part_psqt] = piece_points[capture] * 100;
     } else {
-        psqt_king_square = get_low_bit(b->piece_bitmasks[side_to_play * (bb_king + 1) + bb_king], 0);
-        int source_square = get_source_pos(move);
-        psqt_dest_square = get_dest_pos(move);
-
-        if (side_to_play == Black) {
-            psqt_king_square = vertical_mirror(psqt_king_square);
-            source_square = vertical_mirror(source_square);
-            psqt_dest_square = vertical_mirror(psqt_dest_square);
-        }
-
-        int dense_index_actor = psqt_king_square * (64 * 10) + (actor - 1) * 64 + source_square;
-        int dense_index_dest = psqt_king_square * (64 * 10) + (actor - 1) * 64 + psqt_dest_square;
-
-        parts[score_part_psqt] = -psqt_weights[dense_index_actor];
-        parts[score_part_psqt] += psqt_weights[dense_index_dest];
-        if (capture > 0) {
-            parts[score_part_psqt] -= psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
-        }
-        if (promo > 0) {
-            parts[score_part_psqt] += psqt_weights[psqt_king_square * (64 * 10) + (promo - 1) * 64 + psqt_dest_square];
-        }
+        parts[score_part_king_handeval] = 0;
+        parts[score_part_psqt] = get_score_parts_psqt(b->get_side_to_play(), move);
     }
-    if (actor == bb_king) {
-        parts[score_part_exchange] = piece_points[capture] * 100;
-    }
-    else if (s != NULL) {
-        if (capture != 0) {
-            parts[score_part_exchange] = 100 * b->static_exchange_eval(b->get_side_to_play(), dest_sq, capture, actor);
-            // std::cout << "SEE capt=" << parts[score_part_exchange];
-            // don't double-count captured piece
-            if (s->exchange_coeff > 0 && s->psqt_coeff > 0 && capture != 0 && psqt_king_square >= 0 && psqt_dest_square >= 0 && parts[score_part_exchange] == 100 * PIECE_VALUE[capture]) {
-                parts[score_part_exchange] += (s->exchange_coeff / s->psqt_coeff) * psqt_weights[psqt_king_square * (64 * 10) + (capture - 1 + 5) * 64 + psqt_dest_square];
-    //            std::cout << " SEE psqt-adj=" << parts[score_part_exchange];
-            }
-        }
-
-        if (opp_covered_squares & (1ULL << src_sq)) {
-            int null_move_capture = 100 * b->static_exchange_eval(get_opposite_color(b->get_side_to_play()), src_sq, actor, 0);
-            if (null_move_capture > 0) {
-                parts[score_part_exchange] += null_move_capture;
-            }
-            // std::cout << " SEE psqt-save=" << parts[score_part_exchange];
-       }
-        // std::cout << std::endl;
-        if (s->recapture_first_bonus != 0 && capture != 0 && recapture_on_sq == dest_sq) {
-            parts[score_part_exchange] += s->recapture_first_bonus - piece_points[actor] * 100;
-        }
+    if (s != NULL && actor != bb_king) {
+        parts[score_part_exchange] = get_score_parts_exchange(b->get_side_to_play(), move, opp_covered_squares);
     }
 
-    if (s != NULL) {
-        assert(actor > 0 && actor <= bb_king);
-        int dest_square = get_dest_pos(move);
-        parts[score_part_history2] = s->history_bonus2[b->get_side_to_play()][actor - 1][dest_square];
-        if (line.size() > 0) {
-            move_t previous_move = line.back();
-            int counter_actor = get_actor(previous_move);
-            parts[score_part_refutation2] = s->refutation_table2[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(previous_move)];
-            if (line.size() >= 2) {
-                move_t past_move = line[line.size() - 2];
-                piece_t counter_actor = get_actor(past_move);
-                assert(counter_actor != 0);
-                parts[score_part_followup1] = s->followup_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
-            }
-            for (int distance = 3; distance <= line.size(); distance += 2) {
-                move_t past_move = line[line.size() - distance];
-                piece_t counter_actor = get_actor(past_move);
-                assert(counter_actor != 0);
-                parts[score_part_distant1] = s->distant_table1[actor-1][get_dest_pos(move)][counter_actor-1][get_dest_pos(past_move)];
-            }
-        }
-    }
+    get_score_parts_history(move, line, parts);
     parts[score_part_hint] = (move == hint ? 1 : 0);
 }
 
 int MoveSorter::get_score(const Fenboard *b, move_t move, const std::vector<move_t> &line) const
 {
-    move_t ignore;
-    int16_t tt_value;
-    unsigned char tt_depth, tt_type;
-
-    if (s != NULL && s->fetch_tt_entry(b->get_zobrist_with_move(move), ignore, tt_value, tt_depth, tt_type)) {
-        if (tt_type == TT_EXACT) {
-            return tt_value + 1000;
+    if (s != NULL) {
+        move_t tt_move = 0;
+        int tt_value;
+        int tt_alpha = alpha;
+        int tt_beta = beta;
+        bool found = s->read_transposition(b->get_zobrist_with_move(move), tt_move, depth_to_go, tt_alpha, tt_beta, tt_value);
+        if (found && tt_alpha > tt_beta) {
+            return 1000;
         }
     }
 
@@ -890,7 +913,7 @@ void MoveSorter::load_more(const Fenboard *b) {
                         buffer.erase(location);
                     }
                 }
-                if (do_sort && (buffer.size() - start) > 1) {
+                if (do_sort &&(buffer.size() - start) > 1) {
                     std::map<move_t, int> move_scores;
                     for (auto iter = buffer.begin() + start; iter != buffer.end(); iter++) {
                         move_scores[*iter] = get_score(b, *iter, *line);
@@ -919,6 +942,9 @@ void MoveSorter::reset(const Fenboard *b, Search *s, const std::vector<move_t> &
     this->b = b;
     this->verbose = verbose;
     this->line = &line;
+    this->depth_to_go = depth;
+    this->alpha = alpha;
+    this->beta = beta;
     if (line.size() > 0 && get_captured_piece(line.back()) != 0) {
         this->recapture_on_sq = get_dest_pos(line.back());
     } else {
