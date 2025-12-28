@@ -261,10 +261,6 @@ void display_bitboard(uint64_t n, int rank, int file)
 }
 
 
-BoardPos bb_make_board_pos(int rank, int file) {
-    return rank * 8 + file;
-}
-
 std::string bp_to_string(BoardPos bp)
 {
     std::string s;
@@ -386,25 +382,9 @@ Bitboard::Bitboard()
     enpassant_file = -1;
 }
 
-piece_t Bitboard::get_piece(unsigned char rank, unsigned char file) const
-{
-    uint64_t test = 1ULL << bb_make_board_pos(rank, file);
-    for (int i = 0; i < 2; i++) {
-        Color color = static_cast<Color>(i);
-        if (piece_bitmasks[color * (bb_king + 1) + bb_all] & test) {
-            for (int piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
-                if (piece_bitmasks[color * (bb_king + 1) + piece_type] & test) {
-                    return make_piece(piece_type, color);
-                }
-            }
-        }
-    }
-    return 0;
-}
-
 void Bitboard::set_piece(unsigned char rank, unsigned char file, piece_t piece)
 {
-    uint64_t bit = 1ULL << bb_make_board_pos(rank, file);
+    uint64_t bit = 1ULL << make_board_pos(rank, file);
 
     // remove old piece if any
     piece_t current_piece = get_piece(rank, file);

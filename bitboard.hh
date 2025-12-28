@@ -11,17 +11,9 @@
 #include <iostream>
 #include <strings.h>
 #include <stdalign.h>
+#include "move.hh"
 
 const int PIECE_VALUE[] = { 0, 1, 3, 3, 5, 9, 1000 };
-
-typedef unsigned char piece_t;
-const piece_t bb_all = 0;
-const piece_t bb_pawn = 1;
-const piece_t bb_knight = 2;
-const piece_t bb_bishop = 3;
-const piece_t bb_rook = 4;
-const piece_t bb_queen = 5;
-const piece_t bb_king = 6;
 
 const int INCLUDE_PAWN = 1;
 const int INCLUDE_KNIGHT = 2;
@@ -30,34 +22,6 @@ const int INCLUDE_ROOK = 8;
 const int INCLUDE_QUEEN = 0x10;
 const int INCLUDE_KING = 0x20;
 const int INCLUDE_ALL = 0x3f;
-
-enum Color { White = 0, Black = 1 };
-
-static constexpr Color get_opposite_color(Color color) {
-    return color == White ? Black : White;
-}
-
-typedef unsigned int move_t;
-typedef unsigned char BoardPos;
-const BoardPos InvalidPos = 8;
-const int EMPTY = 0;
-const int INVALID = 8;
-const int PIECE_MASK = 7;
-const int WhiteMask = 0;
-const int BlackMask = 8;
-
-const int CAPTURE_PIECE_POS = 12;
-const int PROMO_PIECE_POS = 15;
-const int ENPASSANT_FLAG = 0x38000;
-const int MOVE_FROM_CHECK = 0x40000;
-const int ACTOR_OFFSET = 19;
-const int ACTOR_MASK = 0x0380000;
-const int UNUSED_MASK = 0x01c00000;
-const int ENPASSANT_POS = 25;
-const int ENPASSANT_STATE_MASK = 0xf << ENPASSANT_POS;
-const int INVALIDATES_CASTLE_K = 0x20000000;
-const int INVALIDATES_CASTLE_Q = 0x40000000;
-const int GIVES_CHECK = 0x80000000;
 
 const int FL_ALL = 4;
 const int FL_CAPTURES = 2;
@@ -117,21 +81,6 @@ constexpr int max(int a, int b) {
 
 
 class Bitboard;
-
-static constexpr piece_t make_piece(piece_t type, Color color)
-{
-    if (color == Black && type != EMPTY) {
-        return type | BlackMask;
-    } else {
-        return type;
-    }
-}
-
-
-constexpr piece_t get_actor(move_t move)
-{
-    return (move & ACTOR_MASK) >> ACTOR_OFFSET;
-}
 
 struct PackedMoves {
     alignas(64) uint64_t dest_squares;
@@ -204,7 +153,20 @@ class Bitboard
 public:
     Bitboard();
 
-    piece_t get_piece(unsigned char rank, unsigned char file) const;
+    piece_t get_piece(unsigned char rank, unsigned char file) const {
+        uint64_t test = 1ULL << make_board_pos(rank, file);
+        for (int i = 0; i < 2; i++) {
+            Color color = static_cast<Color>(i);
+            if (get_bitmask(color, bb_all) & test) {
+                for (int piece_type = bb_pawn; piece_type <= bb_king; piece_type++) {
+                    if (get_bitmask(color, piece_type)& test) {
+                        return make_piece(piece_type, color);
+                    }
+                }
+            }
+        }
+        return 0;
+    }
     piece_t get_piece(int sq) const {
         return get_piece(sq / 8, sq % 8);
     }
