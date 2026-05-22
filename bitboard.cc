@@ -1503,8 +1503,13 @@ void Bitboard::apply_move(move_t move)
     else if ((sourcepiece & PIECE_MASK) == bb_pawn) {
         // set enpassant capability
         if (abs(destrank - sourcerank) == 2) {
-            allows_enpassant = true;
-            set_enpassant_file(destfile);
+            uint64_t opposing_pawns = get_bitmask(get_opposite_color(color), bb_pawn);
+            int dest_sq = get_dest_pos(move);
+            uint64_t ep_mask = (1ULL << (dest_sq + 1)) | (1ULL << (dest_sq - 1));
+            if ((opposing_pawns & ep_mask) > 0) {
+                allows_enpassant = true;
+                set_enpassant_file(destfile);
+            }
         }
         // pawn promote
         else if (destrank == 0 || destrank == 7) {

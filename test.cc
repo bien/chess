@@ -211,11 +211,11 @@ void test_legal_moves(std::string fischer_pgn_file)
     assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
     move_t e4 = b.read_move("e4", White);
     b.apply_move(e4);
-    assert_equals(static_cast<uint64_t>(5133399426941399707ULL), b.get_hash());
+    assert_equals(static_cast<uint64_t>(1684307002031533037ULL), b.get_hash());
 
     boardtext.str("");
     boardtext << b;
-    assert_equals(std::string("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"), boardtext.str());
+    assert_equals(std::string("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"), boardtext.str());
 
     assert_equals(make_piece(bb_pawn, White), b.get_piece(3, 4));
     assert_equals(static_cast<piece_t>(EMPTY), b.get_piece(1, 4));
@@ -241,82 +241,82 @@ void test_legal_moves(std::string fischer_pgn_file)
     std::vector<move_t> moverecord;
     std::vector<std::string> boardrecord;
     std::ifstream fischer(fischer_pgn_file);
-    if (!fischer) {
-        std::cout << "Cannot load Fischer.pgn" << std::endl;
-        assert_equals(0, 1);
-    }
+    if (fischer) {
 
-    // play one game
-    pgn_istream fischerpgn(fischer);
-    read_pgn(&fischerpgn, game_metadata, movelist);
-    for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
-        move_t move = b.read_move(iter->first.move, White);
-        b.apply_move(move);
-        moverecord.push_back(move);
-        boardtext.str("");
-        boardtext << b;
-        boardrecord.push_back(boardtext.str());
-
-        move = b.read_move(iter->second.move, Black);
-        b.apply_move(move);
-        moverecord.push_back(move);
-        boardtext.str("");
-        boardtext << b;
-        boardrecord.push_back(boardtext.str());
-    }
-
-    boardtext.str("");
-    boardtext << b;
-    assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 24"), boardtext.str());
-    assert_equals(static_cast<uint64_t>(10878024775352243206ULL), b.get_hash());
-
-    // play in reverse
-    assert_equals(moverecord.size(), boardrecord.size());
-    for (int i = moverecord.size() - 1; i >= 0; i--)
-    {
-        boardtext.str("");
-        b.get_fen(boardtext);
-        assert_equals(boardrecord[i], boardtext.str());
-        b.undo_move(moverecord[i]);
-    }
-
-    boardtext.str("");
-    boardtext << b;
-    assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), boardtext.str());
-    assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
-
-    b.set_fen("r5k1/1p1brpbp/1npp2p1/q1n5/p1PNPP2/2N3PP/PPQ2B1K/3RRB2");
-    move_t move = b.read_move("g4", White);
-    b.apply_move(move);
-    move = b.read_move("Rae8", Black);
-    b.apply_move(move);
-    boardtext.str("");
-    boardtext << b;
-    assert_equals(std::string("4r1k1/1p1brpbp/1npp2p1/q1n5/p1PNPPP1/2N4P/PPQ2B1K/3RRB2 w KQk - 0 2"), boardtext.str());
-
-    b.set_fen("8/4k3/5p2/3BP1pP/5KP1/8/2b5/8 w - g6 0 1");
-    move = b.read_move("hxg6", White);
-    b.apply_move(move);
-    boardtext.str("");
-    boardtext << b;
-    assert_equals(std::string("8/4k3/5pP1/3BP3/5KP1/8/2b5/8 b - - 0 1"), boardtext.str());
-
-    // play the rest of the Fischer games
-    while (!fischer.eof()) {
-        movelist.clear();
-        game_metadata.clear();
+        // play one game
+        pgn_istream fischerpgn(fischer);
         read_pgn(&fischerpgn, game_metadata, movelist);
-        b.set_starting_position();
         for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
             move_t move = b.read_move(iter->first.move, White);
-//            std::cout << board_to_fen(&b) << " + " << iter->first.move << " = " << move_to_algebra(&b, move) << std::endl;
             b.apply_move(move);
-            if (iter->second.move.length() > 1) {
-                move = b.read_move(iter->second.move, Black);
-//                std::cout << board_to_fen(&b) << " + " << iter->second.move << " = " << move_to_algebra(&b, move) << std::endl;
+            moverecord.push_back(move);
+            boardtext.str("");
+            boardtext << b;
+            boardrecord.push_back(boardtext.str());
+
+            move = b.read_move(iter->second.move, Black);
+            b.apply_move(move);
+            moverecord.push_back(move);
+            boardtext.str("");
+            boardtext << b;
+            boardrecord.push_back(boardtext.str());
+        }
+
+        boardtext.str("");
+        boardtext << b;
+        assert_equals(std::string("r2q4/ppp3bk/3p2pp/3P4/2n1Nn2/8/PPB3PP/R4R1K w - - 0 24"), boardtext.str());
+        assert_equals(static_cast<uint64_t>(10878024775352243206ULL), b.get_hash());
+
+        // play in reverse
+        assert_equals(moverecord.size(), boardrecord.size());
+        for (int i = moverecord.size() - 1; i >= 0; i--)
+        {
+            boardtext.str("");
+            b.get_fen(boardtext);
+            assert_equals(boardrecord[i], boardtext.str());
+            b.undo_move(moverecord[i]);
+        }
+
+        boardtext.str("");
+        boardtext << b;
+        assert_equals(std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), boardtext.str());
+        assert_equals(static_cast<uint64_t>(initial_hash), b.get_hash());
+
+        b.set_fen("r5k1/1p1brpbp/1npp2p1/q1n5/p1PNPP2/2N3PP/PPQ2B1K/3RRB2");
+        move_t move = b.read_move("g4", White);
+        b.apply_move(move);
+        move = b.read_move("Rae8", Black);
+        b.apply_move(move);
+        boardtext.str("");
+        boardtext << b;
+        assert_equals(std::string("4r1k1/1p1brpbp/1npp2p1/q1n5/p1PNPPP1/2N4P/PPQ2B1K/3RRB2 w KQk - 0 2"), boardtext.str());
+
+        b.set_fen("8/4k3/5p2/3BP1pP/5KP1/8/2b5/8 w - g6 0 1");
+        move = b.read_move("hxg6", White);
+        b.apply_move(move);
+        boardtext.str("");
+        boardtext << b;
+        assert_equals(std::string("8/4k3/5pP1/3BP3/5KP1/8/2b5/8 b - - 0 1"), boardtext.str());
+
+        // play the rest of the Fischer games
+        while (!fischer.eof()) {
+            movelist.clear();
+            game_metadata.clear();
+            read_pgn(&fischerpgn, game_metadata, movelist);
+            b.set_starting_position();
+            for (auto iter = movelist.begin(); iter != movelist.end(); iter++) {
+                move_t move = b.read_move(iter->first.move, White);
+    //            std::cout << board_to_fen(&b) << " + " << iter->first.move << " = " << move_to_algebra(&b, move) << std::endl;
                 b.apply_move(move);
+                if (iter->second.move.length() > 1) {
+                    move = b.read_move(iter->second.move, Black);
+    //                std::cout << board_to_fen(&b) << " + " << iter->second.move << " = " << move_to_algebra(&b, move) << std::endl;
+                    b.apply_move(move);
+                }
             }
         }
+    } else {
+        std::cout << "Cannot load Fischer.pgn" << std::endl;
     }
 
     // bug in check computation
@@ -334,6 +334,14 @@ void test_legal_moves(std::string fischer_pgn_file)
     legal_moves(&b, legal_black);
     assert_equals(0, static_cast<int>(legal_black.size()));
     assert_equals(true, b.king_in_check(Black));
+
+    // this does not create enpassant
+    b.set_fen("1k6/8/3p4/1p1Pp3/1K3pr1/4R3/PPP5/8 w - - 6 45");
+    move_t move = b.read_move("c4",  White);
+    b.apply_move(move);
+    boardtext.str("");
+    boardtext << b;
+    assert_equals(std::string("1k6/8/3p4/1p1Pp3/1KP2pr1/4R3/PP6/8 b - - 0 45"), boardtext.str());
 
     // capture attacking piece
     assert_moves("r4kr1/1b2R1Q1/pq4p1/8/1p4P1/5P2/PPP4P/1K2R3 b - - 0 1", { "Rg8xg7" });
