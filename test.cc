@@ -79,11 +79,11 @@ void assert_equals_unordered(const std::vector<T> &a, const std::vector<T> &b)
 }
 
 
-void legal_moves(Fenboard *b, std::vector<move_t> &moves) {
+void legal_moves(Fenboard *b, std::vector<move_t> &moves, bool nonquiet_only=false) {
     MoveSorter ms;
     std::vector<move_t> line;
-    ms.reset(b, NULL, line);
-    while (ms.has_more_moves()) {
+    ms.reset(b, NULL, line, nonquiet_only);
+    while (ms.has_more_moves() && (!nonquiet_only || ms.next_gives_check_or_capture())) {
         moves.push_back(ms.next_move());
     }
 }
@@ -108,14 +108,14 @@ void assert_illegal_move(Fenboard *b, std::vector<move_t> &move_list, move_t mov
     }
 }
 
-void assert_moves(const std::string &fen, const std::vector<std::string> &expected_moves)
+void assert_moves(const std::string &fen, const std::vector<std::string> &expected_moves, bool nonquiet_only=false)
 {
     Fenboard b;
     std::vector<move_t> legal;
     std::ostringstream movetext;
 
     b.set_fen(fen);
-    legal_moves(&b, legal);
+    legal_moves(&b, legal, nonquiet_only);
     if (expected_moves.size() != legal.size()) {
         std::cout << "Expected moves: ";
         for (auto iter = expected_moves.begin(); iter != expected_moves.end(); iter++) {
@@ -371,6 +371,9 @@ void test_legal_moves(std::string fischer_pgn_file)
 
     // promote check
     assert_moves("8/5P2/1p6/pP6/P6p/8/5k2/7K w - - 0 67", { "Kh2", "f8=Q+", "f8=R+", "f8=B", "f8=N" });
+
+    // promote is non-quiet
+    assert_moves("8/5P2/1p6/pP6/P6p/8/5k2/7K w - - 0 67", { "f8=Q+", "f8=R+", "f8=B", "f8=N" }, true);
 
     assert_moves("8/8/8/8/4K3/2N5/6p1/k5NB b - - 0 2", { "Kb2", "gxh1=Q+", "gxh1=R", "gxh1=B+", "gxh1=N" });
 

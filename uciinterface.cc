@@ -28,6 +28,7 @@ struct UciSearchUpdate : public SearchUpdate {
 
     void operator()(move_t best_move, int depth, int nodecount, int score)
     {
+        if (best_move != -1 && best_move != 0) {
         this->depth = depth;
         std::cout << "info currmove ";
         print_move_uci(best_move, std::cout) << std::endl;
@@ -35,6 +36,7 @@ struct UciSearchUpdate : public SearchUpdate {
             << " score cp " << score
             << " nodes " << nodecount
             << std::endl;
+        }
     }
 
 };
@@ -52,7 +54,7 @@ int main(int argc, char **argv)
         input = new std::ifstream(argv[1]);
     }
 
-    NNUEEvaluation simple;
+    NNUEEvaluation simple(false);
     Search search(&simple);
     search.use_transposition_table = false;
     search.use_pv = true;

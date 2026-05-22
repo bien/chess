@@ -125,20 +125,24 @@ int main(int argc, char **argv)
                 auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
                 int result_score = s->score;
                 std::cout << ((plyno / 2) + 1) << (b.get_side_to_play() == White ? ". " : "... ") << move_text;
-                if (move == suggested_move) {
-                    std::cout << " eval=" << result_score;
-                }
-                else {
+                if (move != suggested_move) {
                     move_t tt_move;
                     int tt_value = 0;
                     int tt_alpha = SCORE_MIN, tt_beta = SCORE_MAX;
                     if (s->read_transposition(b.get_zobrist_with_move(move), tt_move, 0, tt_alpha, tt_beta, tt_value)) {
+                        if (b.get_side_to_play() == Black){
+                            tt_value = -tt_value;
+                        }
                         std::cout << " eval=" << tt_value;
+                    } else {
+                        std::cout << "break" << std::endl;
+
                     }
                     if (abs(result_score - tt_value) > 10) {
                         std::cout << " (";
                         b.print_move(suggested_move, std::cout);
                         std::cout << " eval=" << result_score;
+                        std::cout << " loss=" << tt_value - result_score;
                         std::cout << ")";
                     }
                 }

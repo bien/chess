@@ -1,6 +1,9 @@
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <fstream>
 #include <vector>
+#include <map>
+#include "pgn.hh"
 #include "fenboard.hh"
 #include "evaluate.hh"
 #include "search.hh"
@@ -33,12 +36,15 @@ void print_line(Fenboard &b, Search &s, move_t first_move)
 
 int main(int argc, char **argv)
 {
+    int max_games = 1;
     try {
 
         po::options_description desc("Allowed options");
         desc.add_options()
             ("help", "produce help message")
             ("fen", po::value<std::string>(), "set board state")
+            ("pgn", po::value<std::string>(), "Annotate pgn")
+            ("games", po::value<int>(), "Number of pgn games to annotate")
             ("line", po::value<std::string>(), "line to evaluate")
             ("depth", po::value<int>(), "set depth")
             ("alpha", po::value<int>(), "set alpha")
@@ -136,7 +142,6 @@ int main(int argc, char **argv)
             } else {
                 result_move = s.alphabeta(b);
                 result_score = s.score;
-
             }
             std::cout << "Move = " << move_to_uci(result_move) << " score = " << result_score << std::endl;
             std::cout << "Line = " << move_to_uci(result_move);
@@ -156,13 +161,85 @@ int main(int argc, char **argv)
                 << " partial hits: " << s.transposition_partial_hits
                 << " insufficient_depth: " << s.transposition_insufficient_depth
                 << " checks: " << s.transposition_checks
-                << " conflicts: " << s.transposition_conflicts
+                << " conflicts: " << s.transtable->transposition_conflicts
                 << std::endl;
             std::cout << "transposition stats: full_hits: " << (s.transposition_full_hits * 100.0 / s.transposition_checks)
                 << " partial hits: " << (s.transposition_partial_hits * 100.0 / s.transposition_checks)
                 << " insufficient_depth: " << (s.transposition_insufficient_depth * 100.0 / s.transposition_checks)
                 << " misses: " << ((s.transposition_checks - s.transposition_full_hits - s.transposition_partial_hits - s.transposition_insufficient_depth) * 100.0 / s.transposition_checks)
                 << std::endl;
+        }
+
+        if (vm.count("pgn")) {
+            std::string pgnfilename = vm["pgn"].as<std::string>();
+            std::ifstream pgnstream(pgnfilename);
+            if (!pgnstream) {
+                std::cout << "Cannot load " << pgnfilename << ": " << strerror(errno) << std::endl;
+                return -1;
+            }
+            pgn_istream mypgn(pgnstream);
+            if (vm.count("games")) {
+                max_games = vm["games"].as<int>();
+            }
+            uint64_t total_nodecount = 0;
+            uint64_t total_null_nodecount = 0;
+            uint64_t total_low_depth_nodecount = 0;
+            for (int gameno = 0; gameno < max_games; gameno++) {
+                b.set_starting_position();
+                s.reset();
+                std::map<std::string, std::string> game_metadata;
+                std::vector<std::pair<move_annot, move_annot> > movelist;
+
+                read_pgn(&mypgn, game_metadata, movelist);
+                int plyno = 0;
+                for (auto iter = movelist.begin(); iter != movelist.end(); ) {
+                    std::string move_text;
+                    if (b.get_side_to_play() == White) {
+                        move_text = iter->first.move;
+                    } else if (iter->second.move.length() > 1){
+                        move_text = iter->second.move;
+                        ++iter;
+                    } else {
+                        break;
+                    }
+                    move_t move = b.read_move(move_text, b.get_side_to_play());
+                    auto starttime = std::chrono::system_clock::now();
+                    move_t suggested_move = s.alphabeta(b);
+                    auto elapsed_usecs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - starttime).count();
+                    int result_score = s.score;
+                    std::cout << ((plyno / 2) + 1) << (b.get_side_to_play() == White ? ". " : "... ") << move_text;
+                    if (move != suggested_move) {
+                        move_t tt_move;
+                        int tt_value = 0;
+                        int tt_alpha = SCORE_MIN, tt_beta = SCORE_MAX;
+                        if (s.read_transposition(b.get_zobrist_with_move(move), tt_move, 0, tt_alpha, tt_beta, tt_value)) {
+                            if (b.get_side_to_play() == Black){
+                                tt_value = -tt_value;
+                            }
+                            std::cout << " eval=" << tt_value;
+                        }
+                        if (abs(result_score - tt_value) > 10) {
+                            std::cout << " (";
+                            b.print_move(suggested_move, std::cout);
+                            std::cout << " eval=" << result_score;
+                            std::cout << " loss=" << tt_value - result_score;
+                            std::cout << ")";
+                        }
+                    }
+
+                    std::cout << " time=" << elapsed_usecs / 1000.0 << "ms ";
+                    std::cout << "Node count=" << s.nodecount << " null=" << s.null_nodecount << " low=" << s.low_depth_nodecount << " commenced=" << s.moves_commenced << " expanded=" << s.moves_expanded << " quiescent count = " << s.qnodecount;
+                    std::cout << std::endl;
+                    total_nodecount += s.nodecount;
+                    total_null_nodecount += s.null_nodecount;
+                    total_low_depth_nodecount += s.low_depth_nodecount;
+                    b.apply_move(move);
+                    plyno++;
+                    s.reset_counters();
+                }
+                std::cout << "game over" << std::endl;
+            }
+            std::cout << "Total nodecount=" << total_nodecount << " null=" << total_null_nodecount << " low=" << total_low_depth_nodecount << std::endl;
         }
         std::vector<move_t> line;
         if (vm.count("line")) {
@@ -199,6 +276,9 @@ int main(int argc, char **argv)
                     }
                 }
                 int point_score = e->delta_evaluate(b, move, static_score);
+                if (b.get_side_to_play() == Black) {
+                    point_score = -point_score;
+                }
                 int score_parts[score_part_len];
                 move_iter->get_score_parts(&b, move, line, score_parts);
                 std::cout << "  " << move_to_algebra(&b, move) << " sort=" << move_iter->get_score(&b, move, line);

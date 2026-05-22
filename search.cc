@@ -49,6 +49,9 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
     if (use_iterative_deepening) {
         int old_max_depth = max_depth;
         int guess_score = eval->evaluate(b);
+        if (b.get_side_to_play() == Black) {
+            guess_score = -guess_score;
+        }
         if (millis_available > 0) {
             deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(millis_available);
         }
@@ -59,9 +62,6 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
                 if (use_pv) {
                     std::tuple<move_t, move_t, int> sub;
                     std::vector<move_t> line;
-                    if (b.get_side_to_play() == Black){
-                        guess_score = -guess_score;
-                    }
                     int alpha = guess_score - 25;
                     int beta = guess_score + 25;
                     int backoff = 200;
@@ -86,12 +86,14 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
                             break;
                         }
                         backoff *= 2;
+                        if (guess_score < -1000) {
+                            // near checkmate, use simple window
+                            alpha = SCORE_MIN;
+                        } else if (guess_score > 1000) {
+                            beta = SCORE_MAX;
+                        }
                     }
                     result = std::get<0>(sub);
-
-                    if (b.get_side_to_play() == Black){
-                        score = -score;
-                    }
                 }
                 if (s != NULL) {
                     (*s)(result, max_depth, nodecount, score);
@@ -104,6 +106,9 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
         }
         catch (const std::exception &e) {
             std::cout << "Search interrupted: " << e.what() << std::endl;
+        }
+        if (b.get_side_to_play() == Black){
+            score = -score;
         }
         max_depth = old_max_depth;
     } else {
@@ -122,7 +127,7 @@ move_t Search::alphabeta(Fenboard &b, SearchUpdate *s)
 Search::Search(Evaluation *eval, int transposition_table_size_log2)
     : score(0), nodecount(0), qnodecount(0), transposition_table_size_log2(transposition_table_size_log2), use_transposition_table(true),
         use_pruning(true), eval(eval), min_score_prune_sorting(2), use_pv(true), use_iterative_deepening(true),
-        use_quiescent_search(true), use_killer_move(true), quiescent_depth(2), millis_available(0), max_depth(8), soft_deadline(true)
+        use_quiescent_search(true), use_killer_move(true), quiescent_depth(6), millis_available(0), max_depth(8), soft_deadline(true)
 
 {
     srandom(clock());
@@ -130,7 +135,6 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     transposition_partial_hits = 0;
     transposition_full_hits = 0;
     transposition_insufficient_depth = 0;
-    transposition_conflicts = 0;
     recapture_first_bonus = 0;
     moves_expanded = 0;
     moves_commenced = 0;
@@ -142,7 +146,7 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
     quiescent_positive_capture_only = false;
     quiescent_single_capture_square_only = false;
 
-    transposition_table = new uint64_t[1ULL<<transposition_table_size_log2];
+    transtable = new TranspositionTable(transposition_table_size_log2);
     reset();
     for (int i = 0; i < max_depth; i++) {
         move_sorter_pool.push_back(new MoveSorter());
@@ -155,7 +159,7 @@ Search::Search(Evaluation *eval, int transposition_table_size_log2)
 void Search::reset()
 {
     reset_counters();
-    memset(transposition_table, 0, sizeof(uint64_t) * (1ULL<<transposition_table_size_log2));
+    transtable->reset();
     memset(&history_bonus2, 0, sizeof(history_bonus2));
     memset(&refutation_table2, 0, sizeof(refutation_table2));
 }
@@ -256,7 +260,7 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     bool is_quiescent = (depth >= max_depth) && use_quiescent_search && depth <= max_depth + quiescent_depth;
 
     // check for repetition
-    if (b.times_seen() >= 3) {
+    if (b.times_seen() >= 2) {
         return std::tuple<move_t, move_t, int>(-1, -1, 0);
     }
 
@@ -339,9 +343,6 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
 
         move_t submove = 0;
         int static_eval = VERY_BAD - 1;
-        if (depth_to_go == 1) {
-            static_eval = eval->evaluate(b);
-        }
         int best_index = -1;
         int move_index = -1;
         Counter killer_move_counter;
@@ -365,6 +366,9 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
 
             int child_static_eval = VERY_BAD - 1;
             if (depth_to_go <= 1) {
+                if (static_eval < VERY_BAD) {
+                    static_eval = eval->evaluate(b);
+                }
                 child_static_eval = eval->delta_evaluate(b, move, static_eval);
             }
             uint64_t start_nodecount = nodecount;
@@ -466,6 +470,18 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
 
                 if (search_debug >= depth + 1) {
                     std::cout << "*";
+                    if (!move_iter->has_more_moves()) {
+                        std::cout << "L"; // last
+                    }
+                    if (first && !initialized_null_move_eval) {
+                        std::cout << "f"; // first
+                    }
+                    if (!is_quiescent) {
+                        std::cout << "q"; // not quiescent
+                    }
+                    if (move_iter->next_gives_check_or_capture()) {
+                        std::cout << "c"; // more checks/captures to come
+                    }
                 }
             }
             if ((move & GIVES_CHECK) == 0 && get_captured_piece(move) == 0) {
@@ -523,7 +539,6 @@ std::tuple<move_t, move_t, int> Search::negamax_with_memory(Fenboard &b, int dep
     if (use_transposition_table) {
        write_transposition(b.get_hash(), best_move, best_score, max_depth - depth, original_alpha, original_beta);
     }
-
     return std::tuple<move_t, move_t, int>(best_move, best_response, best_score);
 }
 
@@ -540,7 +555,7 @@ void Search::write_transposition(uint64_t board_hash, move_t move, int best_scor
     if (depth < 0) {
         depth = 0;
     }
-    insert_tt_entry(board_hash, move, best_score, depth, tt_type);
+    transtable->insert_tt_entry(board_hash, move, best_score, depth, tt_type);
 }
 
 bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth, int &alpha, int &beta, int &exact_value)
@@ -554,7 +569,7 @@ bool Search::read_transposition(uint64_t board_hash, move_t &tt_move, int depth,
         std::cout << "Reading tt entry for " << board_hash << " depth=" << (int) depth << " alpha=" << alpha << " beta=" << beta << std::endl;
     }
 
-    if (fetch_tt_entry(board_hash, tt_move, tt_value, tt_depth, tt_type)) {
+    if (transtable->fetch_tt_entry(board_hash, tt_move, tt_value, tt_depth, tt_type)) {
         if (tt_depth >= depth) {
             // found something at appropriate depth
             int mate_depth_adjustment = 0;
@@ -716,7 +731,7 @@ void MoveSorter::get_score_parts(const Fenboard *b, move_t move, const std::vect
 
     memset(parts, 0, sizeof(int) * score_part_len);
 
-    if (s != NULL && s->fetch_tt_entry(b->get_zobrist_with_move(move), ignore, tt_value, tt_depth, tt_type)) {
+    if (s != NULL && s->transtable->fetch_tt_entry(b->get_zobrist_with_move(move), ignore, tt_value, tt_depth, tt_type)) {
         if (tt_type == TT_EXACT) {
             parts[score_part_trans] = tt_value + 1000;
         }

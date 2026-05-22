@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstring>
 #include "fenboard.hh"
+#include "transposition.hh"
 #include <tuple>
 #include <utility>
 #include <climits>
@@ -150,7 +151,6 @@ struct Search {
     int transposition_partial_hits;
     int transposition_full_hits;
     int transposition_insufficient_depth;
-    int transposition_conflicts;
     int moves_commenced;
     int moves_expanded;
 
@@ -166,80 +166,12 @@ private:
     int32_t refutation_table2[6][64][6][64];
 
     void history_cutoff(Color side_to_play, int depth_to_go, move_t move, int move_rank, const std::vector<move_t> &line, bool high);
-    uint64_t *transposition_table;
 public:
+    TranspositionTable *transtable;
     std::tuple<move_t, move_t, int> negamax_with_memory(Fenboard &b, int depth, int alpha, int beta, std::vector<move_t> &line, move_t hint=0, int static_score=0);
     bool read_transposition(uint64_t board_hash, move_t &move, int depth, int &alpha, int &beta, int &exact_value);
 private:
     void write_transposition(uint64_t board_hash, move_t move, int best_score, int depth, int original_alpha, int original_beta);
-    uint64_t &tt_entry(uint64_t hash) {
-        return transposition_table[hash & ((1ULL << transposition_table_size_log2)-1)];
-    }
-    const uint64_t &tt_entry(uint64_t hash) const {
-        return transposition_table[hash & ((1ULL << transposition_table_size_log2)-1)];
-    }
-    bool fetch_tt_entry(uint64_t hash, move_t &move, int16_t &value, unsigned char &depth, unsigned char &type) const {
-        uint64_t storage = tt_entry(hash);
-        unsigned short checksum = hash & 0xff00;
-        type = storage & 0x3;
-        if (type <= 0 || checksum != (storage & 0xff00)) {
-            if (hash == tt_hash_debug) {
-                std::cout << "Missing tt entry for " << hash << std::endl;
-            }
-            return false;
-        }
-        depth = (storage >> 2) & 0x1f;
-        value = (storage >> 16) & 0xffff;
-        move = (storage >> 32);
-
-
-        if (hash == tt_hash_debug) {
-            std::cout << "Found tt entry for " << hash << " response=" << move_to_uci(move) << " depth=" << (int) depth << " value=" << value << " type=";
-            switch (type) {
-                case TT_EXACT: std::cout << "exact"; break;
-                case TT_LOWER: std::cout << "lower"; break;
-                case TT_UPPER: std::cout << "upper"; break;
-                default: std::cout << "unknown"; break;
-            }
-            std::cout << std::endl;
-        }
-
-        return true;
-    }
-    void insert_tt_entry(uint64_t hash, move_t move, int16_t value, unsigned char depth, unsigned char type) {
-        move_t old_move;
-        int16_t old_value;
-        unsigned char old_depth, old_type;
-
-        uint64_t store = tt_entry(hash);
-        if (store != 0 && (hash & 0xff00) != (store & 0xff00)) {
-            transposition_conflicts++;
-        }
-
-        // don't overwrite deeper value already present
-        if (fetch_tt_entry(hash, old_move, old_value, old_depth, old_type) && old_depth > depth) {
-            return;
-        }
-
-        uint64_t storage = (static_cast<uint64_t>(move) << 32) | (0xffff0000ULL & (static_cast<int16_t>(value) << 16));
-        storage |= (depth & 0x1f) << 2;
-        storage |= type & 0x3;
-        unsigned short checksum = hash & 0xff00;
-        storage |= checksum;
-        tt_entry(hash) = storage;
-
-        if (hash == tt_hash_debug) {
-            std::cout << "Insert tt entry for " << hash << " response=" << move_to_uci(move) << " depth=" << (int)depth << " value=" << value << " type=";
-            switch (type) {
-                case TT_EXACT: std::cout << "exact"; break;
-                case TT_LOWER: std::cout << "lower"; break;
-                case TT_UPPER: std::cout << "upper"; break;
-                default: std::cout << "unknown"; break;
-            }
-            std::cout << std::endl;
-        }
-
-    }
 
     std::vector<MoveSorter *> move_sorter_pool;
 public:

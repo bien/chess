@@ -6,6 +6,7 @@
 
 class SimpleEvaluation : public Evaluation {
 public:
+    // returns positive score for white winning
     virtual int evaluate(const Fenboard &b);
     virtual int delta_evaluate(Fenboard &b, move_t move, int previous_score);
     bool endgame(const Fenboard &b, int &eval) const;
